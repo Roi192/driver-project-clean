@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>התקנת הגמ״ר</title>
+    <meta name="theme-color" content="#1a1d24" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="הגמ״ר" />
+    <link rel="manifest" href="/manifest-hagmar.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/install/install.css" />
+    <script>
+      window.__INSTALL_CONFIG__ = {
+        department: "hagmar",
+        authPath: "/auth/hagmar",
+        pageTitle: "התקנת הגמ״ר",
+        installLabel: "התקן הגמ״ר",
+      };
+      document.documentElement.style.setProperty("--department-primary", "160 84% 39%");
+    </script>
+    <script defer src="/install/install.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <div class="logo-wrap">
+        <img src="/pwa-192x192.png" alt="סמל" class="logo" />
+      </div>
+
+      <div class="badge"><span class="badge-icon">🛡️</span> הגמ״ר</div>
+      <h1>התקן את האפליקציה</h1>
+      <p class="subtitle">הורד את אפליקציית הגמ״ר לטלפון כדי לקבל גישה מהירה, דיווחים והתראות.</p>
+
+      <section class="card">
+        <div id="features-section" class="features">
+          <div class="feature"><span class="feature-icon">⚡</span><span class="feature-text">גישה ישירה</span></div>
+          <div class="feature"><span class="feature-icon">🔔</span><span class="feature-text">התראות פוש</span></div>
+          <div class="feature"><span class="feature-icon">📱</span><span class="feature-text">חווית אפליקציה</span></div>
+          <div class="feature"><span class="feature-icon">🛡️</span><span class="feature-text">הגנת מרחב</span></div>
+        </div>
+
+        <div id="installed-banner" class="installed-banner" hidden>
+          <span class="installed-icon">✅</span>
+          <span class="installed-title">ההתקנה הושלמה!</span>
+          <span class="installed-sub">פתח את האפליקציה מהמסך הראשי של הטלפון.</span>
+        </div>
+
+        <section class="panel" id="ios-panel" hidden>
+          <h2>התקנה באייפון</h2>
+          <ol class="steps">
+            <li>לחץ על כפתור השיתוף בתחתית המסך</li>
+            <li>גלול ובחר <strong>"הוסף למסך הבית"</strong></li>
+            <li>לחץ <strong>"הוסף"</strong> בפינה הימנית</li>
+          </ol>
+        </section>
+
+        <section class="panel" id="manual-panel">
+          <h2>כיצד להתקין</h2>
+          <ol class="steps">
+            <li>פתח את הקישור הזה ב-<strong>Chrome</strong> או <strong>Samsung Internet</strong></li>
+            <li>לחץ על תפריט הדפדפן <strong>⋮</strong></li>
+            <li>בחר <strong>"התקן אפליקציה"</strong> או <strong>"הוסף למסך הבית"</strong></li>
+          </ol>
+        </section>
+
+        <div class="actions">
+          <button id="install-button" class="button button-primary" hidden>🚀 התקן הגמ״ר</button>
+        </div>
+
+        <p id="status-text" class="status">פתח את הקישור הזה מהטלפון כדי להתקין.</p>
+      </section>
+
+      <div class="footer">© חטיבת בנימין</div>
+    </main>
+  </body>
+</html>

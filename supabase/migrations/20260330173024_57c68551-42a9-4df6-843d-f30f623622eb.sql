@@ -1,0 +1,1 @@
+UPDATE work_plan_events SET status = 'completed' WHERE status != 'completed';

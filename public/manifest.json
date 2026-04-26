@@ -1,0 +1,50 @@
+{
+  "id": "/drivers-app",
+  "name": "נהגי בט\"ש - חטיבת בנימין",
+  "short_name": "נהגי בט\"ש",
+  "description": "מערכת ניהול נהגי בט״ש לחטיבת בנימין - דיווחים, תרגולות ובטיחות",
+  "start_url": "/auth",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "hsl(222 22% 12%)",
+  "theme_color": "hsl(222 22% 12%)",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-1.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false
+}
