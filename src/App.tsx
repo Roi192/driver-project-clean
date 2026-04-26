@@ -69,7 +69,7 @@ import BattalionUsersManagement from "./pages/BattalionUsersManagement";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
-
+const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
