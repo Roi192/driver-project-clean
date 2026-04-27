@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AuthBattalion from "./pages/AuthBattalion";
+import ResetPassword from "./pages/ResetPassword";
 import ShiftForm from "./pages/ShiftForm";
 import DrillLocations from "./pages/DrillLocations";
 import SafetyFiles from "./pages/SafetyFiles";
@@ -88,6 +89,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/gdud" element={<AuthBattalion />} />
             <Route path="/auth/hagmar" element={<HagmarAuth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/department-selector"
               element={

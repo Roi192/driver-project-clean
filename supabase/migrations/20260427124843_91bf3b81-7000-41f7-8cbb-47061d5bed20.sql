@@ -1,0 +1,2 @@
+ALTER TABLE public.content_cycle_overrides DROP CONSTRAINT IF EXISTS content_cycle_overrides_override_type_check;
+ALTER TABLE public.content_cycle_overrides ADD CONSTRAINT content_cycle_overrides_override_type_check CHECK (override_type IN ('completed', 'absent', 'excluded'));

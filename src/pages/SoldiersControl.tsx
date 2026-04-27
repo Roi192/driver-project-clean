@@ -483,11 +483,69 @@ export default function SoldiersControl() {
     
     return true;
   }).sort((a, b) => {
+    // Helper: any-license earliest expiry (uses min between civilian/military)
+    const earliestLicense = (s: Soldier) => {
+      const m = getDateTime(s.military_license_expiry);
+      const c = getDateTime(s.civilian_license_expiry);
+      return Math.min(m, c);
+    };
+    // Helper: 0 if release date is BEFORE earliest license expiry (priority case), else 1
+    const releaseBeforeLicense = (s: Soldier) => {
+      const r = getDateTime(s.release_date);
+      const lic = earliestLicense(s);
+      if (!s.release_date || lic === Number.MAX_SAFE_INTEGER) return 1;
+      return r < lic ? 0 : 1;
+    };
+    const noDefensive = (s: Soldier) => (s.defensive_driving_passed ? 1 : 0);
+
     if (sortMode === "civilian_expiry_no_defensive") {
-      const aPriority = a.defensive_driving_passed ? 1 : 0;
-      const bPriority = b.defensive_driving_passed ? 1 : 0;
+      const aPriority = noDefensive(a);
+      const bPriority = noDefensive(b);
       if (aPriority !== bPriority) return aPriority - bPriority;
       return getDateTime(a.civilian_license_expiry) - getDateTime(b.civilian_license_expiry);
+    }
+    if (sortMode === "military_expiry_no_defensive") {
+      const ap = noDefensive(a); const bp = noDefensive(b);
+      if (ap !== bp) return ap - bp;
+      return getDateTime(a.military_license_expiry) - getDateTime(b.military_license_expiry);
+    }
+    if (sortMode === "any_license_expiry_asc") {
+      return earliestLicense(a) - earliestLicense(b);
+    }
+    if (sortMode === "any_license_no_defensive") {
+      const ap = noDefensive(a); const bp = noDefensive(b);
+      if (ap !== bp) return ap - bp;
+      return earliestLicense(a) - earliestLicense(b);
+    }
+    if (sortMode === "release_before_civilian") {
+      const aRel = a.release_date && a.civilian_license_expiry && getDateTime(a.release_date) < getDateTime(a.civilian_license_expiry) ? 0 : 1;
+      const bRel = b.release_date && b.civilian_license_expiry && getDateTime(b.release_date) < getDateTime(b.civilian_license_expiry) ? 0 : 1;
+      if (aRel !== bRel) return aRel - bRel;
+      return getDateTime(a.civilian_license_expiry) - getDateTime(b.civilian_license_expiry);
+    }
+    if (sortMode === "release_before_military") {
+      const aRel = a.release_date && a.military_license_expiry && getDateTime(a.release_date) < getDateTime(a.military_license_expiry) ? 0 : 1;
+      const bRel = b.release_date && b.military_license_expiry && getDateTime(b.release_date) < getDateTime(b.military_license_expiry) ? 0 : 1;
+      if (aRel !== bRel) return aRel - bRel;
+      return getDateTime(a.military_license_expiry) - getDateTime(b.military_license_expiry);
+    }
+    if (sortMode === "release_before_any_license") {
+      const ap = releaseBeforeLicense(a); const bp = releaseBeforeLicense(b);
+      if (ap !== bp) return ap - bp;
+      return earliestLicense(a) - earliestLicense(b);
+    }
+    if (sortMode === "civilian_expiry_no_defensive_release") {
+      // Triple priority: no defensive → license expiring soon → release before license
+      const ap = noDefensive(a); const bp = noDefensive(b);
+      if (ap !== bp) return ap - bp;
+      const ar = releaseBeforeLicense(a); const br = releaseBeforeLicense(b);
+      if (ar !== br) return ar - br;
+      return getDateTime(a.civilian_license_expiry) - getDateTime(b.civilian_license_expiry);
+    }
+    if (sortMode === "no_defensive_first") {
+      const ap = noDefensive(a); const bp = noDefensive(b);
+      if (ap !== bp) return ap - bp;
+      return a.full_name.localeCompare(b.full_name, "he");
     }
     if (sortMode === "civilian_expiry_asc") return getDateTime(a.civilian_license_expiry) - getDateTime(b.civilian_license_expiry);
     if (sortMode === "military_expiry_asc") return getDateTime(a.military_license_expiry) - getDateTime(b.military_license_expiry);
@@ -827,11 +885,19 @@ export default function SoldiersControl() {
                     </SelectTrigger>
                     <SelectContent className="bg-white border border-slate-200">
                       <SelectItem value="name_asc" className="text-slate-700">שם א-ת</SelectItem>
-                      <SelectItem value="civilian_expiry_no_defensive" className="text-slate-700">אזרחי פג בקרוב + בלי נהיגה מונעת</SelectItem>
                       <SelectItem value="civilian_expiry_asc" className="text-slate-700">רישיון אזרחי - הקרוב ביותר</SelectItem>
                       <SelectItem value="military_expiry_asc" className="text-slate-700">רישיון צבאי - הקרוב ביותר</SelectItem>
+                      <SelectItem value="any_license_expiry_asc" className="text-slate-700">כל רישיון - הקרוב ביותר לפוג</SelectItem>
                       <SelectItem value="release_date_asc" className="text-slate-700">שחרור - הקרוב ביותר</SelectItem>
                       <SelectItem value="qualified_date_asc" className="text-slate-700">מוכשר מ - הוותיק ביותר</SelectItem>
+                      <SelectItem value="no_defensive_first" className="text-slate-700">בלי נהיגה מונעת תחילה</SelectItem>
+                      <SelectItem value="civilian_expiry_no_defensive" className="text-slate-700">בלי נהיגה מונעת + אזרחי פג בקרוב</SelectItem>
+                      <SelectItem value="military_expiry_no_defensive" className="text-slate-700">בלי נהיגה מונעת + צבאי פג בקרוב</SelectItem>
+                      <SelectItem value="any_license_no_defensive" className="text-slate-700">בלי נהיגה מונעת + כל רישיון פג בקרוב</SelectItem>
+                      <SelectItem value="release_before_civilian" className="text-slate-700">משתחרר לפני שאזרחי פג</SelectItem>
+                      <SelectItem value="release_before_military" className="text-slate-700">משתחרר לפני שצבאי פג</SelectItem>
+                      <SelectItem value="release_before_any_license" className="text-slate-700">משתחרר לפני שרישיון כלשהו פג</SelectItem>
+                      <SelectItem value="civilian_expiry_no_defensive_release" className="text-slate-700">בלי נהיגה מונעת + משתחרר לפני שפג + אזרחי</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1258,4 +1324,4 @@ export default function SoldiersControl() {
       </div>
     </AppLayout>
   );
-}// redeploy trigger 04/26/2026 22:46:19
+}

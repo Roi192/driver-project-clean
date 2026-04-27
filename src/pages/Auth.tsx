@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { Shield, Loader2, Car } from 'lucide-react';
+import { Shield, Loader2, Car, KeyRound } from 'lucide-react';
 import unitLogo from '@/assets/unit-logo.png';
 import bgVehicles from '@/assets/bg-vehicles.png';
 import { OUTPOSTS } from '@/lib/constants';
@@ -20,6 +21,9 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [outpost, setOutpost] = useState('');
   const [personalNumber, setPersonalNumber] = useState('');
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
   
   const { signIn, signUp, signOut, user } = useAuth();
   const navigate = useNavigate();
@@ -81,6 +85,26 @@ export default function Auth() {
       }
     }
     setIsLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) {
+      toast({ title: 'שגיאה', description: 'נא להזין אימייל', variant: 'destructive' });
+      return;
+    }
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotLoading(false);
+    if (error) {
+      toast({ title: 'שגיאה', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'נשלח קישור לאיפוס', description: 'בדוק את תיבת המייל שלך' });
+    setForgotOpen(false);
+    setForgotEmail('');
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -189,6 +213,15 @@ export default function Auth() {
                 <Button type="submit" className="w-full h-12 cta-button text-base font-bold rounded-xl" disabled={isLoading}>
                   {isLoading ? (<><Loader2 className="w-5 h-5 animate-spin ml-2" />מתחבר...</>) : 'התחבר למערכת'}
                 </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotEmail(email); setForgotOpen(true); }}
+                    className="text-sm font-semibold text-primary hover:underline"
+                  >
+                    שכחת סיסמה?
+                  </button>
+                </div>
               </form>
             </TabsContent>
 
@@ -248,6 +281,42 @@ export default function Auth() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              איפוס סיסמה
+            </DialogTitle>
+            <DialogDescription>
+              הזן את כתובת האימייל שלך ונשלח אליך קישור לאיפוס הסיסמה.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email" className="text-slate-800 font-semibold">אימייל</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                placeholder="your@email.com"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                dir="ltr"
+                className="text-right bg-white border-slate-300 text-slate-900 h-12 rounded-xl"
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button type="button" variant="outline" onClick={() => setForgotOpen(false)} disabled={forgotLoading}>
+                ביטול
+              </Button>
+              <Button type="submit" className="cta-button" disabled={forgotLoading}>
+                {forgotLoading ? (<><Loader2 className="w-4 h-4 animate-spin ml-2" />שולח...</>) : 'שלח קישור איפוס'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
