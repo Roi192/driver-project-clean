@@ -24,6 +24,13 @@ export default function Auth() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetPersonalNumber, setResetPersonalNumber] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   
   const { signIn, signUp, signOut, user } = useAuth();
   const navigate = useNavigate();
@@ -48,13 +55,23 @@ export default function Auth() {
     const { error } = await signIn(email, password);
     if (error) {
       setIsLoading(false);
+      const newCount = failedAttempts + 1;
+      setFailedAttempts(newCount);
       toast({
         title: 'שגיאה בהתחברות',
         description: error.message === 'Invalid login credentials' ? 'אימייל או סיסמה שגויים' : error.message,
         variant: 'destructive',
       });
+      if (newCount >= 2) {
+        setResetEmail(email);
+        setResetPersonalNumber('');
+        setResetNewPassword('');
+        setResetConfirmPassword('');
+        setResetOpen(true);
+      }
       return;
     }
+    setFailedAttempts(0);
     // Verify department matches this login page (BT"SH drivers only)
     const { data: { user: loggedInUser } } = await supabase.auth.getUser();
     if (loggedInUser) {
@@ -105,6 +122,56 @@ export default function Auth() {
     toast({ title: 'נשלח קישור לאיפוס', description: 'בדוק את תיבת המייל שלך' });
     setForgotOpen(false);
     setForgotEmail('');
+  };
+
+  const handleDirectReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail || !resetPersonalNumber || !resetNewPassword || !resetConfirmPassword) {
+      toast({ title: 'שגיאה', description: 'נא למלא את כל השדות', variant: 'destructive' });
+      return;
+    }
+    if (resetNewPassword.length < 8) {
+      toast({ title: 'שגיאה', description: 'הסיסמה חייבת להכיל לפחות 8 תווים', variant: 'destructive' });
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(resetNewPassword);
+    const hasLower = /[a-z]/.test(resetNewPassword);
+    const hasNum = /[0-9]/.test(resetNewPassword);
+    if (!(hasUpper && hasLower && hasNum)) {
+      toast({ title: 'שגיאה', description: 'הסיסמה חייבת להכיל אותיות גדולות, קטנות ומספרים', variant: 'destructive' });
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      toast({ title: 'שגיאה', description: 'הסיסמאות אינן תואמות', variant: 'destructive' });
+      return;
+    }
+    setResetLoading(true);
+    const { data, error } = await supabase.functions.invoke('reset-password-by-personal-number', {
+      body: {
+        email: resetEmail,
+        personalNumber: resetPersonalNumber,
+        newPassword: resetNewPassword,
+      },
+    });
+    setResetLoading(false);
+    if (error || (data as any)?.error) {
+      toast({
+        title: 'שגיאה באיפוס',
+        description: (data as any)?.error || error?.message || 'פרטים שגויים',
+        variant: 'destructive',
+      });
+      return;
+    }
+    toast({ title: 'הסיסמה עודכנה', description: 'מנסה להתחבר...' });
+    setResetOpen(false);
+    setFailedAttempts(0);
+    // Auto sign-in with the new password
+    setIsLoading(true);
+    const { error: signInErr } = await signIn(resetEmail, resetNewPassword);
+    setIsLoading(false);
+    if (signInErr) {
+      toast({ title: 'שגיאה בהתחברות', description: signInErr.message, variant: 'destructive' });
+    }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -312,6 +379,77 @@ export default function Auth() {
               </Button>
               <Button type="submit" className="cta-button" disabled={forgotLoading}>
                 {forgotLoading ? (<><Loader2 className="w-4 h-4 animate-spin ml-2" />שולח...</>) : 'שלח קישור איפוס'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              איפוס סיסמה ישיר
+            </DialogTitle>
+            <DialogDescription>
+              לאחר 2 ניסיונות שגויים. אמת את זהותך באמצעות אימייל ומספר אישי כדי לקבוע סיסמה חדשה.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleDirectReset} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email" className="text-slate-800 font-semibold">אימייל</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                dir="ltr"
+                className="text-right bg-white border-slate-300 text-slate-900 h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reset-pn" className="text-slate-800 font-semibold">מספר אישי</Label>
+              <Input
+                id="reset-pn"
+                type="text"
+                placeholder="1234567"
+                value={resetPersonalNumber}
+                onChange={(e) => setResetPersonalNumber(e.target.value)}
+                dir="ltr"
+                className="text-right bg-white border-slate-300 text-slate-900 h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reset-pw" className="text-slate-800 font-semibold">סיסמה חדשה</Label>
+              <Input
+                id="reset-pw"
+                type="password"
+                placeholder="לפחות 8 תווים, כולל אותיות ומספרים"
+                value={resetNewPassword}
+                onChange={(e) => setResetNewPassword(e.target.value)}
+                dir="ltr"
+                className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reset-pw2" className="text-slate-800 font-semibold">אימות סיסמה</Label>
+              <Input
+                id="reset-pw2"
+                type="password"
+                placeholder="הקלד שוב"
+                value={resetConfirmPassword}
+                onChange={(e) => setResetConfirmPassword(e.target.value)}
+                dir="ltr"
+                className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl"
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button type="button" variant="outline" onClick={() => setResetOpen(false)} disabled={resetLoading}>
+                ביטול
+              </Button>
+              <Button type="submit" className="cta-button" disabled={resetLoading}>
+                {resetLoading ? (<><Loader2 className="w-4 h-4 animate-spin ml-2" />מעדכן...</>) : 'עדכן סיסמה'}
               </Button>
             </DialogFooter>
           </form>
