@@ -31,6 +31,7 @@ export type Database = {
           notes: string | null
           severity: string | null
           soldier_id: string | null
+          source_safety_content_id: string | null
           status: string
           updated_at: string
           vehicle_number: string | null
@@ -52,6 +53,7 @@ export type Database = {
           notes?: string | null
           severity?: string | null
           soldier_id?: string | null
+          source_safety_content_id?: string | null
           status?: string
           updated_at?: string
           vehicle_number?: string | null
@@ -73,6 +75,7 @@ export type Database = {
           notes?: string | null
           severity?: string | null
           soldier_id?: string | null
+          source_safety_content_id?: string | null
           status?: string
           updated_at?: string
           vehicle_number?: string | null
@@ -91,6 +94,13 @@ export type Database = {
             columns: ["soldier_id"]
             isOneToOne: false
             referencedRelation: "soldiers_basic"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accidents_source_safety_content_id_fkey"
+            columns: ["source_safety_content_id"]
+            isOneToOne: false
+            referencedRelation: "safety_content"
             referencedColumns: ["id"]
           },
         ]
