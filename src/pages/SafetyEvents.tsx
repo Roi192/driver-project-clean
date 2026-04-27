@@ -12,8 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AddEditDialog, FieldConfig, FormValues } from "@/components/admin/AddEditDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { StorageImage } from "@/components/shared/StorageImage";
-import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.jpg";
-import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.jpg";
+import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.png";
+import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.png";
 import { REGIONS, OUTPOSTS } from "@/lib/constants";
 
 type View = "categories" | "items" | "itemDetail";
