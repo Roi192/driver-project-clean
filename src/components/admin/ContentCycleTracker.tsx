@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, Layers, CalendarCheck, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, Layers, CalendarCheck, AlertTriangle, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -128,6 +128,11 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
         // Check for manual override first
         const override = overrides.find(o => o.soldier_id === soldier.id && o.content_cycle === cycleName);
         
+        // Soldier explicitly excluded from this cycle's summary
+        if (override?.override_type === 'excluded') {
+          return;
+        }
+
         if (override?.override_type === 'completed') {
           manuallyCompleted.push({ ...soldier, completionDate: override.completion_date });
           return;
@@ -148,7 +153,11 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
         else missing.push(soldier);
       });
 
-      const total = eligibleSoldiers.length;
+      const visibleSoldiers = eligibleSoldiers.filter((soldier) => {
+        const override = overrides.find(o => o.soldier_id === soldier.id && o.content_cycle === cycleName);
+        return override?.override_type !== 'excluded';
+      });
+      const total = visibleSoldiers.length;
       const completedCount = attended.length + manuallyCompleted.length;
       const percentage = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
@@ -223,6 +232,24 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
         .eq("content_cycle", cycleName);
       if (error) throw error;
       toast.success("הסימון הוסר");
+      onOverrideChange();
+    } catch (e: any) {
+      toast.error("שגיאה: " + e.message);
+    }
+  };
+
+  const handleExcludeFromCycle = async (soldierId: string, cycleName: string) => {
+    if (!confirm("להסיר את החייל מסיכום המופע? ניתן להחזירו על ידי הסרת הסימון.")) return;
+    try {
+      const { error } = await supabase.from("content_cycle_overrides").upsert({
+        soldier_id: soldierId,
+        content_cycle: cycleName,
+        override_type: "excluded",
+        completion_date: null,
+        absence_reason: null,
+      }, { onConflict: "soldier_id,content_cycle" });
+      if (error) throw error;
+      toast.success("החייל הוסר מהרשימה");
       onOverrideChange();
     } catch (e: any) {
       toast.error("שגיאה: " + e.message);
@@ -335,6 +362,15 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                                   סיבה
                                 </Button>
                               )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                onClick={(e) => { e.stopPropagation(); handleExcludeFromCycle(soldier.id, cycle.name); }}
+                                title="הסר מהרשימה"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -366,6 +402,15 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                               >
                                 הסר
                               </button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                onClick={(e) => { e.stopPropagation(); handleExcludeFromCycle(soldier.id, cycle.name); }}
+                                title="הסר מהרשימה"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -384,7 +429,18 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                         {cycle.attended.map(soldier => (
                           <div key={soldier.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white border border-border">
                             <span className="text-sm text-slate-800">{soldier.full_name}</span>
-                            <CheckCircle className="w-5 h-5 text-emerald-500" />
+                            <div className="flex items-center gap-1.5">
+                              <CheckCircle className="w-5 h-5 text-emerald-500" />
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                onClick={(e) => { e.stopPropagation(); handleExcludeFromCycle(soldier.id, cycle.name); }}
+                                title="הסר מהרשימה"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>

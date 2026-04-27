@@ -12,8 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AddEditDialog, FieldConfig, FormValues } from "@/components/admin/AddEditDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { StorageImage } from "@/components/shared/StorageImage";
-import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.png";
-import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.png";
+import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.jpg";
+import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.jpg";
 import { REGIONS, OUTPOSTS } from "@/lib/constants";
 
 type View = "categories" | "items" | "itemDetail";
@@ -146,6 +146,8 @@ const forceDialogOpenAfterMobileUpload = (reopenDialog: () => void) => {
   reopenDialog();
   window.setTimeout(reopenDialog, 150);
   window.setTimeout(reopenDialog, 800);
+  window.setTimeout(reopenDialog, 2_000);
+  window.setTimeout(reopenDialog, 5_000);
 };
 
 const toText = (value: unknown): string => {
@@ -373,6 +375,16 @@ export default function SafetyEvents() {
     const driverType = toNullableText(data.driver_type);
     const eventDate = toNullableText(data.event_date);
     const description = toNullableText(data.description);
+    const selectedSoldierId = toNullableText(data.soldier_id);
+
+    // Validation: if it's a sector/neighbor event with security driver, require soldier selection
+    // so the event can be synced to the soldier's profile (טבלת שליטה)
+    if ((selectedCategory === "sector_events" || selectedCategory === "neighbor_events") &&
+        driverType === "security" && !selectedSoldierId) {
+      toast.error("יש לבחור חייל מהרשימה כדי לסנכרן את האירוע לטבלת השליטה");
+      setIsSubmitting(false);
+      return;
+    }
 
     const insertData = {
       title,
@@ -423,10 +435,10 @@ export default function SafetyEvents() {
 
       // Sync to accidents table (טבלת שליטה) for any sector/neighbor event
       if (selectedCategory === "sector_events" || selectedCategory === "neighbor_events") {
-        await supabase.from("accidents").insert([{
+        const accidentPayload = {
           accident_date: eventDate || new Date().toISOString().slice(0, 10),
           driver_type: driverType === "combat" ? "combat" : "security",
-          soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
+          soldier_id: driverType === "security" ? selectedSoldierId : null,
           driver_name: driverType === "combat" ? toNullableText(data.driver_name) : null,
           vehicle_number: toNullableText(data.vehicle_number),
           incident_type: eventType,
@@ -434,7 +446,14 @@ export default function SafetyEvents() {
           location: toNullableText(data.outpost) || toNullableText(data.region),
           description: description || title,
           status: 'open',
-        }]);
+        };
+        const { error: accErr } = await supabase.from("accidents").insert([accidentPayload]);
+        if (accErr) {
+          console.error("accidents sync error:", accErr);
+          toast.warning("האירוע נשמר אך הסנכרון לטבלת השליטה נכשל");
+        } else if (selectedSoldierId) {
+          toast.success("האירוע סונכרן לפרופיל החייל בטבלת השליטה");
+        }
       }
 
       setAddDialogOpen(false);
@@ -485,6 +504,14 @@ export default function SafetyEvents() {
       vehicle_number: toNullableText(data.vehicle_number),
       severity: toText(data.severity) || 'minor',
     };
+
+    const selectedSoldierIdEdit = toNullableText(data.soldier_id);
+    if ((selectedCategory === "sector_events" || selectedCategory === "neighbor_events") &&
+        driverType === "security" && !selectedSoldierIdEdit) {
+      toast.error("יש לבחור חייל מהרשימה כדי לסנכרן את האירוע לטבלת השליטה");
+      setIsSubmitting(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("safety_content")
