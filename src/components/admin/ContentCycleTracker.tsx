@@ -34,6 +34,9 @@ interface Soldier {
   personal_number: string;
   rotation_group: string | null;
   qualified_date: string | null;
+  created_at?: string | null;
+  release_date?: string | null;
+  is_active?: boolean;
 }
 
 interface ContentCycleOverride {
@@ -62,6 +65,23 @@ const ABSENCE_REASONS = [
   "אחר",
 ];
 
+const getDateKey = (value: string | null | undefined) => value?.slice(0, 10) || null;
+
+const wasSoldierRelevantOnDate = (soldier: Soldier, eventDate: string) => {
+  const eventDateKey = getDateKey(eventDate);
+  if (!eventDateKey) return true;
+
+  const createdDateKey = getDateKey(soldier.created_at);
+  const qualifiedDateKey = getDateKey(soldier.qualified_date);
+  const releaseDateKey = getDateKey(soldier.release_date);
+
+  if (createdDateKey && createdDateKey > eventDateKey) return false;
+  if (qualifiedDateKey && qualifiedDateKey > eventDateKey) return false;
+  if (releaseDateKey && releaseDateKey < eventDateKey) return false;
+
+  return true;
+};
+
 export function ContentCycleTracker({ events, attendance, soldiers, overrides, onOverrideChange }: ContentCycleTrackerProps) {
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
   const [completionDialog, setCompletionDialog] = useState<{ soldier: Soldier; cycleName: string } | null>(null);
@@ -83,12 +103,22 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
     });
 
     return Array.from(cycleMap.entries()).map(([cycleName, cycleEvents]) => {
-      const earliestDate = cycleEvents.reduce((min, e) => e.event_date < min ? e.event_date : min, cycleEvents[0].event_date);
+      const relevantSoldierIds = new Set<string>();
 
-      const eligibleSoldiers = soldiers.filter(s => {
-        if (!s.qualified_date) return true;
-        return s.qualified_date <= earliestDate;
+      cycleEvents.forEach((event) => {
+        (event.expected_soldiers || []).forEach((soldierId) => {
+          const soldier = soldiers.find((s) => s.id === soldierId);
+          if (soldier && wasSoldierRelevantOnDate(soldier, event.event_date)) {
+            relevantSoldierIds.add(soldierId);
+          }
+        });
+
+        attendance
+          .filter((record) => record.event_id === event.id)
+          .forEach((record) => relevantSoldierIds.add(record.soldier_id));
       });
+
+      const eligibleSoldiers = soldiers.filter((soldier) => relevantSoldierIds.has(soldier.id));
 
       const attended: Soldier[] = [];
       const missing: Array<Soldier & { absenceReason?: string | null }> = [];
