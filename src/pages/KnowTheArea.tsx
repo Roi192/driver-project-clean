@@ -975,9 +975,42 @@ const KnowTheArea = () => {
         event_type: data.event_type || null,
         driver_type: data.driver_type || null,
         image_url: data.image_url || null,
+        soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
+        driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
+        vehicle_number: data.vehicle_number || null,
+        severity: data.severity || 'minor',
       }).eq("id", editingEvent.id);
       
       if (error) throw error;
+
+      // Sync to accidents table for soldier control table visibility
+      try {
+        const accidentPayload: any = {
+          accident_date: data.event_date || new Date().toISOString().slice(0, 10),
+          driver_type: data.driver_type === "combat" ? "combat" : "security",
+          soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
+          driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
+          vehicle_number: data.vehicle_number || null,
+          incident_type: data.event_type || null,
+          severity: data.severity || 'minor',
+          location: data.outpost || data.region || null,
+          description: data.description || data.title,
+        };
+        const { data: existing } = await supabase
+          .from("accidents")
+          .select("id")
+          .eq("description", data.description || data.title)
+          .eq("accident_date", accidentPayload.accident_date)
+          .maybeSingle();
+        if (existing?.id) {
+          await supabase.from("accidents").update(accidentPayload).eq("id", existing.id);
+        } else {
+          await supabase.from("accidents").insert([{ ...accidentPayload, status: 'open' }]);
+        }
+      } catch (e: any) {
+        console.error("accidents sync exception:", e);
+      }
+
       toast.success("האירוע עודכן");
       setShowAddEventDialog(false);
       setEditingEvent(null);
@@ -1130,9 +1163,36 @@ const KnowTheArea = () => {
         event_type: data.event_type || null,
         driver_type: data.driver_type || null,
         image_url: data.image_url || null,
+        soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
+        driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
+        vehicle_number: data.vehicle_number || null,
+        severity: data.severity || 'minor',
       }]);
 
       if (error) throw error;
+
+      // Sync to accidents table (טבלת שליטה) so it appears in soldier profile
+      try {
+        const accidentPayload: any = {
+          accident_date: data.event_date || new Date().toISOString().slice(0, 10),
+          driver_type: data.driver_type === "combat" ? "combat" : "security",
+          soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
+          driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
+          vehicle_number: data.vehicle_number || null,
+          incident_type: data.event_type || null,
+          severity: data.severity || 'minor',
+          location: data.outpost || data.region || null,
+          description: data.description || data.title,
+          status: 'open',
+        };
+        const { error: accErr } = await supabase.from("accidents").insert([accidentPayload]);
+        if (accErr) {
+          console.error("accidents sync error:", accErr);
+          toast.warning("האירוע נשמר אך הסנכרון לטבלת השליטה נכשל: " + accErr.message);
+        }
+      } catch (e: any) {
+        console.error("accidents sync exception:", e);
+      }
 
       toast.success("אירוע הבטיחות נוסף בהצלחה");
       setShowAddEventDialog(false);
