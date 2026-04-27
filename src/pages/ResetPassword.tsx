@@ -14,13 +14,23 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Check for errors in the URL hash (e.g. expired link)
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const errorDescription = params.get('error_description') || params.get('error');
+    if (errorDescription) {
+      setErrorMessage(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
+    }
+
     // Supabase will set the session automatically from the recovery URL hash
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || session) {
         setHasSession(true);
+        setErrorMessage(null);
       }
     });
     supabase.auth.getSession().then(({ data }) => {
@@ -75,7 +85,12 @@ export default function ResetPassword() {
         <CardContent className="pb-8">
           {!hasSession ? (
             <div className="text-center space-y-4">
-              <p className="text-muted-foreground">קישור איפוס לא תקין או שפג תוקפו.</p>
+              <p className="text-muted-foreground">
+                {errorMessage ? `שגיאה: ${errorMessage}` : 'קישור איפוס לא תקין או שפג תוקפו.'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                אם הלינק נשלח לפני יותר משעה, בקש איפוס סיסמה חדש.
+              </p>
               <Button onClick={() => navigate('/auth')} className="w-full">חזרה להתחברות</Button>
             </div>
           ) : (

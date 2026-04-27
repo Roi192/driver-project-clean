@@ -157,6 +157,9 @@ export default function SoldiersControl() {
   const [releaseDateFilter, setReleaseDateFilter] = useState<string>("all");
   const [qualifiedDateFilter, setQualifiedDateFilter] = useState<string>("all");
   const [sortMode, setSortMode] = useState<string>("name_asc");
+  const [customSort1, setCustomSort1] = useState<string>("no_defensive");
+  const [customSort2, setCustomSort2] = useState<string>("any_license_expiry");
+  const [customSort3, setCustomSort3] = useState<string>("name");
 
   const [formData, setFormData] = useState({
     personal_number: "",
@@ -497,6 +500,47 @@ export default function SoldiersControl() {
       return r < lic ? 0 : 1;
     };
     const noDefensive = (s: Soldier) => (s.defensive_driving_passed ? 1 : 0);
+
+    // Custom multi-level sort: evaluates a single criterion key for soldier
+    const evalCriterion = (s: Soldier, key: string): number | string => {
+      switch (key) {
+        case "none": return 0;
+        case "no_defensive": return noDefensive(s);
+        case "no_correct_driving": return s.correct_driving_in_service_date ? 1 : 0;
+        case "civilian_expiry": return getDateTime(s.civilian_license_expiry);
+        case "military_expiry": return getDateTime(s.military_license_expiry);
+        case "any_license_expiry": return earliestLicense(s);
+        case "release_date": return getDateTime(s.release_date);
+        case "qualified_date": return getDateTime(s.qualified_date);
+        case "release_before_civilian":
+          return s.release_date && s.civilian_license_expiry && getDateTime(s.release_date) < getDateTime(s.civilian_license_expiry) ? 0 : 1;
+        case "release_before_military":
+          return s.release_date && s.military_license_expiry && getDateTime(s.release_date) < getDateTime(s.military_license_expiry) ? 0 : 1;
+        case "release_before_any_license": return releaseBeforeLicense(s);
+        case "missing_civilian": return s.civilian_license_expiry ? 1 : 0;
+        case "missing_military": return s.military_license_expiry ? 1 : 0;
+        case "missing_release": return s.release_date ? 1 : 0;
+        case "name": return s.full_name;
+        default: return 0;
+      }
+    };
+    const compareCriterion = (a: Soldier, b: Soldier, key: string): number => {
+      if (key === "none") return 0;
+      const av = evalCriterion(a, key);
+      const bv = evalCriterion(b, key);
+      if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv, "he");
+      return (av as number) - (bv as number);
+    };
+
+    if (sortMode === "custom") {
+      const c1 = compareCriterion(a, b, customSort1);
+      if (c1 !== 0) return c1;
+      const c2 = compareCriterion(a, b, customSort2);
+      if (c2 !== 0) return c2;
+      const c3 = compareCriterion(a, b, customSort3);
+      if (c3 !== 0) return c3;
+      return a.full_name.localeCompare(b.full_name, "he");
+    }
 
     if (sortMode === "civilian_expiry_no_defensive") {
       const aPriority = noDefensive(a);
@@ -898,9 +942,45 @@ export default function SoldiersControl() {
                       <SelectItem value="release_before_military" className="text-slate-700">משתחרר לפני שצבאי פג</SelectItem>
                       <SelectItem value="release_before_any_license" className="text-slate-700">משתחרר לפני שרישיון כלשהו פג</SelectItem>
                       <SelectItem value="civilian_expiry_no_defensive_release" className="text-slate-700">בלי נהיגה מונעת + משתחרר לפני שפג + אזרחי</SelectItem>
+                      <SelectItem value="custom" className="text-slate-700 font-bold">⚙️ מיון מותאם אישית (3 שכבות)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {sortMode === "custom" && (
+                  <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                    {[
+                      { label: "מיון ראשי", value: customSort1, setter: setCustomSort1 },
+                      { label: "מיון משני", value: customSort2, setter: setCustomSort2 },
+                      { label: "מיון שלישוני", value: customSort3, setter: setCustomSort3 },
+                    ].map((row, idx) => (
+                      <div key={idx}>
+                        <Label className="text-xs text-slate-600 mb-1 block font-semibold">{row.label}</Label>
+                        <Select value={row.value} onValueChange={row.setter}>
+                          <SelectTrigger className="rounded-xl bg-white text-slate-700 border-slate-300">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border border-slate-200 max-h-72">
+                            <SelectItem value="none" className="text-slate-700">— ללא —</SelectItem>
+                            <SelectItem value="no_defensive" className="text-slate-700">בלי נהיגה מונעת תחילה</SelectItem>
+                            <SelectItem value="no_correct_driving" className="text-slate-700">בלי נהיגה נכונה בשירות תחילה</SelectItem>
+                            <SelectItem value="civilian_expiry" className="text-slate-700">תוקף רישיון אזרחי (קרוב→רחוק)</SelectItem>
+                            <SelectItem value="military_expiry" className="text-slate-700">תוקף רישיון צבאי (קרוב→רחוק)</SelectItem>
+                            <SelectItem value="any_license_expiry" className="text-slate-700">כל רישיון - הקרוב ביותר לפוג</SelectItem>
+                            <SelectItem value="release_date" className="text-slate-700">תאריך שחרור (קרוב→רחוק)</SelectItem>
+                            <SelectItem value="qualified_date" className="text-slate-700">תאריך הכשרה (וותיק→חדש)</SelectItem>
+                            <SelectItem value="release_before_civilian" className="text-slate-700">משתחרר לפני שאזרחי פג</SelectItem>
+                            <SelectItem value="release_before_military" className="text-slate-700">משתחרר לפני שצבאי פג</SelectItem>
+                            <SelectItem value="release_before_any_license" className="text-slate-700">משתחרר לפני שרישיון כלשהו פג</SelectItem>
+                            <SelectItem value="missing_civilian" className="text-slate-700">חסר תאריך רישיון אזרחי תחילה</SelectItem>
+                            <SelectItem value="missing_military" className="text-slate-700">חסר תאריך רישיון צבאי תחילה</SelectItem>
+                            <SelectItem value="missing_release" className="text-slate-700">חסר תאריך שחרור תחילה</SelectItem>
+                            <SelectItem value="name" className="text-slate-700">שם א-ת</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
