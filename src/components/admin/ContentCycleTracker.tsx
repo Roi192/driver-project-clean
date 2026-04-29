@@ -71,15 +71,18 @@ const wasSoldierRelevantOnDate = (soldier: Soldier, eventDate: string) => {
   const eventDateKey = getDateKey(eventDate);
   if (!eventDateKey) return true;
 
-  const createdDateKey = getDateKey(soldier.created_at);
   const qualifiedDateKey = getDateKey(soldier.qualified_date);
   const releaseDateKey = getDateKey(soldier.release_date);
 
-  if (createdDateKey && createdDateKey > eventDateKey) return false;
   if (qualifiedDateKey && qualifiedDateKey > eventDateKey) return false;
   if (releaseDateKey && releaseDateKey < eventDateKey) return false;
 
   return true;
+};
+
+const isSoldierRelevantForEventDate = (soldier: Soldier, eventDate: string) => {
+  const hasHistoricalReleaseDate = Boolean(getDateKey(soldier.release_date));
+  return (soldier.is_active === true || hasHistoricalReleaseDate) && wasSoldierRelevantOnDate(soldier, eventDate);
 };
 
 export function ContentCycleTracker({ events, attendance, soldiers, overrides, onOverrideChange }: ContentCycleTrackerProps) {
@@ -106,9 +109,13 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
       const relevantSoldierIds = new Set<string>();
 
       cycleEvents.forEach((event) => {
+        soldiers
+          .filter((soldier) => isSoldierRelevantForEventDate(soldier, event.event_date))
+          .forEach((soldier) => relevantSoldierIds.add(soldier.id));
+
         (event.expected_soldiers || []).forEach((soldierId) => {
           const soldier = soldiers.find((s) => s.id === soldierId);
-          if (soldier && wasSoldierRelevantOnDate(soldier, event.event_date)) {
+          if (soldier && isSoldierRelevantForEventDate(soldier, event.event_date)) {
             relevantSoldierIds.add(soldierId);
           }
         });
