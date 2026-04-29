@@ -2,11 +2,23 @@ import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,15 +27,29 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, differenceInDays, parseISO, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
+import {
+  format,
+  addMonths,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isToday,
+  isSameDay,
+  differenceInDays,
+  parseISO,
+  startOfWeek,
+  endOfWeek,
+  addWeeks,
+  addDays,
+} from "date-fns";
 import { he } from "date-fns/locale";
-import { 
-  Calendar as CalendarIcon, 
-  Plus, 
-  ChevronRight, 
-  ChevronLeft, 
-  Bell, 
-  Users, 
+import {
+  Calendar as CalendarIcon,
+  Plus,
+  ChevronRight,
+  ChevronLeft,
+  Bell,
+  Users,
   Loader2,
   List,
   CalendarDays,
@@ -37,7 +63,7 @@ import {
   CheckCircle,
   XCircle,
   MinusCircle,
-  HelpCircle
+  HelpCircle,
 } from "lucide-react";
 import unitLogo from "@/assets/unit-logo.png";
 import { ContentCycleTracker } from "@/components/admin/ContentCycleTracker";
@@ -73,6 +99,7 @@ interface Soldier {
   rotation_group: string | null;
   qualified_date: string | null;
   release_date: string | null;
+  control_removed_at?: string | null;
   created_at: string;
   is_active: boolean;
 }
@@ -96,10 +123,21 @@ interface EventAttendance {
 }
 
 // סיבות היעדרות
-type AbsenceReason = "קורס" | "גימלים" | "גימלים ממושכים" | "נעדר" | "נפקד" | "כלא";
+type AbsenceReason =
+  | "קורס"
+  | "גימלים"
+  | "גימלים ממושכים"
+  | "נעדר"
+  | "נפקד"
+  | "כלא";
 
 // סיבות שלא משפיעות על אחוז הנוכחות (החייל לא היה יכול להגיע)
-const NON_COUNTABLE_ABSENCE_REASONS: AbsenceReason[] = ["קורס", "גימלים ממושכים", "נפקד", "כלא"];
+const NON_COUNTABLE_ABSENCE_REASONS: AbsenceReason[] = [
+  "קורס",
+  "גימלים ממושכים",
+  "נפקד",
+  "כלא",
+];
 
 const absenceReasonOptions: { value: AbsenceReason; label: string }[] = [
   { value: "קורס", label: "קורס" },
@@ -111,7 +149,11 @@ const absenceReasonOptions: { value: AbsenceReason; label: string }[] = [
 ];
 
 // 4 סטטוסים לנוכחות
-type AttendanceStatus = "attended" | "absent" | "not_in_rotation" | "not_updated";
+type AttendanceStatus =
+  | "attended"
+  | "absent"
+  | "not_in_rotation"
+  | "not_updated";
 
 const attendanceStatusLabels: Record<AttendanceStatus, string> = {
   attended: "נכח",
@@ -158,28 +200,65 @@ const categoryLabels = {
   holiday: "חג/אזכור",
 };
 
-const getDateKey = (value: string | null | undefined) => value?.slice(0, 10) || null;
+const getDateKey = (value: string | null | undefined) =>
+  value?.slice(0, 10) || null;
 
 const wasSoldierInUnitOnDate = (soldier: Soldier, eventDate: string) => {
   const eventDateKey = getDateKey(eventDate);
   if (!eventDateKey) return true;
 
   const releaseDateKey = getDateKey(soldier.release_date);
+  const controlRemovedDateKey = getDateKey(soldier.control_removed_at);
+  const serviceEndDateKey =
+    [releaseDateKey, controlRemovedDateKey].filter(Boolean).sort()[0] || null;
   const qualifiedDateKey = getDateKey(soldier.qualified_date);
 
-  if (releaseDateKey && releaseDateKey < eventDateKey) return false;
+  if (serviceEndDateKey && serviceEndDateKey < eventDateKey) return false;
   if (qualifiedDateKey && qualifiedDateKey > eventDateKey) return false;
 
   return true;
 };
 
 const isSoldierRelevantForEventDate = (soldier: Soldier, eventDate: string) => {
-  const hasHistoricalReleaseDate = Boolean(getDateKey(soldier.release_date));
-  return (soldier.is_active || hasHistoricalReleaseDate) && wasSoldierInUnitOnDate(soldier, eventDate);
+  const hasHistoricalEndDate = Boolean(
+    getDateKey(soldier.release_date) || getDateKey(soldier.control_removed_at),
+  );
+  return (
+    (soldier.is_active || hasHistoricalEndDate) &&
+    wasSoldierInUnitOnDate(soldier, eventDate)
+  );
+};
+
+const isDeletedSoldierPlaceholder = (soldier: Soldier | undefined) =>
+  Boolean(soldier) &&
+  !soldier!.is_active &&
+  !soldier!.personal_number &&
+  getDateKey(soldier!.release_date) === "1970-01-01";
+
+const isMeaningfulAttendanceRecord = (record: EventAttendance) =>
+  record.status === "attended" ||
+  record.status === "absent" ||
+  record.completed;
+
+const shouldIncludeAttendanceRecordForEvent = (
+  record: EventAttendance,
+  soldier: Soldier | undefined,
+  eventDate: string,
+) => {
+  if (!soldier || isDeletedSoldierPlaceholder(soldier)) {
+    return isMeaningfulAttendanceRecord(record);
+  }
+
+  return isSoldierRelevantForEventDate(soldier, eventDate);
 };
 
 export default function AnnualWorkPlan() {
-  const { isAdmin, isPlatoonCommander, canAccessAnnualWorkPlan, loading: authLoading } = useAuth();
+  const {
+    isAdmin,
+    isPlatoonCommander,
+    canAccessAnnualWorkPlan,
+    loading: authLoading,
+  } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState<WorkPlanEvent[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -194,15 +273,27 @@ export default function AnnualWorkPlan() {
   const [editingEvent, setEditingEvent] = useState<WorkPlanEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<WorkPlanEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<WorkPlanEvent | null>(
+    null,
+  );
   const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
-  const [expectedSoldiersDialogOpen, setExpectedSoldiersDialogOpen] = useState(false);
-  const [selectedSoldierAttendance, setSelectedSoldierAttendance] = useState<Record<string, { status: AttendanceStatus; reason: string; completed: boolean }>>({});
-  const [selectedExpectedSoldiers, setSelectedExpectedSoldiers] = useState<string[]>([]);
+  const [expectedSoldiersDialogOpen, setExpectedSoldiersDialogOpen] =
+    useState(false);
+  const [selectedSoldierAttendance, setSelectedSoldierAttendance] = useState<
+    Record<
+      string,
+      { status: AttendanceStatus; reason: string; completed: boolean }
+    >
+  >({});
+  const [selectedExpectedSoldiers, setSelectedExpectedSoldiers] = useState<
+    string[]
+  >([]);
   const [dateEventsDialogOpen, setDateEventsDialogOpen] = useState(false);
-  const [attendanceRotationFilter, setAttendanceRotationFilter] = useState<string>("expected");
+  const [attendanceRotationFilter, setAttendanceRotationFilter] =
+    useState<string>("expected");
   const [manualAddSoldierId, setManualAddSoldierId] = useState<string>("");
-  const [detailAttendanceView, setDetailAttendanceView] = useState<AttendanceStatus | null>(null);
+  const [detailAttendanceView, setDetailAttendanceView] =
+    useState<AttendanceStatus | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -225,14 +316,19 @@ export default function AnnualWorkPlan() {
   // Active soldiers for selecting expected soldiers (new events)
   // = the drivers that appear in the Control Table (is_active = true)
   const activeSoldiers = useMemo(
-    () => soldiers.filter(s => s.is_active && wasSoldierInUnitOnDate(s, format(new Date(), "yyyy-MM-dd"))),
-    [soldiers]
+    () =>
+      soldiers.filter(
+        (s) =>
+          s.is_active &&
+          wasSoldierInUnitOnDate(s, format(new Date(), "yyyy-MM-dd")),
+      ),
+    [soldiers],
   );
 
   // Soldiers eligible for a specific event:
   // drivers from the Control Table date range, including released soldiers for past events.
   const getEligibleSoldiersForEvent = (eventDate: string) => {
-    return soldiers.filter(s => isSoldierRelevantForEventDate(s, eventDate));
+    return soldiers.filter((s) => isSoldierRelevantForEventDate(s, eventDate));
   };
 
   useEffect(() => {
@@ -270,40 +366,54 @@ export default function AnnualWorkPlan() {
 
   const fetchData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
-    
-    const [eventsRes, holidaysRes, soldiersRes, overridesRes, allAttendance] = await Promise.all([
-      supabase.from("work_plan_events").select("*").order("event_date", { ascending: true }),
-      supabase.from("calendar_holidays").select("*"),
-      supabase.from("soldiers").select("id, full_name, personal_number, rotation_group, qualified_date, release_date, created_at, is_active").order("full_name"),
-      supabase.from("content_cycle_overrides").select("*"),
-      fetchAllAttendance(),
-    ]);
+
+    const [eventsRes, holidaysRes, soldiersRes, overridesRes, allAttendance] =
+      await Promise.all([
+        supabase
+          .from("work_plan_events")
+          .select("*")
+          .order("event_date", { ascending: true }),
+        supabase.from("calendar_holidays").select("*"),
+        supabase
+          .from("soldiers")
+          .select(
+            "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active",
+          )
+          .order("full_name"),
+        supabase.from("content_cycle_overrides").select("*"),
+        fetchAllAttendance(),
+      ]);
 
     if (!eventsRes.error) setEvents((eventsRes.data || []) as WorkPlanEvent[]);
     if (!holidaysRes.error) setHolidays(holidaysRes.data || []);
-    const loadedSoldiers: Soldier[] = soldiersRes.error ? [] : (soldiersRes.data || []);
+    const loadedSoldiers: Soldier[] = soldiersRes.error
+      ? []
+      : soldiersRes.data || [];
     const attendanceList: EventAttendance[] = allAttendance || [];
 
     // Add placeholder entries for soldiers that were deleted from the Control Table
     // but still have historical attendance records, so their names remain visible.
-    const existingIds = new Set(loadedSoldiers.map(s => s.id));
+    const existingIds = new Set(loadedSoldiers.map((s) => s.id));
     const orphanMap = new Map<string, string>();
     attendanceList.forEach((a: any) => {
       if (!existingIds.has(a.soldier_id) && !orphanMap.has(a.soldier_id)) {
         orphanMap.set(a.soldier_id, a.soldier_name_snapshot || "חייל שהוסר");
       }
     });
-    const orphanSoldiers: Soldier[] = Array.from(orphanMap.entries()).map(([id, name]) => ({
-      id,
-      full_name: name,
-      personal_number: "",
-      rotation_group: null,
-      qualified_date: null,
-      // Mark as released in the past so date-based filters keep them out of future events
-      release_date: "1970-01-01",
-      created_at: "1970-01-01",
-      is_active: false,
-    }));
+    const orphanSoldiers: Soldier[] = Array.from(orphanMap.entries()).map(
+      ([id, name]) => ({
+        id,
+        full_name: name,
+        personal_number: "",
+        rotation_group: null,
+        qualified_date: null,
+        // Mark as released in the past so date-based filters keep them out of future events
+        release_date: "1970-01-01",
+        control_removed_at: "1970-01-01",
+        created_at: "1970-01-01",
+        is_active: false,
+      }),
+    );
     setSoldiers([...loadedSoldiers, ...orphanSoldiers]);
     setAttendance(attendanceList);
     if (!overridesRes.error) setContentCycleOverrides(overridesRes.data || []);
@@ -313,14 +423,17 @@ export default function AnnualWorkPlan() {
 
   const getUpcomingReminders = () => {
     const today = new Date();
-    return events.filter(event => {
-      const eventDate = new Date(event.event_date);
-      const daysUntil = differenceInDays(eventDate, today);
-      return daysUntil > 0 && daysUntil <= 60 && event.status !== "completed";
-    }).map(event => ({
-      ...event,
-      daysUntil: differenceInDays(new Date(event.event_date), today)
-    })).sort((a, b) => a.daysUntil - b.daysUntil);
+    return events
+      .filter((event) => {
+        const eventDate = new Date(event.event_date);
+        const daysUntil = differenceInDays(eventDate, today);
+        return daysUntil > 0 && daysUntil <= 60 && event.status !== "completed";
+      })
+      .map((event) => ({
+        ...event,
+        daysUntil: differenceInDays(new Date(event.event_date), today),
+      }))
+      .sort((a, b) => a.daysUntil - b.daysUntil);
   };
 
   const handleSubmit = async () => {
@@ -335,22 +448,32 @@ export default function AnnualWorkPlan() {
       const newEventDate = parseISO(formData.event_date);
       const twoWeeksAgo = addDays(newEventDate, -14);
       const twoWeeksAgoStr = format(twoWeeksAgo, "yyyy-MM-dd");
-      
+
       console.log("Looking for event from 2 weeks ago:", twoWeeksAgoStr);
-      console.log("All events:", events.map(e => ({ date: e.event_date, title: e.title, expected: e.expected_soldiers?.length || 0 })));
-      
-      // חפש כל אירוע שהיה בדיוק שבועיים לפני (ללא קשר לכותרת)
-      const matchingEvent = events.find(event => 
-        event.event_date === twoWeeksAgoStr &&
-        event.expected_soldiers && 
-        event.expected_soldiers.length > 0
+      console.log(
+        "All events:",
+        events.map((e) => ({
+          date: e.event_date,
+          title: e.title,
+          expected: e.expected_soldiers?.length || 0,
+        })),
       );
-      
+
+      // חפש כל אירוע שהיה בדיוק שבועיים לפני (ללא קשר לכותרת)
+      const matchingEvent = events.find(
+        (event) =>
+          event.event_date === twoWeeksAgoStr &&
+          event.expected_soldiers &&
+          event.expected_soldiers.length > 0,
+      );
+
       console.log("Matching event found:", matchingEvent);
-      
+
       if (matchingEvent) {
         copiedExpectedSoldiers = matchingEvent.expected_soldiers;
-        toast.info(`העתקנו ${copiedExpectedSoldiers.length} חיילים מצופים מהמופע "${matchingEvent.title}" מתאריך ${format(twoWeeksAgo, "dd/MM/yyyy", { locale: he })}`);
+        toast.info(
+          `העתקנו ${copiedExpectedSoldiers.length} חיילים מצופים מהמופע "${matchingEvent.title}" מתאריך ${format(twoWeeksAgo, "dd/MM/yyyy", { locale: he })}`,
+        );
       }
     }
 
@@ -361,9 +484,15 @@ export default function AnnualWorkPlan() {
       end_date: formData.end_date || null,
       status: formData.status,
       category: formData.category,
-      color: formData.category === "platoon" ? "blue" : formData.category === "brigade" ? "purple" : "amber",
+      color:
+        formData.category === "platoon"
+          ? "blue"
+          : formData.category === "brigade"
+            ? "purple"
+            : "amber",
       attendees: [],
-      expected_soldiers: editingEvent?.expected_soldiers || copiedExpectedSoldiers,
+      expected_soldiers:
+        editingEvent?.expected_soldiers || copiedExpectedSoldiers,
       content_cycle: formData.content_cycle || null,
     };
 
@@ -403,7 +532,10 @@ export default function AnnualWorkPlan() {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("work_plan_events").delete().eq("id", id);
+    const { error } = await supabase
+      .from("work_plan_events")
+      .delete()
+      .eq("id", id);
 
     if (error) {
       toast.error("שגיאה במחיקת המופע");
@@ -450,12 +582,17 @@ export default function AnnualWorkPlan() {
   const openAddDialogForDate = (date: Date) => {
     setSelectedDate(date);
     resetForm();
-    setFormData(prev => ({ ...prev, event_date: format(date, "yyyy-MM-dd") }));
+    setFormData((prev) => ({
+      ...prev,
+      event_date: format(date, "yyyy-MM-dd"),
+    }));
     setDialogOpen(true);
   };
 
   const getCategoryColor = (category: string | null) => {
-    return categoryColors[category as keyof typeof categoryColors] || "bg-blue-500";
+    return (
+      categoryColors[category as keyof typeof categoryColors] || "bg-blue-500"
+    );
   };
 
   // Calendar rendering
@@ -470,32 +607,45 @@ export default function AnnualWorkPlan() {
 
   // Get events for week
   const getEventsForWeek = () => {
-    return events.filter(event => {
-      const eventDate = parseISO(event.event_date);
-      return eventDate >= weekStart && eventDate <= weekEnd;
-    }).sort((a, b) => parseISO(a.event_date).getTime() - parseISO(b.event_date).getTime());
+    return events
+      .filter((event) => {
+        const eventDate = parseISO(event.event_date);
+        return eventDate >= weekStart && eventDate <= weekEnd;
+      })
+      .sort(
+        (a, b) =>
+          parseISO(a.event_date).getTime() - parseISO(b.event_date).getTime(),
+      );
   };
 
   // Get sorted events for list view
   const getSortedEventsList = () => {
-    return [...events].sort((a, b) => parseISO(a.event_date).getTime() - parseISO(b.event_date).getTime());
+    return [...events].sort(
+      (a, b) =>
+        parseISO(a.event_date).getTime() - parseISO(b.event_date).getTime(),
+    );
   };
 
   const getEventsForDate = (date: Date) => {
-    return events.filter(event => isSameDay(parseISO(event.event_date), date));
+    return events.filter((event) =>
+      isSameDay(parseISO(event.event_date), date),
+    );
   };
 
   const getHolidaysForDate = (date: Date) => {
-    return holidays.filter(h => {
+    return holidays.filter((h) => {
       const holidayDate = parseISO(h.event_date);
-      return holidayDate.getMonth() === date.getMonth() && holidayDate.getDate() === date.getDate();
+      return (
+        holidayDate.getMonth() === date.getMonth() &&
+        holidayDate.getDate() === date.getDate()
+      );
     });
   };
 
   const handleDayClick = (day: Date) => {
     const dayEvents = getEventsForDate(day);
     const dayHolidays = getHolidaysForDate(day);
-    
+
     if (dayEvents.length === 0 && dayHolidays.length === 0) {
       openAddDialogForDate(day);
     } else {
@@ -549,8 +699,11 @@ export default function AnnualWorkPlan() {
   // Attendance management with 4 statuses
   const openAttendanceDialog = (event: WorkPlanEvent) => {
     setSelectedEvent(event);
-    const existingAttendance: Record<string, { status: AttendanceStatus; reason: string; completed: boolean }> = {};
-    
+    const existingAttendance: Record<
+      string,
+      { status: AttendanceStatus; reason: string; completed: boolean }
+    > = {};
+
     // הגדר ברירת מחדל לפי מצופים
     const expectedSoldiers = event.expected_soldiers || [];
 
@@ -558,13 +711,28 @@ export default function AnnualWorkPlan() {
     // plus any soldier that already has a saved attendance record for this event
     // (so historical records stay visible even after a soldier was released/deleted).
     const eligibleSoldierIds = new Set(
-      getEligibleSoldiersForEvent(event.event_date).map(s => s.id)
+      getEligibleSoldiersForEvent(event.event_date).map((s) => s.id),
     );
-    const eventAttendanceRecords = attendance.filter(a => a.event_id === event.id);
-    eventAttendanceRecords.forEach(a => eligibleSoldierIds.add(a.soldier_id));
+    const eventAttendanceRecords = attendance.filter(
+      (a) => a.event_id === event.id,
+    );
+    const soldierById = new Map(
+      soldiers.map((soldier) => [soldier.id, soldier]),
+    );
+    eventAttendanceRecords
+      .filter((a) =>
+        shouldIncludeAttendanceRecordForEvent(
+          a,
+          soldierById.get(a.soldier_id),
+          event.event_date,
+        ),
+      )
+      .forEach((a) => eligibleSoldierIds.add(a.soldier_id));
 
-    eligibleSoldierIds.forEach(soldierId => {
-      const att = eventAttendanceRecords.find(a => a.soldier_id === soldierId);
+    eligibleSoldierIds.forEach((soldierId) => {
+      const att = eventAttendanceRecords.find(
+        (a) => a.soldier_id === soldierId,
+      );
       if (att) {
         existingAttendance[soldierId] = {
           status: att.status as AttendanceStatus,
@@ -574,13 +742,15 @@ export default function AnnualWorkPlan() {
       } else {
         // אם החייל לא ברשימת המצופים, הוא "לא בסבב" כברירת מחדל
         existingAttendance[soldierId] = {
-          status: expectedSoldiers.includes(soldierId) ? "not_updated" : "not_in_rotation",
+          status: expectedSoldiers.includes(soldierId)
+            ? "not_updated"
+            : "not_in_rotation",
           reason: "",
           completed: false,
         };
       }
     });
-    
+
     setSelectedSoldierAttendance(existingAttendance);
     setAttendanceRotationFilter("expected");
     setManualAddSoldierId("");
@@ -593,7 +763,9 @@ export default function AnnualWorkPlan() {
     const expectedSoldierIds = new Set(selectedEvent.expected_soldiers || []);
 
     // Log all current attendance state for debugging
-    const allStatuses = Object.entries(selectedSoldierAttendance).map(([id, d]) => `${id.slice(0,8)}:${d.status}`);
+    const allStatuses = Object.entries(selectedSoldierAttendance).map(
+      ([id, d]) => `${id.slice(0, 8)}:${d.status}`,
+    );
     console.log("All soldier statuses:", allStatuses);
 
     // Build records - keep only meaningful overrides/attendance rows
@@ -601,22 +773,34 @@ export default function AnnualWorkPlan() {
     Object.entries(selectedSoldierAttendance)
       .filter(([soldierId, data]) => {
         if (data.status === "not_updated") return false;
-        if (data.status === "not_in_rotation" && !expectedSoldierIds.has(soldierId)) return false;
+        if (
+          data.status === "not_in_rotation" &&
+          !expectedSoldierIds.has(soldierId)
+        )
+          return false;
         return true;
       })
       .forEach(([soldierId, data]) => {
         recordsMap.set(soldierId, {
           event_id: selectedEvent.id,
           soldier_id: soldierId,
-          attended: data.status === "attended" || (data.status === "absent" && data.completed),
+          attended:
+            data.status === "attended" ||
+            (data.status === "absent" && data.completed),
           absence_reason: data.status === "absent" ? data.reason : null,
           status: data.status,
           completed: data.status === "absent" && data.completed,
         });
       });
-    
+
     const records = Array.from(recordsMap.values());
-    console.log("Records to save:", records.length, "out of", Object.keys(selectedSoldierAttendance).length, "total soldiers");
+    console.log(
+      "Records to save:",
+      records.length,
+      "out of",
+      Object.keys(selectedSoldierAttendance).length,
+      "total soldiers",
+    );
 
     if (records.length === 0) {
       toast.error("אין נתוני נוכחות לשמירה - יש לסמן סטטוס לפחות לחייל אחד");
@@ -629,9 +813,14 @@ export default function AnnualWorkPlan() {
       .delete()
       .eq("event_id", selectedEvent.id)
       .select();
-    
-    console.log("Deleted rows:", deletedRows?.length || 0, "error:", deleteError);
-    
+
+    console.log(
+      "Deleted rows:",
+      deletedRows?.length || 0,
+      "error:",
+      deleteError,
+    );
+
     if (deleteError) {
       console.error("Delete error:", deleteError);
       toast.error("שגיאה במחיקת נוכחות קיימת: " + deleteError.message);
@@ -644,7 +833,12 @@ export default function AnnualWorkPlan() {
       .insert(records)
       .select();
 
-    console.log("Insert result - inserted:", insertedData?.length, "error:", insertError);
+    console.log(
+      "Insert result - inserted:",
+      insertedData?.length,
+      "error:",
+      insertError,
+    );
 
     if (insertError) {
       console.error("Insert error:", insertError);
@@ -658,33 +852,43 @@ export default function AnnualWorkPlan() {
   };
 
   const getRelevantEventAttendance = (eventId: string) => {
-    const event = events.find(e => e.id === eventId);
+    const event = events.find((e) => e.id === eventId);
     if (!event) return [];
 
     const expectedSoldiers = event.expected_soldiers || [];
-    const attendanceRecords = attendance.filter(a => a.event_id === eventId);
-    const attendanceBySoldier = new Map(attendanceRecords.map(record => [record.soldier_id, record]));
-    const soldierById = new Map(soldiers.map(soldier => [soldier.id, soldier]));
+    const attendanceRecords = attendance.filter((a) => a.event_id === eventId);
+    const attendanceBySoldier = new Map(
+      attendanceRecords.map((record) => [record.soldier_id, record]),
+    );
+    const soldierById = new Map(
+      soldiers.map((soldier) => [soldier.id, soldier]),
+    );
 
     // Eligible soldiers for this event = drivers from the Control Table date range:
     // active drivers for current/future events, and released drivers only for events
     // before/through their release date.
     const historicalRosterIds = soldiers
-      .filter((soldier) => isSoldierRelevantForEventDate(soldier, event.event_date))
+      .filter((soldier) =>
+        isSoldierRelevantForEventDate(soldier, event.event_date),
+      )
       .map((s) => s.id);
 
     const soldierIds = new Set<string>([
       ...expectedSoldiers,
-      ...attendanceRecords.map(record => record.soldier_id),
+      ...attendanceRecords.map((record) => record.soldier_id),
       ...historicalRosterIds,
     ]);
 
     return Array.from(soldierIds)
       .filter((soldierId) => {
         const soldier = soldierById.get(soldierId);
-        // Always keep saved attendance records, even if the soldier was deleted
-        // from the Control Table — preserves historical reports.
-        if (attendanceBySoldier.has(soldierId)) return true;
+        const record = attendanceBySoldier.get(soldierId);
+        if (record)
+          return shouldIncludeAttendanceRecordForEvent(
+            record,
+            soldier,
+            event.event_date,
+          );
         if (!soldier) return false;
         return isSoldierRelevantForEventDate(soldier, event.event_date);
       })
@@ -702,7 +906,9 @@ export default function AnnualWorkPlan() {
 
         return {
           soldier_id: soldierId,
-          status: expectedSoldiers.includes(soldierId) ? "not_updated" as AttendanceStatus : "not_in_rotation" as AttendanceStatus,
+          status: expectedSoldiers.includes(soldierId)
+            ? ("not_updated" as AttendanceStatus)
+            : ("not_in_rotation" as AttendanceStatus),
           absence_reason: null,
           completed: false,
         };
@@ -711,40 +917,55 @@ export default function AnnualWorkPlan() {
 
   const getEventAttendanceStats = (eventId: string) => {
     const eventAttendance = getRelevantEventAttendance(eventId);
-    const attended = eventAttendance.filter(a => a.status === "attended" || a.completed).length;
-    
+    const attended = eventAttendance.filter(
+      (a) => a.status === "attended" || a.completed,
+    ).length;
+
     // נעדרים שמשפיעים על אחוז הנוכחות (רק גימלים ונעדר ללא סיבה)
-    const countableAbsent = eventAttendance.filter(a => 
-      a.status === "absent" && 
-      !a.completed &&
-      !NON_COUNTABLE_ABSENCE_REASONS.includes(a.absence_reason as AbsenceReason)
+    const countableAbsent = eventAttendance.filter(
+      (a) =>
+        a.status === "absent" &&
+        !a.completed &&
+        !NON_COUNTABLE_ABSENCE_REASONS.includes(
+          a.absence_reason as AbsenceReason,
+        ),
     ).length;
-    
+
     // נעדרים שלא משפיעים על אחוז הנוכחות (קורס, גימלים ממושכים, נפקד, כלא)
-    const nonCountableAbsent = eventAttendance.filter(a => 
-      a.status === "absent" && 
-      !a.completed &&
-      NON_COUNTABLE_ABSENCE_REASONS.includes(a.absence_reason as AbsenceReason)
+    const nonCountableAbsent = eventAttendance.filter(
+      (a) =>
+        a.status === "absent" &&
+        !a.completed &&
+        NON_COUNTABLE_ABSENCE_REASONS.includes(
+          a.absence_reason as AbsenceReason,
+        ),
     ).length;
-    
-    const notInRotation = eventAttendance.filter(a => a.status === "not_in_rotation").length;
-    const notUpdated = eventAttendance.filter(a => a.status === "not_updated").length;
+
+    const notInRotation = eventAttendance.filter(
+      (a) => a.status === "not_in_rotation",
+    ).length;
+    const notUpdated = eventAttendance.filter(
+      (a) => a.status === "not_updated",
+    ).length;
     const rosterTotal = eventAttendance.length;
-    const total = eventAttendance.filter(a => a.status !== "not_in_rotation" && a.status !== "not_updated").length;
-    
+    const total = eventAttendance.filter(
+      (a) => a.status !== "not_in_rotation" && a.status !== "not_updated",
+    ).length;
+
     // אחוז נוכחות - רק מחושב מאלו שהיו יכולים להגיע
     const totalCountable = attended + countableAbsent;
-    const attendancePercent = totalCountable > 0 ? Math.round((attended / totalCountable) * 100) : 0;
-    
-    return { 
-      attended, 
-      absent: countableAbsent, 
+    const attendancePercent =
+      totalCountable > 0 ? Math.round((attended / totalCountable) * 100) : 0;
+
+    return {
+      attended,
+      absent: countableAbsent,
       nonCountableAbsent,
-      notInRotation, 
+      notInRotation,
       notUpdated,
       rosterTotal,
       total,
-      attendancePercent 
+      attendancePercent,
     };
   };
 
@@ -754,7 +975,7 @@ export default function AnnualWorkPlan() {
     : activeSoldiers;
 
   const selectAllExpected = () => {
-    setSelectedExpectedSoldiers(expectedDialogSoldiers.map(s => s.id));
+    setSelectedExpectedSoldiers(expectedDialogSoldiers.map((s) => s.id));
   };
 
   const clearAllExpected = () => {
@@ -775,18 +996,23 @@ export default function AnnualWorkPlan() {
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white pb-24" dir="rtl">
+      <div
+        className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white pb-24"
+        dir="rtl"
+      >
         {/* Header */}
         <div className="relative overflow-hidden bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 px-4 py-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--gold)/0.2),transparent_50%)]" />
           <div className="absolute top-4 left-4 opacity-20">
             <img src={unitLogo} alt="" className="w-20 h-20" />
           </div>
-          
+
           <div className="relative z-10 text-center">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gold/20 border border-gold/30 mb-4">
               <CalendarIcon className="w-4 h-4 text-gold" />
-              <span className="text-sm font-bold text-gold">תוכנית עבודה שנתית</span>
+              <span className="text-sm font-bold text-gold">
+                תוכנית עבודה שנתית
+              </span>
             </div>
             <h1 className="text-2xl font-black text-white mb-2">לוח שנה</h1>
             <p className="text-slate-400 text-sm">ניהול מופעים ואירועים</p>
@@ -796,18 +1022,31 @@ export default function AnnualWorkPlan() {
         <div className="px-4 py-6 space-y-6">
           {/* Legend */}
           <div className="flex flex-wrap gap-2 justify-center">
-            <Badge className="bg-blue-500 text-white gap-1"><Building2 className="w-3 h-3" /> פלוגתי</Badge>
-            <Badge className="bg-purple-500 text-white gap-1"><Flag className="w-3 h-3" /> חטיבה</Badge>
-            <Badge className="bg-amber-400 text-white gap-1"><Star className="w-3 h-3" /> חג/אזכור</Badge>
+            <Badge className="bg-blue-500 text-white gap-1">
+              <Building2 className="w-3 h-3" /> פלוגתי
+            </Badge>
+            <Badge className="bg-purple-500 text-white gap-1">
+              <Flag className="w-3 h-3" /> חטיבה
+            </Badge>
+            <Badge className="bg-amber-400 text-white gap-1">
+              <Star className="w-3 h-3" /> חג/אזכור
+            </Badge>
           </div>
 
           {/* Attendance Status Legend */}
           <Card className="border-0 bg-gradient-to-br from-slate-50 to-white">
             <CardContent className="p-4">
-              <p className="text-sm font-bold text-slate-700 mb-3">מקרא סטטוסי נוכחות:</p>
+              <p className="text-sm font-bold text-slate-700 mb-3">
+                מקרא סטטוסי נוכחות:
+              </p>
               <div className="flex flex-wrap gap-2">
-                {(Object.keys(attendanceStatusLabels) as AttendanceStatus[]).map(status => (
-                  <Badge key={status} className={`${attendanceStatusColors[status]} text-white gap-1`}>
+                {(
+                  Object.keys(attendanceStatusLabels) as AttendanceStatus[]
+                ).map((status) => (
+                  <Badge
+                    key={status}
+                    className={`${attendanceStatusColors[status]} text-white gap-1`}
+                  >
                     {attendanceStatusIcons[status]}
                     {attendanceStatusLabels[status]}
                   </Badge>
@@ -826,17 +1065,24 @@ export default function AnnualWorkPlan() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {upcomingReminders.slice(0, 3).map(event => (
+                {upcomingReminders.slice(0, 3).map((event) => (
                   <div
                     key={event.id}
                     className="flex items-center gap-3 p-3 rounded-xl bg-white/80 border border-amber-200 cursor-pointer"
-                    onClick={() => { setSelectedEvent(event); setDetailDialogOpen(true); }}
+                    onClick={() => {
+                      setSelectedEvent(event);
+                      setDetailDialogOpen(true);
+                    }}
                   >
-                    <div className={`w-2 h-10 rounded-full ${getCategoryColor(event.category)}`} />
+                    <div
+                      className={`w-2 h-10 rounded-full ${getCategoryColor(event.category)}`}
+                    />
                     <div className="flex-1">
                       <p className="font-bold text-slate-800">{event.title}</p>
                       <p className="text-sm text-slate-500">
-                        {format(parseISO(event.event_date), "dd/MM/yyyy", { locale: he })}
+                        {format(parseISO(event.event_date), "dd/MM/yyyy", {
+                          locale: he,
+                        })}
                       </p>
                     </div>
                     <Badge className="bg-amber-500 text-white">
@@ -850,7 +1096,10 @@ export default function AnnualWorkPlan() {
 
           {/* Add Event Button */}
           <Button
-            onClick={() => { resetForm(); setDialogOpen(true); }}
+            onClick={() => {
+              resetForm();
+              setDialogOpen(true);
+            }}
             className="w-full bg-gradient-to-r from-primary to-teal text-white py-6 rounded-2xl shadow-lg"
           >
             <Plus className="w-5 h-5 ml-2" />
@@ -858,17 +1107,30 @@ export default function AnnualWorkPlan() {
           </Button>
 
           {/* View Mode Tabs */}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "month" | "week" | "list")} className="w-full">
+          <Tabs
+            value={viewMode}
+            onValueChange={(v) => setViewMode(v as "month" | "week" | "list")}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-slate-100 p-1">
-              <TabsTrigger value="month" className="rounded-xl gap-2 data-[state=active]:bg-white">
+              <TabsTrigger
+                value="month"
+                className="rounded-xl gap-2 data-[state=active]:bg-white"
+              >
                 <CalendarIcon className="w-4 h-4" />
                 חודש
               </TabsTrigger>
-              <TabsTrigger value="week" className="rounded-xl gap-2 data-[state=active]:bg-white">
+              <TabsTrigger
+                value="week"
+                className="rounded-xl gap-2 data-[state=active]:bg-white"
+              >
                 <CalendarDays className="w-4 h-4" />
                 שבוע
               </TabsTrigger>
-              <TabsTrigger value="list" className="rounded-xl gap-2 data-[state=active]:bg-white">
+              <TabsTrigger
+                value="list"
+                className="rounded-xl gap-2 data-[state=active]:bg-white"
+              >
                 <List className="w-4 h-4" />
                 רשימה
               </TabsTrigger>
@@ -879,13 +1141,23 @@ export default function AnnualWorkPlan() {
               <Card className="border-0 shadow-xl bg-white/90 backdrop-blur rounded-3xl overflow-hidden">
                 <CardHeader className="bg-gradient-to-l from-primary/10 to-teal/10 border-b border-slate-100">
                   <div className="flex items-center justify-between">
-                    <Button variant="ghost" size="icon" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="rounded-xl">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                      className="rounded-xl"
+                    >
                       <ChevronRight className="w-5 h-5" />
                     </Button>
                     <CardTitle className="text-slate-800">
                       {format(currentDate, "MMMM yyyy", { locale: he })}
                     </CardTitle>
-                    <Button variant="ghost" size="icon" onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="rounded-xl">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCurrentDate(addMonths(currentDate, -1))}
+                      className="rounded-xl"
+                    >
                       <ChevronLeft className="w-5 h-5" />
                     </Button>
                   </div>
@@ -893,8 +1165,11 @@ export default function AnnualWorkPlan() {
                 <CardContent className="p-2">
                   {/* Day Names */}
                   <div className="grid grid-cols-7 gap-1 mb-1">
-                    {["א", "ב", "ג", "ד", "ה", "ו", "ש"].map(day => (
-                      <div key={day} className="text-center text-xs font-bold text-slate-500 py-1">
+                    {["א", "ב", "ג", "ד", "ה", "ו", "ש"].map((day) => (
+                      <div
+                        key={day}
+                        className="text-center text-xs font-bold text-slate-500 py-1"
+                      >
                         {day}
                       </div>
                     ))}
@@ -906,11 +1181,12 @@ export default function AnnualWorkPlan() {
                       <div key={`empty-${i}`} className="aspect-square" />
                     ))}
 
-                    {daysInMonth.map(day => {
+                    {daysInMonth.map((day) => {
                       const dayEvents = getEventsForDate(day);
                       const dayHolidays = getHolidaysForDate(day);
                       const isCurrentDay = isToday(day);
-                      const hasContent = dayEvents.length > 0 || dayHolidays.length > 0;
+                      const hasContent =
+                        dayEvents.length > 0 || dayHolidays.length > 0;
 
                       return (
                         <div
@@ -922,19 +1198,24 @@ export default function AnnualWorkPlan() {
                             ${hasContent ? "bg-slate-50/50" : ""}
                           `}
                         >
-                          <div className={`text-xs mb-0.5 ${isCurrentDay ? "font-bold text-primary" : "text-slate-600"}`}>
+                          <div
+                            className={`text-xs mb-0.5 ${isCurrentDay ? "font-bold text-primary" : "text-slate-600"}`}
+                          >
                             {format(day, "d")}
                           </div>
-                          
+
                           {/* Holidays */}
-                          {dayHolidays.map(h => (
-                            <div key={h.id} className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 truncate mb-0.5">
+                          {dayHolidays.map((h) => (
+                            <div
+                              key={h.id}
+                              className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 truncate mb-0.5"
+                            >
                               {h.title}
                             </div>
                           ))}
-                          
+
                           {/* Events */}
-                          {dayEvents.slice(0, 2).map(event => (
+                          {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
                               className={`text-[8px] px-1 py-0.5 rounded text-white truncate mb-0.5 ${getCategoryColor(event.category)}`}
@@ -942,9 +1223,11 @@ export default function AnnualWorkPlan() {
                               {event.title}
                             </div>
                           ))}
-                          
+
                           {dayEvents.length > 2 && (
-                            <div className="text-[8px] text-slate-500">+{dayEvents.length - 2}</div>
+                            <div className="text-[8px] text-slate-500">
+                              +{dayEvents.length - 2}
+                            </div>
                           )}
                         </div>
                       );
@@ -959,14 +1242,25 @@ export default function AnnualWorkPlan() {
               <Card className="border-0 shadow-xl bg-white/90 backdrop-blur rounded-3xl overflow-hidden">
                 <CardHeader className="bg-gradient-to-l from-primary/10 to-teal/10 border-b border-slate-100">
                   <div className="flex items-center justify-between">
-                    <Button variant="ghost" size="icon" onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="rounded-xl">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
+                      className="rounded-xl"
+                    >
                       <ChevronRight className="w-5 h-5" />
                     </Button>
                     <CardTitle className="text-slate-800 text-center">
                       <span className="text-sm text-slate-500 block">שבוע</span>
-                      {format(weekStart, "dd/MM", { locale: he })} - {format(weekEnd, "dd/MM/yyyy", { locale: he })}
+                      {format(weekStart, "dd/MM", { locale: he })} -{" "}
+                      {format(weekEnd, "dd/MM/yyyy", { locale: he })}
                     </CardTitle>
-                    <Button variant="ghost" size="icon" onClick={() => setCurrentWeek(addWeeks(currentWeek, -1))} className="rounded-xl">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCurrentWeek(addWeeks(currentWeek, -1))}
+                      className="rounded-xl"
+                    >
                       <ChevronLeft className="w-5 h-5" />
                     </Button>
                   </div>
@@ -974,7 +1268,7 @@ export default function AnnualWorkPlan() {
                 <CardContent className="p-4">
                   {/* Week Days */}
                   <div className="space-y-2">
-                    {daysInWeek.map(day => {
+                    {daysInWeek.map((day) => {
                       const dayEvents = getEventsForDate(day);
                       const dayHolidays = getHolidaysForDate(day);
                       const isCurrentDay = isToday(day);
@@ -986,7 +1280,9 @@ export default function AnnualWorkPlan() {
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <span className={`text-sm font-bold ${isCurrentDay ? "text-primary" : "text-slate-700"}`}>
+                              <span
+                                className={`text-sm font-bold ${isCurrentDay ? "text-primary" : "text-slate-700"}`}
+                              >
                                 {format(day, "EEEE", { locale: he })}
                               </span>
                               <span className="text-sm text-slate-500">
@@ -1003,22 +1299,31 @@ export default function AnnualWorkPlan() {
                               הוסף
                             </Button>
                           </div>
-                          
-                          {dayHolidays.length === 0 && dayEvents.length === 0 && (
-                            <p className="text-xs text-slate-400">אין אירועים</p>
-                          )}
-                          
-                          {dayHolidays.map(h => (
-                            <div key={h.id} className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-800 mb-1">
+
+                          {dayHolidays.length === 0 &&
+                            dayEvents.length === 0 && (
+                              <p className="text-xs text-slate-400">
+                                אין אירועים
+                              </p>
+                            )}
+
+                          {dayHolidays.map((h) => (
+                            <div
+                              key={h.id}
+                              className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-800 mb-1"
+                            >
                               <Star className="w-3 h-3 inline ml-1" />
                               {h.title}
                             </div>
                           ))}
-                          
-                          {dayEvents.map(event => (
+
+                          {dayEvents.map((event) => (
                             <div
                               key={event.id}
-                              onClick={() => { setSelectedEvent(event); setDetailDialogOpen(true); }}
+                              onClick={() => {
+                                setSelectedEvent(event);
+                                setDetailDialogOpen(true);
+                              }}
                               className={`text-xs px-2 py-1.5 rounded-lg text-white mb-1 cursor-pointer hover:opacity-80 transition-opacity ${getCategoryColor(event.category)}`}
                             >
                               {event.title}
@@ -1047,33 +1352,58 @@ export default function AnnualWorkPlan() {
                           <p>אין מופעים</p>
                         </div>
                       ) : (
-                        getSortedEventsList().map(event => {
+                        getSortedEventsList().map((event) => {
                           const stats = getEventAttendanceStats(event.id);
                           const eventDate = parseISO(event.event_date);
                           const isPast = eventDate < new Date();
-                          
+
                           return (
                             <div
                               key={event.id}
-                              onClick={() => { setSelectedEvent(event); setDetailDialogOpen(true); }}
+                              onClick={() => {
+                                setSelectedEvent(event);
+                                setDetailDialogOpen(true);
+                              }}
                               className={`p-4 rounded-2xl border cursor-pointer transition-all ${isPast ? "bg-slate-100/50 border-slate-200" : "bg-slate-50 hover:bg-slate-100 border-slate-200"}`}
                             >
                               <div className="flex items-start gap-3">
-                                <div className={`w-1.5 h-full min-h-[60px] rounded-full ${getCategoryColor(event.category)}`} />
+                                <div
+                                  className={`w-1.5 h-full min-h-[60px] rounded-full ${getCategoryColor(event.category)}`}
+                                />
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <h4 className={`font-bold ${isPast ? "text-slate-500" : "text-slate-800"}`}>{event.title}</h4>
-                                    <Badge className={`${statusColors[event.status]} text-white text-xs`}>
+                                    <h4
+                                      className={`font-bold ${isPast ? "text-slate-500" : "text-slate-800"}`}
+                                    >
+                                      {event.title}
+                                    </h4>
+                                    <Badge
+                                      className={`${statusColors[event.status]} text-white text-xs`}
+                                    >
                                       {statusLabels[event.status]}
                                     </Badge>
-                                    <Badge variant="outline" className="text-xs">
-                                      {categoryLabels[event.category as keyof typeof categoryLabels] || "פלוגתי"}
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {categoryLabels[
+                                        event.category as keyof typeof categoryLabels
+                                      ] || "פלוגתי"}
                                     </Badge>
                                   </div>
                                   <div className="flex items-center gap-2 text-sm text-slate-500">
                                     <Clock className="w-3 h-3" />
-                                    {format(eventDate, "dd/MM/yyyy", { locale: he })}
-                                    {isPast && <Badge variant="outline" className="text-xs">עבר</Badge>}
+                                    {format(eventDate, "dd/MM/yyyy", {
+                                      locale: he,
+                                    })}
+                                    {isPast && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        עבר
+                                      </Badge>
+                                    )}
                                   </div>
                                   {stats.total > 0 && (
                                     <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
@@ -1091,14 +1421,18 @@ export default function AnnualWorkPlan() {
                                       </span>
                                     </div>
                                   )}
-                                  {(event.expected_soldiers?.length || 0) > 0 && (
+                                  {(event.expected_soldiers?.length || 0) >
+                                    0 && (
                                     <div className="flex items-center gap-1 text-sm text-blue-600 mt-1">
                                       <Users className="w-3 h-3" />
                                       {event.expected_soldiers.length} מצופים
                                     </div>
                                   )}
                                   {event.is_series && (
-                                    <Badge variant="outline" className="text-xs text-purple-600 border-purple-300 mt-1">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs text-purple-600 border-purple-300 mt-1"
+                                    >
                                       🔄 חוזר כל שבועיים
                                     </Badge>
                                   )}
@@ -1127,9 +1461,14 @@ export default function AnnualWorkPlan() {
 
         {/* Add/Edit Event Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogContent
+            className="max-w-md max-h-[90vh] overflow-y-auto"
+            dir="rtl"
+          >
             <DialogHeader>
-              <DialogTitle>{editingEvent ? "עריכת מופע" : "הוספת מופע חדש"}</DialogTitle>
+              <DialogTitle>
+                {editingEvent ? "עריכת מופע" : "הוספת מופע חדש"}
+              </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -1137,7 +1476,9 @@ export default function AnnualWorkPlan() {
                 <Label>כותרת *</Label>
                 <Input
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
                   placeholder="שם המופע"
                 />
               </div>
@@ -1146,7 +1487,9 @@ export default function AnnualWorkPlan() {
                 <Label>תיאור</Label>
                 <Textarea
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   placeholder="תיאור המופע"
                 />
               </div>
@@ -1157,7 +1500,9 @@ export default function AnnualWorkPlan() {
                   <Input
                     type="date"
                     value={formData.event_date}
-                    onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, event_date: e.target.value })
+                    }
                   />
                 </div>
                 <div>
@@ -1165,7 +1510,9 @@ export default function AnnualWorkPlan() {
                   <Input
                     type="date"
                     value={formData.end_date}
-                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, end_date: e.target.value })
+                    }
                   />
                 </div>
               </div>
@@ -1175,7 +1522,9 @@ export default function AnnualWorkPlan() {
                   <Label>קטגוריה</Label>
                   <Select
                     value={formData.category}
-                    onValueChange={(v) => setFormData({ ...formData, category: v })}
+                    onValueChange={(v) =>
+                      setFormData({ ...formData, category: v })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1191,7 +1540,9 @@ export default function AnnualWorkPlan() {
                   <Label>סטטוס</Label>
                   <Select
                     value={formData.status}
-                    onValueChange={(v) => setFormData({ ...formData, status: v as any })}
+                    onValueChange={(v) =>
+                      setFormData({ ...formData, status: v as any })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1210,10 +1561,14 @@ export default function AnnualWorkPlan() {
                 <Label>מחזור תוכן (דו-שבועי)</Label>
                 <Input
                   value={formData.content_cycle}
-                  onChange={(e) => setFormData({ ...formData, content_cycle: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, content_cycle: e.target.value })
+                  }
                   placeholder="לדוגמא: נהיגת שטח - מחזור 1"
                 />
-                <p className="text-xs text-slate-500 mt-1">אירועים עם אותו מחזור תוכן יקובצו יחד למעקב</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  אירועים עם אותו מחזור תוכן יקובצו יחד למעקב
+                </p>
               </div>
 
               {!editingEvent && (
@@ -1222,29 +1577,48 @@ export default function AnnualWorkPlan() {
                     <Checkbox
                       id="is_recurring"
                       checked={formData.is_recurring}
-                      onCheckedChange={(checked) => setFormData({ ...formData, is_recurring: !!checked })}
+                      onCheckedChange={(checked) =>
+                        setFormData({ ...formData, is_recurring: !!checked })
+                      }
                     />
                     <Label htmlFor="is_recurring" className="cursor-pointer">
-                      <span className="font-bold text-blue-800">אירוע חוזר כל שבועיים</span>
-                      <p className="text-xs text-blue-600">ייצור סדרת אירועים אוטומטית בהפרש של שבועיים</p>
+                      <span className="font-bold text-blue-800">
+                        אירוע חוזר כל שבועיים
+                      </span>
+                      <p className="text-xs text-blue-600">
+                        ייצור סדרת אירועים אוטומטית בהפרש של שבועיים
+                      </p>
                     </Label>
                   </div>
 
                   {formData.is_recurring && (
                     <div>
-                      <Label className="text-blue-700">כמה אירועים ליצור?</Label>
+                      <Label className="text-blue-700">
+                        כמה אירועים ליצור?
+                      </Label>
                       <Select
                         value={formData.recurring_count.toString()}
-                        onValueChange={(v) => setFormData({ ...formData, recurring_count: parseInt(v) })}
+                        onValueChange={(v) =>
+                          setFormData({
+                            ...formData,
+                            recurring_count: parseInt(v),
+                          })
+                        }
                       >
                         <SelectTrigger className="bg-white">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="4">4 אירועים (חודשיים)</SelectItem>
-                          <SelectItem value="6">6 אירועים (3 חודשים)</SelectItem>
-                          <SelectItem value="8">8 אירועים (4 חודשים)</SelectItem>
-                          <SelectItem value="12">12 אירועים (חצי שנה)</SelectItem>
+                          <SelectItem value="6">
+                            6 אירועים (3 חודשים)
+                          </SelectItem>
+                          <SelectItem value="8">
+                            8 אירועים (4 חודשים)
+                          </SelectItem>
+                          <SelectItem value="12">
+                            12 אירועים (חצי שנה)
+                          </SelectItem>
                           <SelectItem value="24">24 אירועים (שנה)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1255,7 +1629,9 @@ export default function AnnualWorkPlan() {
             </div>
 
             <DialogFooter className="mt-6">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>ביטול</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                ביטול
+              </Button>
               <Button onClick={handleSubmit} className="bg-primary">
                 {editingEvent ? "עדכן" : "הוסף"}
               </Button>
@@ -1264,24 +1640,39 @@ export default function AnnualWorkPlan() {
         </Dialog>
 
         {/* Event Detail Dialog */}
-        <Dialog open={detailDialogOpen} onOpenChange={(open) => { setDetailDialogOpen(open); if (!open) setDetailAttendanceView(null); }}>
+        <Dialog
+          open={detailDialogOpen}
+          onOpenChange={(open) => {
+            setDetailDialogOpen(open);
+            if (!open) setDetailAttendanceView(null);
+          }}
+        >
           <DialogContent className="max-w-md" dir="rtl">
             {selectedEvent && (
               <>
                 <DialogHeader>
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-12 rounded-full ${getCategoryColor(selectedEvent.category)}`} />
+                    <div
+                      className={`w-3 h-12 rounded-full ${getCategoryColor(selectedEvent.category)}`}
+                    />
                     <div>
                       <DialogTitle>{selectedEvent.title}</DialogTitle>
                       <div className="flex gap-2 mt-1 flex-wrap">
-                        <Badge className={`${statusColors[selectedEvent.status]} text-white`}>
+                        <Badge
+                          className={`${statusColors[selectedEvent.status]} text-white`}
+                        >
                           {statusLabels[selectedEvent.status]}
                         </Badge>
                         <Badge variant="outline">
-                          {categoryLabels[selectedEvent.category as keyof typeof categoryLabels] || "פלוגתי"}
+                          {categoryLabels[
+                            selectedEvent.category as keyof typeof categoryLabels
+                          ] || "פלוגתי"}
                         </Badge>
                         {selectedEvent.is_series && (
-                          <Badge variant="outline" className="text-purple-600 border-purple-300">
+                          <Badge
+                            variant="outline"
+                            className="text-purple-600 border-purple-300"
+                          >
                             🔄 חוזר כל שבועיים
                           </Badge>
                         )}
@@ -1292,14 +1683,29 @@ export default function AnnualWorkPlan() {
 
                 <div className="space-y-4 mt-4">
                   {selectedEvent.description && (
-                    <p className="text-slate-600">{selectedEvent.description}</p>
+                    <p className="text-slate-600">
+                      {selectedEvent.description}
+                    </p>
                   )}
 
                   <div className="flex items-center gap-2 text-slate-600">
                     <CalendarIcon className="w-4 h-4" />
-                    <span>{format(parseISO(selectedEvent.event_date), "dd/MM/yyyy", { locale: he })}</span>
+                    <span>
+                      {format(
+                        parseISO(selectedEvent.event_date),
+                        "dd/MM/yyyy",
+                        { locale: he },
+                      )}
+                    </span>
                     {selectedEvent.end_date && (
-                      <span>- {format(parseISO(selectedEvent.end_date), "dd/MM/yyyy", { locale: he })}</span>
+                      <span>
+                        -{" "}
+                        {format(
+                          parseISO(selectedEvent.end_date),
+                          "dd/MM/yyyy",
+                          { locale: he },
+                        )}
+                      </span>
                     )}
                   </div>
 
@@ -1308,7 +1714,9 @@ export default function AnnualWorkPlan() {
                     <div className="p-3 bg-blue-50 rounded-xl">
                       <div className="flex items-center gap-2 text-blue-700">
                         <Users className="w-4 h-4" />
-                        <span className="font-medium">{selectedEvent.expected_soldiers.length} חיילים מצופים</span>
+                        <span className="font-medium">
+                          {selectedEvent.expected_soldiers.length} חיילים מצופים
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1316,107 +1724,208 @@ export default function AnnualWorkPlan() {
                   {/* Attendance Stats - Clickable to show soldier lists */}
                   {(() => {
                     const stats = getEventAttendanceStats(selectedEvent.id);
-                    const eventAttendance = getRelevantEventAttendance(selectedEvent.id);
+                    const eventAttendance = getRelevantEventAttendance(
+                      selectedEvent.id,
+                    );
                     if (stats.rosterTotal > 0) {
-                      const attendedSoldiers = eventAttendance.filter(a => a.status === "attended" || a.completed);
-                      const absentSoldiers = eventAttendance.filter(a => a.status === "absent" && !a.completed);
-                      const notInRotationSoldiers = eventAttendance.filter(a => a.status === "not_in_rotation");
-                      const notUpdatedSoldiers = eventAttendance.filter(a => a.status === "not_updated");
+                      const attendedSoldiers = eventAttendance.filter(
+                        (a) => a.status === "attended" || a.completed,
+                      );
+                      const absentSoldiers = eventAttendance.filter(
+                        (a) => a.status === "absent" && !a.completed,
+                      );
+                      const notInRotationSoldiers = eventAttendance.filter(
+                        (a) => a.status === "not_in_rotation",
+                      );
+                      const notUpdatedSoldiers = eventAttendance.filter(
+                        (a) => a.status === "not_updated",
+                      );
 
                       return (
                         <div className="p-3 bg-slate-50 rounded-xl space-y-2">
-                          <p className="font-medium text-slate-700">סיכום נוכחות:</p>
+                          <p className="font-medium text-slate-700">
+                            סיכום נוכחות:
+                          </p>
                           <div className="grid grid-cols-4 gap-2">
-                            <div className="text-center p-2 rounded-lg bg-emerald-100 cursor-pointer hover:bg-emerald-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "attended" ? null : "attended")}>
-                              <p className="text-lg font-bold text-emerald-700">{stats.attended}</p>
+                            <div
+                              className="text-center p-2 rounded-lg bg-emerald-100 cursor-pointer hover:bg-emerald-200 transition-colors"
+                              onClick={() =>
+                                setDetailAttendanceView((prev) =>
+                                  prev === "attended" ? null : "attended",
+                                )
+                              }
+                            >
+                              <p className="text-lg font-bold text-emerald-700">
+                                {stats.attended}
+                              </p>
                               <p className="text-xs text-emerald-600">נכחו</p>
                             </div>
-                            <div className="text-center p-2 rounded-lg bg-red-100 cursor-pointer hover:bg-red-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "absent" ? null : "absent")}>
-                              <p className="text-lg font-bold text-red-700">{stats.absent}</p>
+                            <div
+                              className="text-center p-2 rounded-lg bg-red-100 cursor-pointer hover:bg-red-200 transition-colors"
+                              onClick={() =>
+                                setDetailAttendanceView((prev) =>
+                                  prev === "absent" ? null : "absent",
+                                )
+                              }
+                            >
+                              <p className="text-lg font-bold text-red-700">
+                                {stats.absent}
+                              </p>
                               <p className="text-xs text-red-600">נעדרו</p>
                             </div>
-                            <div className="text-center p-2 rounded-lg bg-blue-100 cursor-pointer hover:bg-blue-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "not_in_rotation" ? null : "not_in_rotation")}>
-                              <p className="text-lg font-bold text-blue-700">{stats.notInRotation}</p>
+                            <div
+                              className="text-center p-2 rounded-lg bg-blue-100 cursor-pointer hover:bg-blue-200 transition-colors"
+                              onClick={() =>
+                                setDetailAttendanceView((prev) =>
+                                  prev === "not_in_rotation"
+                                    ? null
+                                    : "not_in_rotation",
+                                )
+                              }
+                            >
+                              <p className="text-lg font-bold text-blue-700">
+                                {stats.notInRotation}
+                              </p>
                               <p className="text-xs text-blue-600">לא בסבב</p>
                             </div>
-                            <div className="text-center p-2 rounded-lg bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "not_updated" ? null : "not_updated")}>
-                              <p className="text-lg font-bold text-slate-700">{stats.notUpdated}</p>
+                            <div
+                              className="text-center p-2 rounded-lg bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors"
+                              onClick={() =>
+                                setDetailAttendanceView((prev) =>
+                                  prev === "not_updated" ? null : "not_updated",
+                                )
+                              }
+                            >
+                              <p className="text-lg font-bold text-slate-700">
+                                {stats.notUpdated}
+                              </p>
                               <p className="text-xs text-slate-600">לא עודכן</p>
                             </div>
                           </div>
 
                           {/* Expandable soldier lists */}
-                          {detailAttendanceView === "attended" && attendedSoldiers.length > 0 && (
-                            <div className="mt-2 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
-                              <p className="text-xs font-bold text-emerald-700 mb-1.5">נכחו ({attendedSoldiers.length}):</p>
-                              <div className="space-y-1 max-h-40 overflow-y-auto">
-                                {attendedSoldiers.map(a => {
-                                  const s = soldiers.find(sol => sol.id === a.soldier_id);
-                                  return s ? (
-                                    <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm">
-                                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                      <span className="text-slate-800">{s.full_name}</span>
-                                      {a.completed && <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200">השלמה</Badge>}
-                                    </div>
-                                  ) : null;
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {detailAttendanceView === "absent" && absentSoldiers.length > 0 && (
-                            <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                              <p className="text-xs font-bold text-red-700 mb-1.5">נעדרו ({absentSoldiers.length}):</p>
-                              <div className="space-y-1 max-h-40 overflow-y-auto">
-                                {absentSoldiers.map(a => {
-                                  const s = soldiers.find(sol => sol.id === a.soldier_id);
-                                  return s ? (
-                                    <div key={s.id} className="flex items-center justify-between py-1 px-2 rounded bg-white text-sm">
-                                      <div className="flex items-center gap-2">
-                                        <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                                        <span className="text-slate-800">{s.full_name}</span>
+                          {detailAttendanceView === "attended" &&
+                            attendedSoldiers.length > 0 && (
+                              <div className="mt-2 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                                <p className="text-xs font-bold text-emerald-700 mb-1.5">
+                                  נכחו ({attendedSoldiers.length}):
+                                </p>
+                                <div className="space-y-1 max-h-40 overflow-y-auto">
+                                  {attendedSoldiers.map((a) => {
+                                    const s = soldiers.find(
+                                      (sol) => sol.id === a.soldier_id,
+                                    );
+                                    return s ? (
+                                      <div
+                                        key={s.id}
+                                        className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm"
+                                      >
+                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                        <span className="text-slate-800">
+                                          {s.full_name}
+                                        </span>
+                                        {a.completed && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] bg-blue-50 text-blue-600 border-blue-200"
+                                          >
+                                            השלמה
+                                          </Badge>
+                                        )}
                                       </div>
-                                      {a.absence_reason && <span className="text-xs text-amber-600">{a.absence_reason}</span>}
-                                    </div>
-                                  ) : null;
-                                })}
+                                    ) : null;
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
 
-                          {detailAttendanceView === "not_in_rotation" && notInRotationSoldiers.length > 0 && (
-                            <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
-                              <p className="text-xs font-bold text-blue-700 mb-1.5">לא בסבב ({notInRotationSoldiers.length}):</p>
-                              <div className="space-y-1 max-h-40 overflow-y-auto">
-                                {notInRotationSoldiers.map(a => {
-                                  const s = soldiers.find(sol => sol.id === a.soldier_id);
-                                  return s ? (
-                                    <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm">
-                                      <MinusCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                      <span className="text-slate-800">{s.full_name}</span>
-                                    </div>
-                                  ) : null;
-                                })}
+                          {detailAttendanceView === "absent" &&
+                            absentSoldiers.length > 0 && (
+                              <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                                <p className="text-xs font-bold text-red-700 mb-1.5">
+                                  נעדרו ({absentSoldiers.length}):
+                                </p>
+                                <div className="space-y-1 max-h-40 overflow-y-auto">
+                                  {absentSoldiers.map((a) => {
+                                    const s = soldiers.find(
+                                      (sol) => sol.id === a.soldier_id,
+                                    );
+                                    return s ? (
+                                      <div
+                                        key={s.id}
+                                        className="flex items-center justify-between py-1 px-2 rounded bg-white text-sm"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                          <span className="text-slate-800">
+                                            {s.full_name}
+                                          </span>
+                                        </div>
+                                        {a.absence_reason && (
+                                          <span className="text-xs text-amber-600">
+                                            {a.absence_reason}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : null;
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
 
-                          {detailAttendanceView === "not_updated" && notUpdatedSoldiers.length > 0 && (
-                            <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                              <p className="text-xs font-bold text-slate-700 mb-1.5">לא עודכן ({notUpdatedSoldiers.length}):</p>
-                              <div className="space-y-1 max-h-40 overflow-y-auto">
-                                {notUpdatedSoldiers.map(a => {
-                                  const s = soldiers.find(sol => sol.id === a.soldier_id);
-                                  return s ? (
-                                    <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm">
-                                      <HelpCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                      <span className="text-slate-800">{s.full_name}</span>
-                                    </div>
-                                  ) : null;
-                                })}
+                          {detailAttendanceView === "not_in_rotation" &&
+                            notInRotationSoldiers.length > 0 && (
+                              <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                                <p className="text-xs font-bold text-blue-700 mb-1.5">
+                                  לא בסבב ({notInRotationSoldiers.length}):
+                                </p>
+                                <div className="space-y-1 max-h-40 overflow-y-auto">
+                                  {notInRotationSoldiers.map((a) => {
+                                    const s = soldiers.find(
+                                      (sol) => sol.id === a.soldier_id,
+                                    );
+                                    return s ? (
+                                      <div
+                                        key={s.id}
+                                        className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm"
+                                      >
+                                        <MinusCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                        <span className="text-slate-800">
+                                          {s.full_name}
+                                        </span>
+                                      </div>
+                                    ) : null;
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
+
+                          {detailAttendanceView === "not_updated" &&
+                            notUpdatedSoldiers.length > 0 && (
+                              <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                                <p className="text-xs font-bold text-slate-700 mb-1.5">
+                                  לא עודכן ({notUpdatedSoldiers.length}):
+                                </p>
+                                <div className="space-y-1 max-h-40 overflow-y-auto">
+                                  {notUpdatedSoldiers.map((a) => {
+                                    const s = soldiers.find(
+                                      (sol) => sol.id === a.soldier_id,
+                                    );
+                                    return s ? (
+                                      <div
+                                        key={s.id}
+                                        className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm"
+                                      >
+                                        <HelpCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                        <span className="text-slate-800">
+                                          {s.full_name}
+                                        </span>
+                                      </div>
+                                    ) : null;
+                                  })}
+                                </div>
+                              </div>
+                            )}
                         </div>
                       );
                     }
@@ -1425,19 +1934,34 @@ export default function AnnualWorkPlan() {
                 </div>
 
                 <DialogFooter className="mt-6 flex flex-wrap gap-2">
-                  <Button variant="destructive" size="sm" onClick={() => handleDelete(selectedEvent.id)}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(selectedEvent.id)}
+                  >
                     <Trash2 className="w-4 h-4 ml-1" />
                     מחק
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => openExpectedSoldiersDialog(selectedEvent)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openExpectedSoldiersDialog(selectedEvent)}
+                  >
                     <Users className="w-4 h-4 ml-1" />
                     מצופים
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => openAttendanceDialog(selectedEvent)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openAttendanceDialog(selectedEvent)}
+                  >
                     <UserCheck className="w-4 h-4 ml-1" />
                     נוכחות
                   </Button>
-                  <Button size="sm" onClick={() => openEditDialog(selectedEvent)}>
+                  <Button
+                    size="sm"
+                    onClick={() => openEditDialog(selectedEvent)}
+                  >
                     <Edit className="w-4 h-4 ml-1" />
                     ערוך
                   </Button>
@@ -1448,11 +1972,15 @@ export default function AnnualWorkPlan() {
         </Dialog>
 
         {/* Date Events Dialog */}
-        <Dialog open={dateEventsDialogOpen} onOpenChange={setDateEventsDialogOpen}>
+        <Dialog
+          open={dateEventsDialogOpen}
+          onOpenChange={setDateEventsDialogOpen}
+        >
           <DialogContent className="max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle>
-                {selectedDate && format(selectedDate, "dd/MM/yyyy", { locale: he })}
+                {selectedDate &&
+                  format(selectedDate, "dd/MM/yyyy", { locale: he })}
               </DialogTitle>
             </DialogHeader>
 
@@ -1460,12 +1988,20 @@ export default function AnnualWorkPlan() {
               {selectedDate && (
                 <>
                   {/* Holidays */}
-                  {getHolidaysForDate(selectedDate).map(h => (
-                    <div key={h.id} className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                  {getHolidaysForDate(selectedDate).map((h) => (
+                    <div
+                      key={h.id}
+                      className="p-3 rounded-xl bg-amber-50 border border-amber-200"
+                    >
                       <div className="flex items-center gap-2">
                         <Star className="w-4 h-4 text-amber-600" />
-                        <span className="font-medium text-amber-800">{h.title}</span>
-                        <Badge variant="outline" className="text-amber-600 border-amber-300">
+                        <span className="font-medium text-amber-800">
+                          {h.title}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="text-amber-600 border-amber-300"
+                        >
                           {h.category === "holiday" ? "חג" : "אזכור"}
                         </Badge>
                       </div>
@@ -1473,17 +2009,27 @@ export default function AnnualWorkPlan() {
                   ))}
 
                   {/* Events */}
-                  {getEventsForDate(selectedDate).map(event => (
+                  {getEventsForDate(selectedDate).map((event) => (
                     <div
                       key={event.id}
-                      onClick={() => { setSelectedEvent(event); setDetailDialogOpen(true); setDateEventsDialogOpen(false); }}
+                      onClick={() => {
+                        setSelectedEvent(event);
+                        setDetailDialogOpen(true);
+                        setDateEventsDialogOpen(false);
+                      }}
                       className="p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100"
                     >
                       <div className="flex items-center gap-2">
-                        <div className={`w-2 h-8 rounded-full ${getCategoryColor(event.category)}`} />
+                        <div
+                          className={`w-2 h-8 rounded-full ${getCategoryColor(event.category)}`}
+                        />
                         <div className="flex-1">
-                          <p className="font-medium text-slate-800">{event.title}</p>
-                          <Badge className={`${statusColors[event.status]} text-white text-xs`}>
+                          <p className="font-medium text-slate-800">
+                            {event.title}
+                          </p>
+                          <Badge
+                            className={`${statusColors[event.status]} text-white text-xs`}
+                          >
                             {statusLabels[event.status]}
                           </Badge>
                         </div>
@@ -1495,7 +2041,12 @@ export default function AnnualWorkPlan() {
             </div>
 
             <DialogFooter>
-              <Button onClick={() => selectedDate && openAddDialogForDate(selectedDate)} className="w-full">
+              <Button
+                onClick={() =>
+                  selectedDate && openAddDialogForDate(selectedDate)
+                }
+                className="w-full"
+              >
                 <Plus className="w-4 h-4 ml-1" />
                 הוסף מופע ליום זה
               </Button>
@@ -1504,14 +2055,23 @@ export default function AnnualWorkPlan() {
         </Dialog>
 
         {/* Expected Soldiers Dialog */}
-        <Dialog open={expectedSoldiersDialogOpen} onOpenChange={setExpectedSoldiersDialogOpen}>
-          <DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col min-h-0" dir="rtl">
+        <Dialog
+          open={expectedSoldiersDialogOpen}
+          onOpenChange={setExpectedSoldiersDialogOpen}
+        >
+          <DialogContent
+            className="max-w-md max-h-[90vh] overflow-hidden flex flex-col min-h-0"
+            dir="rtl"
+          >
             <DialogHeader>
-              <DialogTitle>חיילים מצופים למופע: {selectedEvent?.title}</DialogTitle>
+              <DialogTitle>
+                חיילים מצופים למופע: {selectedEvent?.title}
+              </DialogTitle>
             </DialogHeader>
 
             <p className="text-sm text-slate-600">
-              בחר את החיילים שאמורים להגיע למופע זה. מי שלא ברשימה יסומן אוטומטית כ"לא בסבב".
+              בחר את החיילים שאמורים להגיע למופע זה. מי שלא ברשימה יסומן
+              אוטומטית כ"לא בסבב".
             </p>
 
             {selectedEvent?.is_series && (
@@ -1526,17 +2086,29 @@ export default function AnnualWorkPlan() {
             )}
 
             <div className="flex flex-wrap gap-2 my-2">
-              <Button variant="outline" size="sm" onClick={selectAllExpected}>בחר הכל</Button>
-              <Button variant="outline" size="sm" onClick={clearAllExpected}>נקה הכל</Button>
+              <Button variant="outline" size="sm" onClick={selectAllExpected}>
+                בחר הכל
+              </Button>
+              <Button variant="outline" size="sm" onClick={clearAllExpected}>
+                נקה הכל
+              </Button>
             </div>
 
             {/* Quick rotation group select */}
             <div className="p-3 rounded-xl bg-violet-50 border border-violet-200">
-              <p className="text-xs font-bold text-violet-700 mb-2">בחר לפי סבב:</p>
+              <p className="text-xs font-bold text-violet-700 mb-2">
+                בחר לפי סבב:
+              </p>
               <div className="flex flex-wrap gap-2">
-                {ROTATION_GROUPS.map(group => {
-                  const groupSoldiers = expectedDialogSoldiers.filter(s => s.rotation_group === group.value);
-                  const allSelected = groupSoldiers.length > 0 && groupSoldiers.every(s => selectedExpectedSoldiers.includes(s.id));
+                {ROTATION_GROUPS.map((group) => {
+                  const groupSoldiers = expectedDialogSoldiers.filter(
+                    (s) => s.rotation_group === group.value,
+                  );
+                  const allSelected =
+                    groupSoldiers.length > 0 &&
+                    groupSoldiers.every((s) =>
+                      selectedExpectedSoldiers.includes(s.id),
+                    );
                   return (
                     <Button
                       key={group.value}
@@ -1546,11 +2118,22 @@ export default function AnnualWorkPlan() {
                       onClick={() => {
                         if (allSelected) {
                           // Remove this group's soldiers
-                          setSelectedExpectedSoldiers(prev => prev.filter(id => !groupSoldiers.some(s => s.id === id)));
+                          setSelectedExpectedSoldiers((prev) =>
+                            prev.filter(
+                              (id) => !groupSoldiers.some((s) => s.id === id),
+                            ),
+                          );
                         } else {
                           // Add this group's soldiers
-                          const newIds = groupSoldiers.map(s => s.id).filter(id => !selectedExpectedSoldiers.includes(id));
-                          setSelectedExpectedSoldiers(prev => [...prev, ...newIds]);
+                          const newIds = groupSoldiers
+                            .map((s) => s.id)
+                            .filter(
+                              (id) => !selectedExpectedSoldiers.includes(id),
+                            );
+                          setSelectedExpectedSoldiers((prev) => [
+                            ...prev,
+                            ...newIds,
+                          ]);
                         }
                       }}
                     >
@@ -1563,7 +2146,7 @@ export default function AnnualWorkPlan() {
 
             <div className="flex-1 min-h-0 overflow-y-auto max-h-[60vh] pr-1 overscroll-contain">
               <div className="space-y-2 p-1">
-                {expectedDialogSoldiers.map(soldier => (
+                {expectedDialogSoldiers.map((soldier) => (
                   <div
                     key={soldier.id}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
@@ -1573,21 +2156,35 @@ export default function AnnualWorkPlan() {
                     }`}
                     onClick={() => {
                       if (selectedExpectedSoldiers.includes(soldier.id)) {
-                        setSelectedExpectedSoldiers(prev => prev.filter(id => id !== soldier.id));
+                        setSelectedExpectedSoldiers((prev) =>
+                          prev.filter((id) => id !== soldier.id),
+                        );
                       } else {
-                        setSelectedExpectedSoldiers(prev => [...prev, soldier.id]);
+                        setSelectedExpectedSoldiers((prev) => [
+                          ...prev,
+                          soldier.id,
+                        ]);
                       }
                     }}
                   >
                     <div className="flex items-center gap-3">
-                      <Checkbox checked={selectedExpectedSoldiers.includes(soldier.id)} />
+                      <Checkbox
+                        checked={selectedExpectedSoldiers.includes(soldier.id)}
+                      />
                       <div className="flex-1">
-                        <p className="font-medium text-slate-800">{soldier.full_name}</p>
+                        <p className="font-medium text-slate-800">
+                          {soldier.full_name}
+                        </p>
                         <div className="flex items-center gap-2">
-                          <p className="text-xs text-slate-500">{soldier.personal_number}</p>
+                          <p className="text-xs text-slate-500">
+                            {soldier.personal_number}
+                          </p>
                           {(soldier as any).rotation_group && (
                             <Badge className="bg-violet-100 text-violet-700 text-[10px] px-1.5 py-0">
-                              {ROTATION_GROUPS.find(r => r.value === (soldier as any).rotation_group)?.label || (soldier as any).rotation_group}
+                              {ROTATION_GROUPS.find(
+                                (r) =>
+                                  r.value === (soldier as any).rotation_group,
+                              )?.label || (soldier as any).rotation_group}
                             </Badge>
                           )}
                         </div>
@@ -1599,7 +2196,12 @@ export default function AnnualWorkPlan() {
             </div>
 
             <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setExpectedSoldiersDialogOpen(false)}>ביטול</Button>
+              <Button
+                variant="outline"
+                onClick={() => setExpectedSoldiersDialogOpen(false)}
+              >
+                ביטול
+              </Button>
               <Button onClick={saveExpectedSoldiers} className="bg-primary">
                 שמור ({selectedExpectedSoldiers.length} נבחרו)
               </Button>
@@ -1608,19 +2210,30 @@ export default function AnnualWorkPlan() {
         </Dialog>
 
         {/* Attendance Dialog with Rotation Filter */}
-        <Dialog open={attendanceDialogOpen} onOpenChange={setAttendanceDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col min-h-0" dir="rtl">
+        <Dialog
+          open={attendanceDialogOpen}
+          onOpenChange={setAttendanceDialogOpen}
+        >
+          <DialogContent
+            className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col min-h-0"
+            dir="rtl"
+          >
             <DialogHeader>
               <DialogTitle>נוכחות במופע: {selectedEvent?.title}</DialogTitle>
             </DialogHeader>
 
             <div className="flex flex-wrap gap-2 mb-2">
-              {(Object.keys(attendanceStatusLabels) as AttendanceStatus[]).map(status => (
-                <Badge key={status} className={`${attendanceStatusColors[status]} text-white gap-1 text-xs`}>
-                  {attendanceStatusIcons[status]}
-                  {attendanceStatusLabels[status]}
-                </Badge>
-              ))}
+              {(Object.keys(attendanceStatusLabels) as AttendanceStatus[]).map(
+                (status) => (
+                  <Badge
+                    key={status}
+                    className={`${attendanceStatusColors[status]} text-white gap-1 text-xs`}
+                  >
+                    {attendanceStatusIcons[status]}
+                    {attendanceStatusLabels[status]}
+                  </Badge>
+                ),
+              )}
             </div>
 
             {/* Rotation Filter */}
@@ -1630,19 +2243,31 @@ export default function AnnualWorkPlan() {
                 <button
                   onClick={() => setAttendanceRotationFilter("expected")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    attendanceRotationFilter === "expected" ? "bg-violet-600 text-white" : "bg-white text-violet-700 border border-violet-200"
+                    attendanceRotationFilter === "expected"
+                      ? "bg-violet-600 text-white"
+                      : "bg-white text-violet-700 border border-violet-200"
                   }`}
                 >
                   מצופים ({selectedEvent?.expected_soldiers?.length || 0})
                 </button>
-                {ROTATION_GROUPS.map(group => {
-                  const count = soldiers.filter(s => s.rotation_group === group.value && (!selectedEvent || isSoldierRelevantForEventDate(s, selectedEvent.event_date))).length;
+                {ROTATION_GROUPS.map((group) => {
+                  const count = soldiers.filter(
+                    (s) =>
+                      s.rotation_group === group.value &&
+                      (!selectedEvent ||
+                        isSoldierRelevantForEventDate(
+                          s,
+                          selectedEvent.event_date,
+                        )),
+                  ).length;
                   return (
                     <button
                       key={group.value}
                       onClick={() => setAttendanceRotationFilter(group.value)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        attendanceRotationFilter === group.value ? "bg-violet-600 text-white" : "bg-white text-violet-700 border border-violet-200"
+                        attendanceRotationFilter === group.value
+                          ? "bg-violet-600 text-white"
+                          : "bg-white text-violet-700 border border-violet-200"
                       }`}
                     >
                       {group.label} ({count})
@@ -1652,32 +2277,65 @@ export default function AnnualWorkPlan() {
                 <button
                   onClick={() => setAttendanceRotationFilter("all")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    attendanceRotationFilter === "all" ? "bg-violet-600 text-white" : "bg-white text-violet-700 border border-violet-200"
+                    attendanceRotationFilter === "all"
+                      ? "bg-violet-600 text-white"
+                      : "bg-white text-violet-700 border border-violet-200"
                   }`}
                 >
-                  הכל ({soldiers.filter(s => !selectedEvent || isSoldierRelevantForEventDate(s, selectedEvent.event_date)).length})
+                  הכל (
+                  {
+                    soldiers.filter(
+                      (s) =>
+                        !selectedEvent ||
+                        isSoldierRelevantForEventDate(
+                          s,
+                          selectedEvent.event_date,
+                        ),
+                    ).length
+                  }
+                  )
                 </button>
               </div>
             </div>
 
             {/* Manual Add Soldier */}
             <div className="flex gap-2">
-              <Select value={manualAddSoldierId} onValueChange={setManualAddSoldierId}>
+              <Select
+                value={manualAddSoldierId}
+                onValueChange={setManualAddSoldierId}
+              >
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="הוסף חייל ידנית..." />
                 </SelectTrigger>
                 <SelectContent>
                   {soldiers
-                    .filter(s => {
+                    .filter((s) => {
                       // Only drivers that belong to this event date according to the Control Table
-                      const expectedSoldiers = selectedEvent?.expected_soldiers || [];
-                      const alreadyAdded = selectedSoldierAttendance[s.id]?.status === "attended" || selectedSoldierAttendance[s.id]?.status === "absent";
-                      const relevantForEvent = !selectedEvent || isSoldierRelevantForEventDate(s, selectedEvent.event_date);
-                      return relevantForEvent && !expectedSoldiers.includes(s.id) && !alreadyAdded;
+                      const expectedSoldiers =
+                        selectedEvent?.expected_soldiers || [];
+                      const alreadyAdded =
+                        selectedSoldierAttendance[s.id]?.status ===
+                          "attended" ||
+                        selectedSoldierAttendance[s.id]?.status === "absent";
+                      const relevantForEvent =
+                        !selectedEvent ||
+                        isSoldierRelevantForEventDate(
+                          s,
+                          selectedEvent.event_date,
+                        );
+                      return (
+                        relevantForEvent &&
+                        !expectedSoldiers.includes(s.id) &&
+                        !alreadyAdded
+                      );
                     })
-                    .map(s => (
+                    .map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.full_name} ({ROTATION_GROUPS.find(r => r.value === s.rotation_group)?.label || "ללא סבב"})
+                        {s.full_name} (
+                        {ROTATION_GROUPS.find(
+                          (r) => r.value === s.rotation_group,
+                        )?.label || "ללא סבב"}
+                        )
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -1688,9 +2346,13 @@ export default function AnnualWorkPlan() {
                 disabled={!manualAddSoldierId}
                 onClick={() => {
                   if (manualAddSoldierId) {
-                    setSelectedSoldierAttendance(prev => ({
+                    setSelectedSoldierAttendance((prev) => ({
                       ...prev,
-                      [manualAddSoldierId]: { status: "attended", reason: "", completed: false }
+                      [manualAddSoldierId]: {
+                        status: "attended",
+                        reason: "",
+                        completed: false,
+                      },
                     }));
                     // Switch to "all" filter so the added soldier is visible
                     setAttendanceRotationFilter("all");
@@ -1706,128 +2368,217 @@ export default function AnnualWorkPlan() {
             <div className="flex-1 min-h-0 overflow-y-auto max-h-[50vh] pr-1 overscroll-contain">
               <div className="space-y-3 p-1">
                 {soldiers
-                  .filter(soldier => {
+                  .filter((soldier) => {
                     if (!selectedEvent) return false;
-                    const expectedSoldiers = selectedEvent.expected_soldiers || [];
+                    const expectedSoldiers =
+                      selectedEvent.expected_soldiers || [];
                     const soldierState = selectedSoldierAttendance[soldier.id];
-                    const hasAttendanceRecord =
-                      soldierState?.status === "attended" || soldierState?.status === "absent";
+                    const hasAttendanceRecord = Boolean(
+                      soldierState &&
+                      selectedEvent &&
+                      shouldIncludeAttendanceRecordForEvent(
+                        {
+                          id: "",
+                          event_id: selectedEvent.id,
+                          soldier_id: soldier.id,
+                          attended:
+                            soldierState.status === "attended" ||
+                            soldierState.completed,
+                          absence_reason: soldierState.reason || null,
+                          status: soldierState.status,
+                          completed: soldierState.completed,
+                        },
+                        soldier,
+                        selectedEvent.event_date,
+                      ),
+                    );
                     // Show drivers that belong to this event date according to the
                     // Control Table, plus saved records for deleted historical soldiers.
-                    const isEligible = isSoldierRelevantForEventDate(soldier, selectedEvent.event_date);
+                    const isEligible = isSoldierRelevantForEventDate(
+                      soldier,
+                      selectedEvent.event_date,
+                    );
                     if (!isEligible && !hasAttendanceRecord) return false;
 
                     if (attendanceRotationFilter === "expected") {
-                      return expectedSoldiers.includes(soldier.id) || hasAttendanceRecord;
+                      return (
+                        expectedSoldiers.includes(soldier.id) ||
+                        hasAttendanceRecord
+                      );
                     }
                     if (attendanceRotationFilter === "all") return true;
-                    return soldier.rotation_group === attendanceRotationFilter || hasAttendanceRecord;
+                    return (
+                      soldier.rotation_group === attendanceRotationFilter ||
+                      hasAttendanceRecord
+                    );
                   })
-                  .map(soldier => {
-                  const soldierData = selectedSoldierAttendance[soldier.id] || { status: "not_updated" as AttendanceStatus, reason: "", completed: false };
-                  const isExpected = selectedEvent?.expected_soldiers?.includes(soldier.id);
-                  const rotationLabel = ROTATION_GROUPS.find(r => r.value === soldier.rotation_group)?.label;
+                  .map((soldier) => {
+                    const soldierData = selectedSoldierAttendance[
+                      soldier.id
+                    ] || {
+                      status: "not_updated" as AttendanceStatus,
+                      reason: "",
+                      completed: false,
+                    };
+                    const isExpected =
+                      selectedEvent?.expected_soldiers?.includes(soldier.id);
+                    const rotationLabel = ROTATION_GROUPS.find(
+                      (r) => r.value === soldier.rotation_group,
+                    )?.label;
 
-                  return (
-                    <div
-                      key={soldier.id}
-                      className={`p-3 rounded-xl border transition-all ${
-                        isExpected ? "bg-white border-slate-300" : "bg-slate-50 border-slate-200"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {isExpected && <Badge className="bg-blue-100 text-blue-700 text-xs">מצופה</Badge>}
-                          {rotationLabel && <Badge className="bg-violet-100 text-violet-700 text-[10px] px-1.5 py-0">{rotationLabel}</Badge>}
-                          <div>
-                            <p className="font-medium text-slate-800">{soldier.full_name}</p>
-                            <p className="text-xs text-slate-500">{soldier.personal_number}</p>
+                    return (
+                      <div
+                        key={soldier.id}
+                        className={`p-3 rounded-xl border transition-all ${
+                          isExpected
+                            ? "bg-white border-slate-300"
+                            : "bg-slate-50 border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {isExpected && (
+                              <Badge className="bg-blue-100 text-blue-700 text-xs">
+                                מצופה
+                              </Badge>
+                            )}
+                            {rotationLabel && (
+                              <Badge className="bg-violet-100 text-violet-700 text-[10px] px-1.5 py-0">
+                                {rotationLabel}
+                              </Badge>
+                            )}
+                            <div>
+                              <p className="font-medium text-slate-800">
+                                {soldier.full_name}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {soldier.personal_number}
+                              </p>
+                            </div>
                           </div>
+                          <Badge
+                            className={`${attendanceStatusColors[soldierData.status]} text-white gap-1`}
+                          >
+                            {attendanceStatusIcons[soldierData.status]}
+                            {attendanceStatusLabels[soldierData.status]}
+                          </Badge>
                         </div>
-                        <Badge className={`${attendanceStatusColors[soldierData.status]} text-white gap-1`}>
-                          {attendanceStatusIcons[soldierData.status]}
-                          {attendanceStatusLabels[soldierData.status]}
-                        </Badge>
-                      </div>
 
-                      {/* Status Selection */}
-                      <div className="grid grid-cols-4 gap-1">
-                        {(["attended", "absent", "not_in_rotation", "not_updated"] as AttendanceStatus[]).map(status => (
-                          <button
-                            key={status}
-                            onClick={() => {
-                              setSelectedSoldierAttendance(prev => ({
-                                ...prev,
-                                [soldier.id]: {
-                                  ...prev[soldier.id],
-                                  status,
-                                  reason: status === "attended" || status === "not_in_rotation" ? "" : prev[soldier.id]?.reason || "",
-                                  completed: status === "absent" ? prev[soldier.id]?.completed || false : false
-                                }
-                              }));
-                            }}
-                            className={`p-1.5 rounded-lg text-xs transition-all ${
-                              soldierData.status === status
-                                ? `${attendanceStatusColors[status]} text-white`
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                          >
-                            {attendanceStatusLabels[status]}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Absence Reason & Completion */}
-                      {soldierData.status === "absent" && (
-                        <div className="mt-2 space-y-2">
-                          <Select
-                            value={soldierData.reason}
-                            onValueChange={(v) => {
-                              setSelectedSoldierAttendance(prev => ({
-                                ...prev,
-                                [soldier.id]: { ...prev[soldier.id], reason: v }
-                              }));
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="בחר סיבת היעדרות..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {absenceReasonOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-
-                          <div className="flex items-center gap-3 p-2 rounded-xl bg-emerald-50 border border-emerald-200">
-                            <Checkbox
-                              id={`completed-${soldier.id}`}
-                              checked={soldierData.completed}
-                              onCheckedChange={(checked) => {
-                                setSelectedSoldierAttendance(prev => ({
+                        {/* Status Selection */}
+                        <div className="grid grid-cols-4 gap-1">
+                          {(
+                            [
+                              "attended",
+                              "absent",
+                              "not_in_rotation",
+                              "not_updated",
+                            ] as AttendanceStatus[]
+                          ).map((status) => (
+                            <button
+                              key={status}
+                              onClick={() => {
+                                setSelectedSoldierAttendance((prev) => ({
                                   ...prev,
-                                  [soldier.id]: { ...prev[soldier.id], completed: !!checked }
+                                  [soldier.id]: {
+                                    ...prev[soldier.id],
+                                    status,
+                                    reason:
+                                      status === "attended" ||
+                                      status === "not_in_rotation"
+                                        ? ""
+                                        : prev[soldier.id]?.reason || "",
+                                    completed:
+                                      status === "absent"
+                                        ? prev[soldier.id]?.completed || false
+                                        : false,
+                                  },
                                 }));
                               }}
-                            />
-                            <Label htmlFor={`completed-${soldier.id}`} className="cursor-pointer text-sm">
-                              <span className="font-bold text-emerald-700">השלים את המופע</span>
-                              <p className="text-xs text-emerald-600">החייל ביצע השלמה ויחשב כנכח</p>
-                            </Label>
-                          </div>
+                              className={`p-1.5 rounded-lg text-xs transition-all ${
+                                soldierData.status === status
+                                  ? `${attendanceStatusColors[status]} text-white`
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {attendanceStatusLabels[status]}
+                            </button>
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {/* Absence Reason & Completion */}
+                        {soldierData.status === "absent" && (
+                          <div className="mt-2 space-y-2">
+                            <Select
+                              value={soldierData.reason}
+                              onValueChange={(v) => {
+                                setSelectedSoldierAttendance((prev) => ({
+                                  ...prev,
+                                  [soldier.id]: {
+                                    ...prev[soldier.id],
+                                    reason: v,
+                                  },
+                                }));
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="בחר סיבת היעדרות..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {absenceReasonOptions.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            <div className="flex items-center gap-3 p-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                              <Checkbox
+                                id={`completed-${soldier.id}`}
+                                checked={soldierData.completed}
+                                onCheckedChange={(checked) => {
+                                  setSelectedSoldierAttendance((prev) => ({
+                                    ...prev,
+                                    [soldier.id]: {
+                                      ...prev[soldier.id],
+                                      completed: !!checked,
+                                    },
+                                  }));
+                                }}
+                              />
+                              <Label
+                                htmlFor={`completed-${soldier.id}`}
+                                className="cursor-pointer text-sm"
+                              >
+                                <span className="font-bold text-emerald-700">
+                                  השלים את המופע
+                                </span>
+                                <p className="text-xs text-emerald-600">
+                                  החייל ביצע השלמה ויחשב כנכח
+                                </p>
+                              </Label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
 
             <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setAttendanceDialogOpen(false)}>ביטול</Button>
-              <Button onClick={saveAttendance} className="bg-primary">שמור נוכחות</Button>
+              <Button
+                variant="outline"
+                onClick={() => setAttendanceDialogOpen(false)}
+              >
+                ביטול
+              </Button>
+              <Button onClick={saveAttendance} className="bg-primary">
+                שמור נוכחות
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

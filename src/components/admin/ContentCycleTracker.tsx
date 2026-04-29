@@ -4,9 +4,30 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, Layers, CalendarCheck, AlertTriangle, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  CalendarCheck,
+  AlertTriangle,
+  X,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -36,6 +57,7 @@ interface Soldier {
   qualified_date: string | null;
   created_at?: string | null;
   release_date?: string | null;
+  control_removed_at?: string | null;
   is_active?: boolean;
 }
 
@@ -56,16 +78,10 @@ interface ContentCycleTrackerProps {
   onOverrideChange: () => void;
 }
 
-const ABSENCE_REASONS = [
-  "גימלים",
-  "מיוחדת",
-  "כלא",
-  "נפקד",
-  "קורס",
-  "אחר",
-];
+const ABSENCE_REASONS = ["גימלים", "מיוחדת", "כלא", "נפקד", "קורס", "אחר"];
 
-const getDateKey = (value: string | null | undefined) => value?.slice(0, 10) || null;
+const getDateKey = (value: string | null | undefined) =>
+  value?.slice(0, 10) || null;
 
 const wasSoldierRelevantOnDate = (soldier: Soldier, eventDate: string) => {
   const eventDateKey = getDateKey(eventDate);
@@ -73,22 +89,65 @@ const wasSoldierRelevantOnDate = (soldier: Soldier, eventDate: string) => {
 
   const qualifiedDateKey = getDateKey(soldier.qualified_date);
   const releaseDateKey = getDateKey(soldier.release_date);
+  const controlRemovedDateKey = getDateKey(soldier.control_removed_at);
+  const serviceEndDateKey =
+    [releaseDateKey, controlRemovedDateKey].filter(Boolean).sort()[0] || null;
 
   if (qualifiedDateKey && qualifiedDateKey > eventDateKey) return false;
-  if (releaseDateKey && releaseDateKey < eventDateKey) return false;
+  if (serviceEndDateKey && serviceEndDateKey < eventDateKey) return false;
 
   return true;
 };
 
 const isSoldierRelevantForEventDate = (soldier: Soldier, eventDate: string) => {
-  const hasHistoricalReleaseDate = Boolean(getDateKey(soldier.release_date));
-  return (soldier.is_active === true || hasHistoricalReleaseDate) && wasSoldierRelevantOnDate(soldier, eventDate);
+  const hasHistoricalEndDate = Boolean(
+    getDateKey(soldier.release_date) || getDateKey(soldier.control_removed_at),
+  );
+  return (
+    (soldier.is_active === true || hasHistoricalEndDate) &&
+    wasSoldierRelevantOnDate(soldier, eventDate)
+  );
 };
 
-export function ContentCycleTracker({ events, attendance, soldiers, overrides, onOverrideChange }: ContentCycleTrackerProps) {
+const isDeletedSoldierPlaceholder = (soldier: Soldier | undefined) =>
+  Boolean(soldier) &&
+  soldier!.is_active !== true &&
+  !soldier!.personal_number &&
+  getDateKey(soldier!.release_date) === "1970-01-01";
+
+const isMeaningfulAttendanceRecord = (record: EventAttendance) =>
+  record.status === "attended" ||
+  record.status === "absent" ||
+  record.completed;
+
+const shouldIncludeAttendanceRecordForEvent = (
+  record: EventAttendance,
+  soldier: Soldier | undefined,
+  eventDate: string,
+) => {
+  if (!soldier || isDeletedSoldierPlaceholder(soldier)) {
+    return isMeaningfulAttendanceRecord(record);
+  }
+
+  return isSoldierRelevantForEventDate(soldier, eventDate);
+};
+
+export function ContentCycleTracker({
+  events,
+  attendance,
+  soldiers,
+  overrides,
+  onOverrideChange,
+}: ContentCycleTrackerProps) {
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
-  const [completionDialog, setCompletionDialog] = useState<{ soldier: Soldier; cycleName: string } | null>(null);
-  const [absenceDialog, setAbsenceDialog] = useState<{ soldier: Soldier; cycleName: string } | null>(null);
+  const [completionDialog, setCompletionDialog] = useState<{
+    soldier: Soldier;
+    cycleName: string;
+  } | null>(null);
+  const [absenceDialog, setAbsenceDialog] = useState<{
+    soldier: Soldier;
+    cycleName: string;
+  } | null>(null);
   const [completionDate, setCompletionDate] = useState("");
   const [absenceReason, setAbsenceReason] = useState("");
   const [customReason, setCustomReason] = useState("");
@@ -96,8 +155,8 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
 
   const contentCycles = useMemo(() => {
     const cycleMap = new Map<string, WorkPlanEvent[]>();
-    
-    events.forEach(event => {
+
+    events.forEach((event) => {
       const cycle = (event as any).content_cycle;
       if (cycle) {
         if (!cycleMap.has(cycle)) cycleMap.set(cycle, []);
@@ -110,49 +169,70 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
 
       cycleEvents.forEach((event) => {
         soldiers
-          .filter((soldier) => isSoldierRelevantForEventDate(soldier, event.event_date))
+          .filter((soldier) =>
+            isSoldierRelevantForEventDate(soldier, event.event_date),
+          )
           .forEach((soldier) => relevantSoldierIds.add(soldier.id));
 
         (event.expected_soldiers || []).forEach((soldierId) => {
           const soldier = soldiers.find((s) => s.id === soldierId);
-          if (soldier && isSoldierRelevantForEventDate(soldier, event.event_date)) {
+          if (
+            soldier &&
+            isSoldierRelevantForEventDate(soldier, event.event_date)
+          ) {
             relevantSoldierIds.add(soldierId);
           }
         });
 
         attendance
           .filter((record) => record.event_id === event.id)
+          .filter((record) =>
+            shouldIncludeAttendanceRecordForEvent(
+              record,
+              soldiers.find((s) => s.id === record.soldier_id),
+              event.event_date,
+            ),
+          )
           .forEach((record) => relevantSoldierIds.add(record.soldier_id));
       });
 
-      const eligibleSoldiers = soldiers.filter((soldier) => relevantSoldierIds.has(soldier.id));
+      const eligibleSoldiers = soldiers.filter((soldier) =>
+        relevantSoldierIds.has(soldier.id),
+      );
 
       const attended: Soldier[] = [];
       const missing: Array<Soldier & { absenceReason?: string | null }> = [];
-      const manuallyCompleted: Array<Soldier & { completionDate?: string | null }> = [];
+      const manuallyCompleted: Array<
+        Soldier & { completionDate?: string | null }
+      > = [];
 
-      eligibleSoldiers.forEach(soldier => {
+      eligibleSoldiers.forEach((soldier) => {
         // Check for manual override first
-        const override = overrides.find(o => o.soldier_id === soldier.id && o.content_cycle === cycleName);
-        
+        const override = overrides.find(
+          (o) => o.soldier_id === soldier.id && o.content_cycle === cycleName,
+        );
+
         // Soldier explicitly excluded from this cycle's summary
-        if (override?.override_type === 'excluded') {
+        if (override?.override_type === "excluded") {
           return;
         }
 
-        if (override?.override_type === 'completed') {
-          manuallyCompleted.push({ ...soldier, completionDate: override.completion_date });
+        if (override?.override_type === "completed") {
+          manuallyCompleted.push({
+            ...soldier,
+            completionDate: override.completion_date,
+          });
           return;
         }
 
-        if (override?.override_type === 'absent') {
+        if (override?.override_type === "absent") {
           missing.push({ ...soldier, absenceReason: override.absence_reason });
           return;
         }
 
-        const didAttend = cycleEvents.some(event => {
+        const didAttend = cycleEvents.some((event) => {
           const att = attendance.find(
-            a => a.event_id === event.id && a.soldier_id === soldier.id
+            (a) => a.event_id === event.id && a.soldier_id === soldier.id,
           );
           return att && (att.status === "attended" || att.completed);
         });
@@ -161,12 +241,15 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
       });
 
       const visibleSoldiers = eligibleSoldiers.filter((soldier) => {
-        const override = overrides.find(o => o.soldier_id === soldier.id && o.content_cycle === cycleName);
-        return override?.override_type !== 'excluded';
+        const override = overrides.find(
+          (o) => o.soldier_id === soldier.id && o.content_cycle === cycleName,
+        );
+        return override?.override_type !== "excluded";
       });
       const total = visibleSoldiers.length;
       const completedCount = attended.length + manuallyCompleted.length;
-      const percentage = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+      const percentage =
+        total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
       return {
         name: cycleName,
@@ -186,13 +269,16 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
     if (!completionDialog || !completionDate) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("content_cycle_overrides").upsert({
-        soldier_id: completionDialog.soldier.id,
-        content_cycle: completionDialog.cycleName,
-        override_type: "completed",
-        completion_date: completionDate,
-        absence_reason: null,
-      }, { onConflict: "soldier_id,content_cycle" });
+      const { error } = await supabase.from("content_cycle_overrides").upsert(
+        {
+          soldier_id: completionDialog.soldier.id,
+          content_cycle: completionDialog.cycleName,
+          override_type: "completed",
+          completion_date: completionDate,
+          absence_reason: null,
+        },
+        { onConflict: "soldier_id,content_cycle" },
+      );
       if (error) throw error;
       toast.success("סומן כהושלם בהצלחה");
       onOverrideChange();
@@ -210,13 +296,16 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
     if (!absenceDialog || !finalReason) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("content_cycle_overrides").upsert({
-        soldier_id: absenceDialog.soldier.id,
-        content_cycle: absenceDialog.cycleName,
-        override_type: "absent",
-        absence_reason: finalReason,
-        completion_date: null,
-      }, { onConflict: "soldier_id,content_cycle" });
+      const { error } = await supabase.from("content_cycle_overrides").upsert(
+        {
+          soldier_id: absenceDialog.soldier.id,
+          content_cycle: absenceDialog.cycleName,
+          override_type: "absent",
+          absence_reason: finalReason,
+          completion_date: null,
+        },
+        { onConflict: "soldier_id,content_cycle" },
+      );
       if (error) throw error;
       toast.success("סיבת היעדרות נשמרה");
       onOverrideChange();
@@ -245,16 +334,25 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
     }
   };
 
-  const handleExcludeFromCycle = async (soldierId: string, cycleName: string) => {
-    if (!confirm("להסיר את החייל מסיכום המופע? ניתן להחזירו על ידי הסרת הסימון.")) return;
+  const handleExcludeFromCycle = async (
+    soldierId: string,
+    cycleName: string,
+  ) => {
+    if (
+      !confirm("להסיר את החייל מסיכום המופע? ניתן להחזירו על ידי הסרת הסימון.")
+    )
+      return;
     try {
-      const { error } = await supabase.from("content_cycle_overrides").upsert({
-        soldier_id: soldierId,
-        content_cycle: cycleName,
-        override_type: "excluded",
-        completion_date: null,
-        absence_reason: null,
-      }, { onConflict: "soldier_id,content_cycle" });
+      const { error } = await supabase.from("content_cycle_overrides").upsert(
+        {
+          soldier_id: soldierId,
+          content_cycle: cycleName,
+          override_type: "excluded",
+          completion_date: null,
+          absence_reason: null,
+        },
+        { onConflict: "soldier_id,content_cycle" },
+      );
       if (error) throw error;
       toast.success("החייל הוסר מהרשימה");
       onOverrideChange();
@@ -269,7 +367,9 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
         <CardContent className="p-6 text-center">
           <Layers className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
           <p className="font-bold text-slate-800">אין מחזורי תוכן</p>
-          <p className="text-sm text-slate-600 mt-1">הוסף שדה "מחזור תוכן" למופעים כדי לעקוב אחרי העברת תוכן דו-שבועית</p>
+          <p className="text-sm text-slate-600 mt-1">
+            הוסף שדה "מחזור תוכן" למופעים כדי לעקוב אחרי העברת תוכן דו-שבועית
+          </p>
         </CardContent>
       </Card>
     );
@@ -282,13 +382,16 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
           <Layers className="w-5 h-5 text-slate-700" />
           מעקב תוכן דו-שבועי
         </h3>
-        
-        {contentCycles.map(cycle => {
+
+        {contentCycles.map((cycle) => {
           const isExpanded = expandedCycle === cycle.name;
-          
+
           return (
-            <Card key={cycle.name} className="border-0 shadow-md overflow-hidden">
-              <div 
+            <Card
+              key={cycle.name}
+              className="border-0 shadow-md overflow-hidden"
+            >
+              <div
                 className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
                 onClick={() => setExpandedCycle(isExpanded ? null : cycle.name)}
               >
@@ -300,19 +403,29 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge className={`text-xs ${
-                      cycle.percentage >= 80 ? "bg-emerald-100 text-emerald-700" :
-                      cycle.percentage >= 50 ? "bg-amber-100 text-amber-700" :
-                      "bg-red-100 text-red-700"
-                    }`}>
+                    <Badge
+                      className={`text-xs ${
+                        cycle.percentage >= 80
+                          ? "bg-emerald-100 text-emerald-700"
+                          : cycle.percentage >= 50
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-700"
+                      }`}
+                    >
                       {cycle.completedCount}/{cycle.total}
                     </Badge>
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                    {isExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-500" />
+                    )}
                   </div>
                 </div>
-                
+
                 <Progress value={cycle.percentage} className="h-2" />
-                <p className="text-xs text-slate-600 mt-1">{cycle.percentage}% מהחיילים עברו את התוכן</p>
+                <p className="text-xs text-slate-600 mt-1">
+                  {cycle.percentage}% מהחיילים עברו את התוכן
+                </p>
 
                 {cycle.missing.length > 0 && (
                   <p className="text-xs text-red-600 font-medium mt-2">
@@ -331,16 +444,27 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                         צריכים להשלים ({cycle.missing.length})
                       </p>
                       <div className="space-y-1.5">
-                        {cycle.missing.map(soldier => (
-                          <div key={soldier.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white border border-border">
+                        {cycle.missing.map((soldier) => (
+                          <div
+                            key={soldier.id}
+                            className="flex items-center justify-between py-2 px-3 rounded-lg bg-white border border-border"
+                          >
                             <div className="flex flex-col">
-                              <span className="text-sm text-slate-800 font-medium">{soldier.full_name}</span>
+                              <span className="text-sm text-slate-800 font-medium">
+                                {soldier.full_name}
+                              </span>
                               {soldier.absenceReason && (
                                 <span className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
                                   <AlertTriangle className="w-3 h-3" />
                                   {soldier.absenceReason}
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); handleRemoveOverride(soldier.id, cycle.name); }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveOverride(
+                                        soldier.id,
+                                        cycle.name,
+                                      );
+                                    }}
                                     className="text-red-400 hover:text-red-600 mr-1 underline text-xs"
                                   >
                                     הסר
@@ -353,7 +477,13 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 text-xs text-emerald-700 hover:bg-emerald-50"
-                                onClick={(e) => { e.stopPropagation(); setCompletionDialog({ soldier, cycleName: cycle.name }); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCompletionDialog({
+                                    soldier,
+                                    cycleName: cycle.name,
+                                  });
+                                }}
                               >
                                 <CalendarCheck className="w-3.5 h-3.5 ml-1" />
                                 השלמה
@@ -363,7 +493,13 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                                   size="sm"
                                   variant="ghost"
                                   className="h-7 text-xs text-amber-700 hover:bg-amber-50"
-                                  onClick={(e) => { e.stopPropagation(); setAbsenceDialog({ soldier, cycleName: cycle.name }); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAbsenceDialog({
+                                      soldier,
+                                      cycleName: cycle.name,
+                                    });
+                                  }}
                                 >
                                   <AlertTriangle className="w-3.5 h-3.5 ml-1" />
                                   סיבה
@@ -373,7 +509,13 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                                 size="icon"
                                 variant="ghost"
                                 className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"
-                                onClick={(e) => { e.stopPropagation(); handleExcludeFromCycle(soldier.id, cycle.name); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExcludeFromCycle(
+                                    soldier.id,
+                                    cycle.name,
+                                  );
+                                }}
                                 title="הסר מהרשימה"
                               >
                                 <X className="w-4 h-4" />
@@ -393,18 +535,28 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                         הושלם ידנית ({cycle.manuallyCompleted.length})
                       </p>
                       <div className="space-y-1">
-                        {cycle.manuallyCompleted.map(soldier => (
-                          <div key={soldier.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white border border-border">
+                        {cycle.manuallyCompleted.map((soldier) => (
+                          <div
+                            key={soldier.id}
+                            className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white border border-border"
+                          >
                             <div className="flex flex-col">
-                              <span className="text-sm text-slate-800">{soldier.full_name}</span>
+                              <span className="text-sm text-slate-800">
+                                {soldier.full_name}
+                              </span>
                               {soldier.completionDate && (
-                                <span className="text-xs text-slate-500">הושלם: {soldier.completionDate}</span>
+                                <span className="text-xs text-slate-500">
+                                  הושלם: {soldier.completionDate}
+                                </span>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="w-5 h-5 text-blue-500" />
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleRemoveOverride(soldier.id, cycle.name); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveOverride(soldier.id, cycle.name);
+                                }}
                                 className="text-xs text-red-400 hover:text-red-600 underline"
                               >
                                 הסר
@@ -413,7 +565,13 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                                 size="icon"
                                 variant="ghost"
                                 className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"
-                                onClick={(e) => { e.stopPropagation(); handleExcludeFromCycle(soldier.id, cycle.name); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExcludeFromCycle(
+                                    soldier.id,
+                                    cycle.name,
+                                  );
+                                }}
                                 title="הסר מהרשימה"
                               >
                                 <X className="w-4 h-4" />
@@ -433,16 +591,27 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
                         עברו את התוכן ({cycle.attended.length})
                       </p>
                       <div className="space-y-1">
-                        {cycle.attended.map(soldier => (
-                          <div key={soldier.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white border border-border">
-                            <span className="text-sm text-slate-800">{soldier.full_name}</span>
+                        {cycle.attended.map((soldier) => (
+                          <div
+                            key={soldier.id}
+                            className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-white border border-border"
+                          >
+                            <span className="text-sm text-slate-800">
+                              {soldier.full_name}
+                            </span>
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="w-5 h-5 text-emerald-500" />
                               <Button
                                 size="icon"
                                 variant="ghost"
                                 className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"
-                                onClick={(e) => { e.stopPropagation(); handleExcludeFromCycle(soldier.id, cycle.name); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExcludeFromCycle(
+                                    soldier.id,
+                                    cycle.name,
+                                  );
+                                }}
                                 title="הסר מהרשימה"
                               >
                                 <X className="w-4 h-4" />
@@ -461,16 +630,25 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
       </div>
 
       {/* Completion Dialog */}
-      <Dialog open={!!completionDialog} onOpenChange={() => { setCompletionDialog(null); setCompletionDate(""); }}>
+      <Dialog
+        open={!!completionDialog}
+        onOpenChange={() => {
+          setCompletionDialog(null);
+          setCompletionDate("");
+        }}
+      >
         <DialogContent className="max-w-sm" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-slate-800">סימון השלמה</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-600">
-            סימון <strong>{completionDialog?.soldier.full_name}</strong> כמי שהשלים את <strong>{completionDialog?.cycleName}</strong>
+            סימון <strong>{completionDialog?.soldier.full_name}</strong> כמי
+            שהשלים את <strong>{completionDialog?.cycleName}</strong>
           </p>
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">תאריך השלמה</label>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">
+              תאריך השלמה
+            </label>
             <Input
               type="date"
               value={completionDate}
@@ -479,7 +657,11 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
             />
           </div>
           <DialogFooter>
-            <Button onClick={handleMarkCompleted} disabled={!completionDate || saving} className="w-full">
+            <Button
+              onClick={handleMarkCompleted}
+              disabled={!completionDate || saving}
+              className="w-full"
+            >
               {saving ? "שומר..." : "סמן כהושלם"}
             </Button>
           </DialogFooter>
@@ -487,30 +669,50 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
       </Dialog>
 
       {/* Absence Reason Dialog */}
-      <Dialog open={!!absenceDialog} onOpenChange={() => { setAbsenceDialog(null); setAbsenceReason(""); setCustomReason(""); }}>
+      <Dialog
+        open={!!absenceDialog}
+        onOpenChange={() => {
+          setAbsenceDialog(null);
+          setAbsenceReason("");
+          setCustomReason("");
+        }}
+      >
         <DialogContent className="max-w-sm" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-slate-800">סיבת היעדרות</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-600">
-            למה <strong>{absenceDialog?.soldier.full_name}</strong> לא היה ב<strong>{absenceDialog?.cycleName}</strong>?
+            למה <strong>{absenceDialog?.soldier.full_name}</strong> לא היה ב
+            <strong>{absenceDialog?.cycleName}</strong>?
           </p>
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">סיבה</label>
-            <Select value={absenceReason} onValueChange={(val) => { setAbsenceReason(val); if (val !== "אחר") setCustomReason(""); }}>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">
+              סיבה
+            </label>
+            <Select
+              value={absenceReason}
+              onValueChange={(val) => {
+                setAbsenceReason(val);
+                if (val !== "אחר") setCustomReason("");
+              }}
+            >
               <SelectTrigger className="bg-white text-slate-800">
                 <SelectValue placeholder="בחר סיבה..." />
               </SelectTrigger>
               <SelectContent>
-                {ABSENCE_REASONS.map(reason => (
-                  <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                {ABSENCE_REASONS.map((reason) => (
+                  <SelectItem key={reason} value={reason}>
+                    {reason}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           {absenceReason === "אחר" && (
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">פרט סיבה</label>
+              <label className="text-sm font-medium text-slate-700 mb-1 block">
+                פרט סיבה
+              </label>
               <Input
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
@@ -520,7 +722,15 @@ export function ContentCycleTracker({ events, attendance, soldiers, overrides, o
             </div>
           )}
           <DialogFooter>
-            <Button onClick={handleMarkAbsent} disabled={(!absenceReason || (absenceReason === "אחר" && !customReason)) || saving} className="w-full">
+            <Button
+              onClick={handleMarkAbsent}
+              disabled={
+                !absenceReason ||
+                (absenceReason === "אחר" && !customReason) ||
+                saving
+              }
+              className="w-full"
+            >
               {saving ? "שומר..." : "שמור סיבה"}
             </Button>
           </DialogFooter>
