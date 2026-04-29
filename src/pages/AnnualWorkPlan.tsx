@@ -92,6 +92,7 @@ interface EventAttendance {
   absence_reason: string | null;
   status: string;
   completed: boolean;
+  soldier_name_snapshot?: string | null;
 }
 
 // סיבות היעדרות
@@ -163,15 +164,18 @@ const wasSoldierInUnitOnDate = (soldier: Soldier, eventDate: string) => {
   const eventDateKey = getDateKey(eventDate);
   if (!eventDateKey) return true;
 
-  const createdDateKey = getDateKey(soldier.created_at);
   const releaseDateKey = getDateKey(soldier.release_date);
   const qualifiedDateKey = getDateKey(soldier.qualified_date);
 
-  if (createdDateKey && createdDateKey > eventDateKey) return false;
   if (releaseDateKey && releaseDateKey < eventDateKey) return false;
   if (qualifiedDateKey && qualifiedDateKey > eventDateKey) return false;
 
   return true;
+};
+
+const isSoldierRelevantForEventDate = (soldier: Soldier, eventDate: string) => {
+  const hasHistoricalReleaseDate = Boolean(getDateKey(soldier.release_date));
+  return (soldier.is_active || hasHistoricalReleaseDate) && wasSoldierInUnitOnDate(soldier, eventDate);
 };
 
 export default function AnnualWorkPlan() {
@@ -198,7 +202,7 @@ export default function AnnualWorkPlan() {
   const [dateEventsDialogOpen, setDateEventsDialogOpen] = useState(false);
   const [attendanceRotationFilter, setAttendanceRotationFilter] = useState<string>("expected");
   const [manualAddSoldierId, setManualAddSoldierId] = useState<string>("");
-  const [detailAttendanceView, setDetailAttendanceView] = useState<"attended" | "absent" | "not_in_rotation" | null>(null);
+  const [detailAttendanceView, setDetailAttendanceView] = useState<AttendanceStatus | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -226,9 +230,9 @@ export default function AnnualWorkPlan() {
   );
 
   // Soldiers eligible for a specific event:
-  // currently in the Control Table (is_active) AND were in the unit on the event date.
+  // drivers from the Control Table date range, including released soldiers for past events.
   const getEligibleSoldiersForEvent = (eventDate: string) => {
-    return soldiers.filter(s => s.is_active && wasSoldierInUnitOnDate(s, eventDate));
+    return soldiers.filter(s => isSoldierRelevantForEventDate(s, eventDate));
   };
 
   useEffect(() => {
@@ -277,8 +281,31 @@ export default function AnnualWorkPlan() {
 
     if (!eventsRes.error) setEvents((eventsRes.data || []) as WorkPlanEvent[]);
     if (!holidaysRes.error) setHolidays(holidaysRes.data || []);
-    if (!soldiersRes.error) setSoldiers(soldiersRes.data || []);
-    setAttendance(allAttendance);
+    const loadedSoldiers: Soldier[] = soldiersRes.error ? [] : (soldiersRes.data || []);
+    const attendanceList: EventAttendance[] = allAttendance || [];
+
+    // Add placeholder entries for soldiers that were deleted from the Control Table
+    // but still have historical attendance records, so their names remain visible.
+    const existingIds = new Set(loadedSoldiers.map(s => s.id));
+    const orphanMap = new Map<string, string>();
+    attendanceList.forEach((a: any) => {
+      if (!existingIds.has(a.soldier_id) && !orphanMap.has(a.soldier_id)) {
+        orphanMap.set(a.soldier_id, a.soldier_name_snapshot || "חייל שהוסר");
+      }
+    });
+    const orphanSoldiers: Soldier[] = Array.from(orphanMap.entries()).map(([id, name]) => ({
+      id,
+      full_name: name,
+      personal_number: "",
+      rotation_group: null,
+      qualified_date: null,
+      // Mark as released in the past so date-based filters keep them out of future events
+      release_date: "1970-01-01",
+      created_at: "1970-01-01",
+      is_active: false,
+    }));
+    setSoldiers([...loadedSoldiers, ...orphanSoldiers]);
+    setAttendance(attendanceList);
     if (!overridesRes.error) setContentCycleOverrides(overridesRes.data || []);
 
     setLoading(false);
@@ -639,12 +666,11 @@ export default function AnnualWorkPlan() {
     const attendanceBySoldier = new Map(attendanceRecords.map(record => [record.soldier_id, record]));
     const soldierById = new Map(soldiers.map(soldier => [soldier.id, soldier]));
 
-    // Eligible soldiers for this event = drivers currently in the Control Table
-    // (is_active = true) that were also in the unit on the event date.
-    // Released soldiers from past events are still preserved through their saved
-    // attendance records below (attendanceRecords).
+    // Eligible soldiers for this event = drivers from the Control Table date range:
+    // active drivers for current/future events, and released drivers only for events
+    // before/through their release date.
     const historicalRosterIds = soldiers
-      .filter((soldier) => soldier.is_active && wasSoldierInUnitOnDate(soldier, event.event_date))
+      .filter((soldier) => isSoldierRelevantForEventDate(soldier, event.event_date))
       .map((s) => s.id);
 
     const soldierIds = new Set<string>([
@@ -656,11 +682,11 @@ export default function AnnualWorkPlan() {
     return Array.from(soldierIds)
       .filter((soldierId) => {
         const soldier = soldierById.get(soldierId);
-        // Always keep saved attendance records, even if the soldier was released
-        // or deleted from the Control Table — preserves historical reports.
+        // Always keep saved attendance records, even if the soldier was deleted
+        // from the Control Table — preserves historical reports.
         if (attendanceBySoldier.has(soldierId)) return true;
         if (!soldier) return false;
-        return soldier.is_active && wasSoldierInUnitOnDate(soldier, event.event_date);
+        return isSoldierRelevantForEventDate(soldier, event.event_date);
       })
       .map((soldierId) => {
         const record = attendanceBySoldier.get(soldierId);
@@ -702,6 +728,8 @@ export default function AnnualWorkPlan() {
     ).length;
     
     const notInRotation = eventAttendance.filter(a => a.status === "not_in_rotation").length;
+    const notUpdated = eventAttendance.filter(a => a.status === "not_updated").length;
+    const rosterTotal = eventAttendance.length;
     const total = eventAttendance.filter(a => a.status !== "not_in_rotation" && a.status !== "not_updated").length;
     
     // אחוז נוכחות - רק מחושב מאלו שהיו יכולים להגיע
@@ -713,14 +741,20 @@ export default function AnnualWorkPlan() {
       absent: countableAbsent, 
       nonCountableAbsent,
       notInRotation, 
+      notUpdated,
+      rosterTotal,
       total,
       attendancePercent 
     };
   };
 
   // Select all expected or toggle
+  const expectedDialogSoldiers = selectedEvent
+    ? getEligibleSoldiersForEvent(selectedEvent.event_date)
+    : activeSoldiers;
+
   const selectAllExpected = () => {
-    setSelectedExpectedSoldiers(activeSoldiers.map(s => s.id));
+    setSelectedExpectedSoldiers(expectedDialogSoldiers.map(s => s.id));
   };
 
   const clearAllExpected = () => {
@@ -1283,15 +1317,16 @@ export default function AnnualWorkPlan() {
                   {(() => {
                     const stats = getEventAttendanceStats(selectedEvent.id);
                     const eventAttendance = getRelevantEventAttendance(selectedEvent.id);
-                    if (stats.total > 0) {
+                    if (stats.rosterTotal > 0) {
                       const attendedSoldiers = eventAttendance.filter(a => a.status === "attended" || a.completed);
                       const absentSoldiers = eventAttendance.filter(a => a.status === "absent" && !a.completed);
                       const notInRotationSoldiers = eventAttendance.filter(a => a.status === "not_in_rotation");
+                      const notUpdatedSoldiers = eventAttendance.filter(a => a.status === "not_updated");
 
                       return (
                         <div className="p-3 bg-slate-50 rounded-xl space-y-2">
                           <p className="font-medium text-slate-700">סיכום נוכחות:</p>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-4 gap-2">
                             <div className="text-center p-2 rounded-lg bg-emerald-100 cursor-pointer hover:bg-emerald-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "attended" ? null : "attended")}>
                               <p className="text-lg font-bold text-emerald-700">{stats.attended}</p>
                               <p className="text-xs text-emerald-600">נכחו</p>
@@ -1303,6 +1338,10 @@ export default function AnnualWorkPlan() {
                             <div className="text-center p-2 rounded-lg bg-blue-100 cursor-pointer hover:bg-blue-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "not_in_rotation" ? null : "not_in_rotation")}>
                               <p className="text-lg font-bold text-blue-700">{stats.notInRotation}</p>
                               <p className="text-xs text-blue-600">לא בסבב</p>
+                            </div>
+                            <div className="text-center p-2 rounded-lg bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => setDetailAttendanceView(prev => prev === "not_updated" ? null : "not_updated")}>
+                              <p className="text-lg font-bold text-slate-700">{stats.notUpdated}</p>
+                              <p className="text-xs text-slate-600">לא עודכן</p>
                             </div>
                           </div>
 
@@ -1354,6 +1393,23 @@ export default function AnnualWorkPlan() {
                                   return s ? (
                                     <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm">
                                       <MinusCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                      <span className="text-slate-800">{s.full_name}</span>
+                                    </div>
+                                  ) : null;
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {detailAttendanceView === "not_updated" && notUpdatedSoldiers.length > 0 && (
+                            <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                              <p className="text-xs font-bold text-slate-700 mb-1.5">לא עודכן ({notUpdatedSoldiers.length}):</p>
+                              <div className="space-y-1 max-h-40 overflow-y-auto">
+                                {notUpdatedSoldiers.map(a => {
+                                  const s = soldiers.find(sol => sol.id === a.soldier_id);
+                                  return s ? (
+                                    <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded bg-white text-sm">
+                                      <HelpCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                       <span className="text-slate-800">{s.full_name}</span>
                                     </div>
                                   ) : null;
@@ -1479,7 +1535,7 @@ export default function AnnualWorkPlan() {
               <p className="text-xs font-bold text-violet-700 mb-2">בחר לפי סבב:</p>
               <div className="flex flex-wrap gap-2">
                 {ROTATION_GROUPS.map(group => {
-                  const groupSoldiers = activeSoldiers.filter(s => s.rotation_group === group.value);
+                  const groupSoldiers = expectedDialogSoldiers.filter(s => s.rotation_group === group.value);
                   const allSelected = groupSoldiers.length > 0 && groupSoldiers.every(s => selectedExpectedSoldiers.includes(s.id));
                   return (
                     <Button
@@ -1507,7 +1563,7 @@ export default function AnnualWorkPlan() {
 
             <div className="flex-1 min-h-0 overflow-y-auto max-h-[60vh] pr-1 overscroll-contain">
               <div className="space-y-2 p-1">
-                {activeSoldiers.map(soldier => (
+                {expectedDialogSoldiers.map(soldier => (
                   <div
                     key={soldier.id}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
@@ -1580,7 +1636,7 @@ export default function AnnualWorkPlan() {
                   מצופים ({selectedEvent?.expected_soldiers?.length || 0})
                 </button>
                 {ROTATION_GROUPS.map(group => {
-                  const count = soldiers.filter(s => s.is_active && s.rotation_group === group.value && (!selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date))).length;
+                  const count = soldiers.filter(s => s.rotation_group === group.value && (!selectedEvent || isSoldierRelevantForEventDate(s, selectedEvent.event_date))).length;
                   return (
                     <button
                       key={group.value}
@@ -1599,7 +1655,7 @@ export default function AnnualWorkPlan() {
                     attendanceRotationFilter === "all" ? "bg-violet-600 text-white" : "bg-white text-violet-700 border border-violet-200"
                   }`}
                 >
-                  הכל ({soldiers.filter(s => s.is_active && (!selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date))).length})
+                  הכל ({soldiers.filter(s => !selectedEvent || isSoldierRelevantForEventDate(s, selectedEvent.event_date)).length})
                 </button>
               </div>
             </div>
@@ -1613,11 +1669,11 @@ export default function AnnualWorkPlan() {
                 <SelectContent>
                   {soldiers
                     .filter(s => {
-                      // Only currently-active drivers (Control Table) that were in the unit on the event date
+                      // Only drivers that belong to this event date according to the Control Table
                       const expectedSoldiers = selectedEvent?.expected_soldiers || [];
                       const alreadyAdded = selectedSoldierAttendance[s.id]?.status === "attended" || selectedSoldierAttendance[s.id]?.status === "absent";
-                      const relevantForEvent = !selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date);
-                      return s.is_active && relevantForEvent && !expectedSoldiers.includes(s.id) && !alreadyAdded;
+                      const relevantForEvent = !selectedEvent || isSoldierRelevantForEventDate(s, selectedEvent.event_date);
+                      return relevantForEvent && !expectedSoldiers.includes(s.id) && !alreadyAdded;
                     })
                     .map(s => (
                       <SelectItem key={s.id} value={s.id}>
@@ -1656,11 +1712,9 @@ export default function AnnualWorkPlan() {
                     const soldierState = selectedSoldierAttendance[soldier.id];
                     const hasAttendanceRecord =
                       soldierState?.status === "attended" || soldierState?.status === "absent";
-                    // Only show drivers from the Control Table that were in the unit
-                    // on the event date — OR any soldier that already has a saved
-                    // attendance record (preserves history for released/deleted soldiers).
-                    const isEligible =
-                      soldier.is_active && wasSoldierInUnitOnDate(soldier, selectedEvent.event_date);
+                    // Show drivers that belong to this event date according to the
+                    // Control Table, plus saved records for deleted historical soldiers.
+                    const isEligible = isSoldierRelevantForEventDate(soldier, selectedEvent.event_date);
                     if (!isEligible && !hasAttendanceRecord) return false;
 
                     if (attendanceRotationFilter === "expected") {

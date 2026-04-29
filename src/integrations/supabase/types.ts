@@ -971,6 +971,7 @@ export type Database = {
           id: string
           notes: string | null
           soldier_id: string
+          soldier_name_snapshot: string | null
           status: string
         }
         Insert: {
@@ -982,6 +983,7 @@ export type Database = {
           id?: string
           notes?: string | null
           soldier_id: string
+          soldier_name_snapshot?: string | null
           status?: string
         }
         Update: {
@@ -993,6 +995,7 @@ export type Database = {
           id?: string
           notes?: string | null
           soldier_id?: string
+          soldier_name_snapshot?: string | null
           status?: string
         }
         Relationships: [
