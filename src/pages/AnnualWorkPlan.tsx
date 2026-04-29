@@ -219,10 +219,17 @@ export default function AnnualWorkPlan() {
   }, [canAccessAnnualWorkPlan, authLoading, navigate]);
 
   // Active soldiers for selecting expected soldiers (new events)
+  // = the drivers that appear in the Control Table (is_active = true)
   const activeSoldiers = useMemo(
     () => soldiers.filter(s => s.is_active && wasSoldierInUnitOnDate(s, format(new Date(), "yyyy-MM-dd"))),
     [soldiers]
   );
+
+  // Soldiers eligible for a specific event:
+  // currently in the Control Table (is_active) AND were in the unit on the event date.
+  const getEligibleSoldiersForEvent = (eventDate: string) => {
+    return soldiers.filter(s => s.is_active && wasSoldierInUnitOnDate(s, eventDate));
+  };
 
   useEffect(() => {
     fetchData();
@@ -519,19 +526,28 @@ export default function AnnualWorkPlan() {
     
     // הגדר ברירת מחדל לפי מצופים
     const expectedSoldiers = event.expected_soldiers || [];
-    
-    soldiers.forEach(s => {
-      const att = attendance.find(a => a.event_id === event.id && a.soldier_id === s.id);
+
+    // Only include drivers from the Control Table that were in the unit on the event date,
+    // plus any soldier that already has a saved attendance record for this event
+    // (so historical records stay visible even after a soldier was released/deleted).
+    const eligibleSoldierIds = new Set(
+      getEligibleSoldiersForEvent(event.event_date).map(s => s.id)
+    );
+    const eventAttendanceRecords = attendance.filter(a => a.event_id === event.id);
+    eventAttendanceRecords.forEach(a => eligibleSoldierIds.add(a.soldier_id));
+
+    eligibleSoldierIds.forEach(soldierId => {
+      const att = eventAttendanceRecords.find(a => a.soldier_id === soldierId);
       if (att) {
-        existingAttendance[s.id] = {
+        existingAttendance[soldierId] = {
           status: att.status as AttendanceStatus,
           reason: att.absence_reason || "",
           completed: att.completed || false,
         };
       } else {
         // אם החייל לא ברשימת המצופים, הוא "לא בסבב" כברירת מחדל
-        existingAttendance[s.id] = {
-          status: expectedSoldiers.includes(s.id) ? "not_updated" : "not_in_rotation",
+        existingAttendance[soldierId] = {
+          status: expectedSoldiers.includes(soldierId) ? "not_updated" : "not_in_rotation",
           reason: "",
           completed: false,
         };
@@ -623,14 +639,12 @@ export default function AnnualWorkPlan() {
     const attendanceBySoldier = new Map(attendanceRecords.map(record => [record.soldier_id, record]));
     const soldierById = new Map(soldiers.map(soldier => [soldier.id, soldier]));
 
-    // Include EVERY soldier who was part of the unit at the time of the event:
-    // - existed (created_at <= event date)
-    // - not yet released (release_date is null or >= event date)
-    // - already qualified (qualified_date is null or <= event date)
-    // This guarantees historical accuracy: released soldiers still appear in
-    // summaries of past events they could have attended.
+    // Eligible soldiers for this event = drivers currently in the Control Table
+    // (is_active = true) that were also in the unit on the event date.
+    // Released soldiers from past events are still preserved through their saved
+    // attendance records below (attendanceRecords).
     const historicalRosterIds = soldiers
-      .filter((soldier) => wasSoldierInUnitOnDate(soldier, event.event_date))
+      .filter((soldier) => soldier.is_active && wasSoldierInUnitOnDate(soldier, event.event_date))
       .map((s) => s.id);
 
     const soldierIds = new Set<string>([
@@ -642,12 +656,11 @@ export default function AnnualWorkPlan() {
     return Array.from(soldierIds)
       .filter((soldierId) => {
         const soldier = soldierById.get(soldierId);
-        // Keep records for soldiers that were deleted from the roster so old
-        // reports remain visible, but don't keep existing roster soldiers after release.
-        if (attendanceBySoldier.has(soldierId) && !soldier) return true;
+        // Always keep saved attendance records, even if the soldier was released
+        // or deleted from the Control Table — preserves historical reports.
+        if (attendanceBySoldier.has(soldierId)) return true;
         if (!soldier) return false;
-
-        return wasSoldierInUnitOnDate(soldier, event.event_date);
+        return soldier.is_active && wasSoldierInUnitOnDate(soldier, event.event_date);
       })
       .map((soldierId) => {
         const record = attendanceBySoldier.get(soldierId);
@@ -1567,7 +1580,7 @@ export default function AnnualWorkPlan() {
                   מצופים ({selectedEvent?.expected_soldiers?.length || 0})
                 </button>
                 {ROTATION_GROUPS.map(group => {
-                  const count = soldiers.filter(s => s.rotation_group === group.value && (!selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date))).length;
+                  const count = soldiers.filter(s => s.is_active && s.rotation_group === group.value && (!selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date))).length;
                   return (
                     <button
                       key={group.value}
@@ -1586,7 +1599,7 @@ export default function AnnualWorkPlan() {
                     attendanceRotationFilter === "all" ? "bg-violet-600 text-white" : "bg-white text-violet-700 border border-violet-200"
                   }`}
                 >
-                  הכל ({soldiers.filter(s => !selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date)).length})
+                  הכל ({soldiers.filter(s => s.is_active && (!selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date))).length})
                 </button>
               </div>
             </div>
@@ -1600,11 +1613,11 @@ export default function AnnualWorkPlan() {
                 <SelectContent>
                   {soldiers
                     .filter(s => {
-                      // Show soldiers not in expected list and not already manually added with attended/absent
+                      // Only currently-active drivers (Control Table) that were in the unit on the event date
                       const expectedSoldiers = selectedEvent?.expected_soldiers || [];
                       const alreadyAdded = selectedSoldierAttendance[s.id]?.status === "attended" || selectedSoldierAttendance[s.id]?.status === "absent";
                       const relevantForEvent = !selectedEvent || wasSoldierInUnitOnDate(s, selectedEvent.event_date);
-                      return relevantForEvent && !expectedSoldiers.includes(s.id) && !alreadyAdded;
+                      return s.is_active && relevantForEvent && !expectedSoldiers.includes(s.id) && !alreadyAdded;
                     })
                     .map(s => (
                       <SelectItem key={s.id} value={s.id}>
@@ -1638,11 +1651,18 @@ export default function AnnualWorkPlan() {
               <div className="space-y-3 p-1">
                 {soldiers
                   .filter(soldier => {
-                    const expectedSoldiers = selectedEvent?.expected_soldiers || [];
-                    const hasAttendanceRecord = selectedSoldierAttendance[soldier.id]?.status === "attended" || selectedSoldierAttendance[soldier.id]?.status === "absent";
-                    const relevantForEvent = !selectedEvent || wasSoldierInUnitOnDate(soldier, selectedEvent.event_date);
-                    if (!relevantForEvent && !hasAttendanceRecord) return false;
-                    
+                    if (!selectedEvent) return false;
+                    const expectedSoldiers = selectedEvent.expected_soldiers || [];
+                    const soldierState = selectedSoldierAttendance[soldier.id];
+                    const hasAttendanceRecord =
+                      soldierState?.status === "attended" || soldierState?.status === "absent";
+                    // Only show drivers from the Control Table that were in the unit
+                    // on the event date — OR any soldier that already has a saved
+                    // attendance record (preserves history for released/deleted soldiers).
+                    const isEligible =
+                      soldier.is_active && wasSoldierInUnitOnDate(soldier, selectedEvent.event_date);
+                    if (!isEligible && !hasAttendanceRecord) return false;
+
                     if (attendanceRotationFilter === "expected") {
                       return expectedSoldiers.includes(soldier.id) || hasAttendanceRecord;
                     }
