@@ -216,24 +216,16 @@ export default function ShiftForm() {
         }
         break;
       case 3: // Equipment
-        if (!formData.combatEquipment?.length || !formData.preMovementChecks?.length || !formData.driverTools?.length) {
-          toast({
-            title: "שגיאה",
-            description: "יש לסמן לפחות פריט אחד בכל קטגוריה",
-            variant: "destructive",
-          });
-          return false;
-        }
+        // No minimum-items requirement: empty categories are allowed (e.g. no driver tools in vehicle)
         break;
       case 4: // Drills
         if (
-          !formData.drillsCompleted?.length ||
           !formData.safetyVulnerabilities ||
           !formData.vardimProcedure
         ) {
           toast({
             title: "שגיאה",
-            description: "יש למלא את כל השדות ולסמן לפחות תרגול אחד",
+            description: "יש למלא את כל השדות בשלב זה",
             variant: "destructive",
           });
           return false;
@@ -286,19 +278,10 @@ export default function ShiftForm() {
       return false;
     }
 
-    // Step 3: Equipment
-    if (!formData.combatEquipment?.length || !formData.preMovementChecks?.length || !formData.driverTools?.length) {
-      toast({
-        title: "שגיאה",
-        description: "חסרים פרטי ציוד. יש למלא מחדש.",
-        variant: "destructive",
-      });
-      updateStep(3);
-      return false;
-    }
+    // Step 3: Equipment — no minimum-items requirement
 
     // Step 4: Drills
-    if (!formData.drillsCompleted?.length || !formData.safetyVulnerabilities || !formData.vardimProcedure) {
+    if (!formData.safetyVulnerabilities || !formData.vardimProcedure) {
       toast({
         title: "שגיאה",
         description: "חסרים פרטי תרגולות. יש למלא מחדש.",

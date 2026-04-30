@@ -51,6 +51,27 @@ export function GeneralDetails() {
   const { user } = useAuth();
   const [previousScore, setPreviousScore] = useState<PreviousMonthScore | null>(null);
   const [loadingScore, setLoadingScore] = useState(true);
+  const driverName = watch("driverName");
+
+  // Auto-fill driver name from the logged-in user's profile (read-only)
+  useEffect(() => {
+    const fetchDriverName = async () => {
+      if (!user?.id) return;
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (profile?.full_name) {
+          setValue("driverName", profile.full_name, { shouldDirty: true, shouldTouch: true });
+        }
+      } catch (error) {
+        console.error("Error fetching driver name:", error);
+      }
+    };
+    fetchDriverName();
+  }, [user?.id, setValue]);
   
   const currentDate = new Date();
   const formattedDate = currentDate.toLocaleDateString('he-IL', {
@@ -325,8 +346,11 @@ export function GeneralDetails() {
         </div>
         <Input
           {...register("driverName")}
-          placeholder="הזן את שמך המלא"
-          className="h-14 bg-slate-50 border-slate-200 focus:border-primary text-base rounded-xl text-slate-800 placeholder:text-slate-400"
+          readOnly
+          disabled
+          value={driverName || ""}
+          placeholder="טוען שם..."
+          className="h-14 bg-slate-100 border-slate-200 text-base rounded-xl text-slate-800 placeholder:text-slate-400 cursor-not-allowed opacity-90"
         />
       </div>
 
