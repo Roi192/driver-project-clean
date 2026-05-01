@@ -74,16 +74,23 @@ export const prepareShiftPhotoForUpload = async (file: File): Promise<File> => {
   if (typeof window === "undefined" || typeof document === "undefined") return file;
 
   try {
+    console.log("[prepareShiftPhotoForUpload] decoding image", file.name, file.size, file.type);
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const objectUrl = URL.createObjectURL(file);
       const img = new Image();
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("IMAGE_DECODE_TIMEOUT"));
+      }, 15000);
 
       img.onload = () => {
+        clearTimeout(timeout);
         URL.revokeObjectURL(objectUrl);
         resolve(img);
       };
 
       img.onerror = () => {
+        clearTimeout(timeout);
         URL.revokeObjectURL(objectUrl);
         reject(new Error("IMAGE_DECODE_FAILED"));
       };
@@ -108,15 +115,18 @@ export const prepareShiftPhotoForUpload = async (file: File): Promise<File> => {
     });
 
     if (!optimizedBlob || optimizedBlob.size === 0 || optimizedBlob.size >= file.size) {
+      console.log("[prepareShiftPhotoForUpload] keeping original (optimized not smaller)");
       return file;
     }
 
     const baseName = file.name?.replace(/\.[^.]+$/, "") || "camera-photo";
+    console.log("[prepareShiftPhotoForUpload] optimized", file.size, "->", optimizedBlob.size);
     return new File([optimizedBlob], `${baseName}.jpg`, {
       type: "image/jpeg",
       lastModified: Date.now(),
     });
-  } catch {
+  } catch (err) {
+    console.warn("[prepareShiftPhotoForUpload] preparation failed, using original file", err);
     return file;
   }
 };

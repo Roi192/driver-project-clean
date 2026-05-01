@@ -30,14 +30,16 @@ export function PhotoCaptureCard({
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isNative = isNativePlatform();
+  const mountedRef = useRef(true);
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
   const previewSrc = localPreview ?? storedPath ?? undefined;
   const isDisabled = disabled || uploading;
 
-  // Cleanup object URL on unmount or when replaced
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (localPreview && localPreview.startsWith("blob:")) {
         URL.revokeObjectURL(localPreview);
       }
@@ -46,7 +48,11 @@ export function PhotoCaptureCard({
 
   const uploadBlob = useCallback(
     async (blob: Blob) => {
-      if (processingRef.current || uploading) return;
+      console.log("[PhotoCapture] uploadBlob called", photoId, "size:", blob.size, "type:", blob.type);
+      if (processingRef.current) {
+        console.warn("[PhotoCapture] already processing, skipping", photoId);
+        return;
+      }
       processingRef.current = true;
 
       const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
@@ -57,20 +63,26 @@ export function PhotoCaptureCard({
       setUploading(true);
 
       try {
+        console.log("[PhotoCapture] preparing file for upload...", photoId);
         const uploadFile = await prepareShiftPhotoForUpload(file);
+        console.log("[PhotoCapture] file prepared", photoId, "size:", uploadFile.size);
 
-        // Show the exact file that will be uploaded, so iPhone/HEIC captures render reliably as thumbnails.
         const objectUrl = URL.createObjectURL(uploadFile);
-        setLocalPreview((prev) => {
-          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
-          return objectUrl;
-        });
+        if (mountedRef.current) {
+          setLocalPreview((prev) => {
+            if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+            return objectUrl;
+          });
+        }
 
+        console.log("[PhotoCapture] starting upload to storage...", photoId);
         const previousStoredPath = storedPath;
         const path = await uploadShiftPhoto({ file: uploadFile, photoId });
 
         console.log("[PhotoCapture] upload success", photoId, path);
-        onUploaded(photoId, path);
+        if (mountedRef.current) {
+          onUploaded(photoId, path);
+        }
 
         if (previousStoredPath && previousStoredPath !== path) {
           await deleteShiftPhoto(previousStoredPath).catch(() => {});
@@ -78,20 +90,24 @@ export function PhotoCaptureCard({
 
         toast({ title: "✅ התמונה נטענה ונשמרה", description: label });
       } catch (error) {
-        setLocalPreview(null);
         const message = error instanceof Error ? error.message : "אירעה שגיאה";
         console.error("[PhotoCapture] upload failed", photoId, message);
+        if (mountedRef.current) {
+          setLocalPreview(null);
+        }
         toast({
           title: "❌ העלאת התמונה נכשלה",
           description: `${label} - ${message}`,
           variant: "destructive",
         });
       } finally {
-        setUploading(false);
+        if (mountedRef.current) {
+          setUploading(false);
+        }
         processingRef.current = false;
       }
     },
-    [label, onUploaded, photoId, storedPath, uploading]
+    [label, onUploaded, photoId, storedPath]
   );
 
   const handleCardClick = useCallback(async () => {
@@ -121,12 +137,12 @@ export function PhotoCaptureCard({
   const handleFileInputChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      // reset so same file can be re-selected
-      event.target.value = "";
+      console.log("[PhotoCapture] file input change", photoId, file ? `name=${file.name} size=${file.size} type=${file.type}` : "(no file)");
       if (!file) return;
+      try { event.target.value = ""; } catch {}
       await uploadBlob(file);
     },
-    [uploadBlob]
+    [uploadBlob, photoId]
   );
 
   const handleRemove = async (event: React.MouseEvent) => {
