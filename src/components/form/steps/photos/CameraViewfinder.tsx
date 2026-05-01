@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, SwitchCamera, Loader2, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isNativePlatform } from "@/lib/capacitor-camera";
 import { toast } from "@/hooks/use-toast";
 
 interface CameraViewfinderProps {
@@ -30,60 +29,58 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
   const [isDarkScene, setIsDarkScene] = useState(false);
   const [screenFlashActive, setScreenFlashActive] = useState(false);
   const userOverrodeTorchRef = useRef(false);
-  const nativeFlashRef = useRef<null | {
+  const flashPluginRef = useRef<null | {
     isAvailable: () => Promise<{ value: boolean }>;
     switchOn: (options?: { intensity?: number }) => Promise<void>;
     switchOff: () => Promise<void>;
   }>(null);
-  const isNative = isNativePlatform();
-
-  // Lazy-load the native LED flash plugin (Capgo Flash) when running inside Capacitor
+  // Lazy-load the hardware LED flash plugin. In Chrome Android it uses the
+  // browser torch API; in the native app it uses the real device LED directly.
   useEffect(() => {
-    if (!isNative) return;
     let cancelled = false;
     (async () => {
       try {
-        // Use a variable so Rollup/Vite does not try to resolve this at build time.
-        // The plugin only exists at runtime inside the native Capacitor shell.
-        const pkg = "@capgo/capacitor-flash";
-        const mod = await import(/* @vite-ignore */ pkg);
+        const mod = await import("@capgo/capacitor-flash");
         if (cancelled) return;
-        // Plugin exposes a `Flash` object
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const Flash = (mod as any).Flash ?? (mod as any).default;
-        if (!Flash) return;
-        nativeFlashRef.current = Flash;
+        const Flash = (mod as any).CapacitorFlash ?? (mod as any).Flash ?? (mod as any).default;
+        if (!Flash) {
+          console.warn("[CameraViewfinder] flash plugin export not found", mod);
+          return;
+        }
+        flashPluginRef.current = Flash;
         try {
           const res = await Flash.isAvailable();
           if (!cancelled && res?.value) setTorchSupported(true);
         } catch (err) {
-          console.warn("[CameraViewfinder] native flash isAvailable failed", err);
+          console.warn("[CameraViewfinder] flash isAvailable failed", err);
         }
       } catch (err) {
-        console.warn("[CameraViewfinder] native flash plugin not available", err);
+        console.warn("[CameraViewfinder] flash plugin not available", err);
       }
     })();
     return () => {
       cancelled = true;
       // Make sure the LED is off when unmounting
-      const f = nativeFlashRef.current;
+      const f = flashPluginRef.current;
       if (f) {
         f.switchOff().catch(() => {});
       }
     };
-  }, [isNative]);
+  }, []);
 
   const applyTorch = useCallback(async (on: boolean) => {
-    // Prefer the native LED plugin when running inside Capacitor (works on iOS too)
-    const nativeFlash = nativeFlashRef.current;
-    if (isNative && nativeFlash) {
+    // Prefer the flash plugin. On Android Chrome this uses the real rear LED
+    // through the browser torch implementation, not the white screen fallback.
+    const flashPlugin = flashPluginRef.current;
+    if (flashPlugin) {
       try {
-        if (on) await nativeFlash.switchOn({ intensity: 1 });
-        else await nativeFlash.switchOff();
+        if (on) await flashPlugin.switchOn({ intensity: 1 });
+        else await flashPlugin.switchOff();
         setTorchOn(on);
         return true;
       } catch (err) {
-        console.warn("[CameraViewfinder] native torch toggle failed", err);
+        console.warn("[CameraViewfinder] plugin torch toggle failed", err);
         // fall through to web API attempt
       }
     }
@@ -107,7 +104,7 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
       console.warn("[CameraViewfinder] torch apply failed", err);
       return false;
     }
-  }, [isNative]);
+  }, []);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {

@@ -11,11 +11,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.1",
+    "@capacitor/android": "8.3.1",
     "@capacitor/camera": "^8.0.2",
     "@capacitor/cli": "^8.0.0",
-    "@capacitor/core": "^8.0.0",
+    "@capacitor/core": "8.3.1",
     "@capacitor/geolocation": "^8.0.0",
+    "@capacitor/ios": "8.3.1",
     "@capgo/capacitor-flash": "^8.0.27",
     "@hookform/resolvers": "^3.10.0",
     "@playwright/test": "^1.57.0",
