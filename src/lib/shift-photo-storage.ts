@@ -15,10 +15,7 @@ const resolveFileExtension = (file: File) => {
   const fromName = file.name?.split(".")?.pop()?.toLowerCase();
   const extension = fromMime || fromName || FALLBACK_EXTENSION;
 
-  if (extension === "jpeg") return "jpg";
-  if (extension === "heic" || extension === "heif") return "jpg";
-
-  return extension;
+  return extension === "jpeg" ? "jpg" : extension;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -26,20 +23,17 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const getUploadErrorMessage = (error: unknown): string => {
   if (!error) return "Unknown upload error";
   if (error instanceof Error) return error.message;
-
   if (typeof error === "object" && error !== null) {
     const maybeMessage = (error as { message?: string }).message;
     if (typeof maybeMessage === "string" && maybeMessage.length > 0) {
       return maybeMessage;
     }
   }
-
   return String(error);
 };
 
 const isRetriableUploadError = (error: unknown) => {
   const message = getUploadErrorMessage(error).toLowerCase();
-
   const statusCode =
     typeof error === "object" && error !== null && "statusCode" in error
       ? Number((error as { statusCode?: number }).statusCode)
@@ -51,7 +45,6 @@ const isRetriableUploadError = (error: unknown) => {
     message.includes("failed to fetch") ||
     message.includes("network") ||
     message.includes("timeout") ||
-    message.includes("upload_timeout") ||
     message.includes("econnreset") ||
     message.includes("etimedout")
   );
@@ -68,9 +61,16 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T
   ]);
 };
 
-const maybeOptimizeImageForUpload = async (file: File): Promise<File> => {
+export const prepareShiftPhotoForUpload = async (file: File): Promise<File> => {
+  if (!file || file.size === 0) {
+    throw new Error("קובץ התמונה ריק או לא תקין");
+  }
+
   if (!file.type?.startsWith("image/")) return file;
-  if (file.size <= MAX_IMAGE_UPLOAD_SIZE_BYTES) return file;
+
+  const mimeType = file.type.toLowerCase();
+  const isAlreadyWebSafeJpeg = mimeType === "image/jpeg" || mimeType === "image/jpg";
+  if (isAlreadyWebSafeJpeg && file.size <= MAX_IMAGE_UPLOAD_SIZE_BYTES) return file;
   if (typeof window === "undefined" || typeof document === "undefined") return file;
 
   try {
@@ -112,28 +112,27 @@ const maybeOptimizeImageForUpload = async (file: File): Promise<File> => {
     }
 
     const baseName = file.name?.replace(/\.[^.]+$/, "") || "camera-photo";
-
     return new File([optimizedBlob], `${baseName}.jpg`, {
       type: "image/jpeg",
       lastModified: Date.now(),
     });
-  } catch (error) {
-    console.warn("[uploadShiftPhoto] image optimization skipped", error);
+  } catch {
     return file;
   }
 };
 
-export const normalizeShiftPhotoPath = (
-  value: string | null | undefined
-): string | null => {
+export const normalizeShiftPhotoPath = (value: string | null | undefined): string | null => {
   if (!value) return null;
   return extractFilePath(value, SHIFT_PHOTOS_BUCKET) ?? value;
 };
 
-const ensureSessionReady = async () => {
-  const { data: sessionData } = await supabase.auth.getSession();
+const getAuthenticatedUserId = async (fallbackUserId?: string): Promise<string> => {
+  if (typeof fallbackUserId === "string" && fallbackUserId.trim().length > 0) {
+    return fallbackUserId.trim();
+  }
 
-  if (sessionData.session?.access_token && sessionData.session.user?.id) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user?.id) {
     return sessionData.session.user.id;
   }
 
@@ -142,9 +141,7 @@ const ensureSessionReady = async () => {
     return userData.user.id;
   }
 
-  const { data: refreshData, error: refreshError } =
-    await supabase.auth.refreshSession();
-
+  const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
   if (!refreshError && refreshData.session?.user?.id) {
     return refreshData.session.user.id;
   }
@@ -152,33 +149,16 @@ const ensureSessionReady = async () => {
   throw new Error("AUTH_REQUIRED: Missing authenticated session");
 };
 
-const getAuthenticatedUserId = async (fallbackUserId?: string): Promise<string> => {
-  if (typeof fallbackUserId === "string" && fallbackUserId.trim().length > 0) {
-    return fallbackUserId.trim();
-  }
-
-  return await ensureSessionReady();
-};
-
 export async function uploadShiftPhoto(params: {
   file: File;
   photoId: string;
   userId?: string;
 }): Promise<string> {
-  console.log("[uploadShiftPhoto] starting", {
-    photoId: params.photoId,
-    originalName: params.file.name,
-    originalType: params.file.type,
-    originalSize: params.file.size,
-  });
-
+  console.log("[uploadShiftPhoto] Starting upload for photoId:", params.photoId);
   const authenticatedUserId = await getAuthenticatedUserId(params.userId);
-
-  console.log("[uploadShiftPhoto] authenticated user", authenticatedUserId);
-
-  const optimizedFile = await maybeOptimizeImageForUpload(params.file);
-  const uploadCandidates =
-    optimizedFile === params.file ? [params.file] : [optimizedFile, params.file];
+  console.log("[uploadShiftPhoto] Authenticated userId:", authenticatedUserId);
+  const optimizedFile = await prepareShiftPhotoForUpload(params.file);
+  const uploadCandidates = optimizedFile === params.file ? [params.file] : [optimizedFile, params.file];
 
   let lastError: unknown = null;
 
@@ -186,20 +166,9 @@ export async function uploadShiftPhoto(params: {
     const extension = resolveFileExtension(candidateFile);
 
     for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt += 1) {
-      const filePath = `${authenticatedUserId}/drafts/${params.photoId}_${Date.now()}_${attempt}.${extension}`;
+      const filePath = `${authenticatedUserId}/drafts/${params.photoId}_${Date.now()}.${extension}`;
 
       try {
-        console.log("[uploadShiftPhoto] attempt", {
-          photoId: params.photoId,
-          attempt,
-          filePath,
-          candidateName: candidateFile.name,
-          candidateType: candidateFile.type,
-          candidateSize: candidateFile.size,
-        });
-
-        await ensureSessionReady();
-
         const { error } = await withTimeout(
           supabase.storage.from(SHIFT_PHOTOS_BUCKET).upload(filePath, candidateFile, {
             contentType: candidateFile.type || "image/jpeg",
@@ -210,23 +179,25 @@ export async function uploadShiftPhoto(params: {
         );
 
         if (!error) {
-          console.log("[uploadShiftPhoto] success", { photoId: params.photoId, filePath });
+          const { error: signedUrlError } = await supabase.storage
+            .from(SHIFT_PHOTOS_BUCKET)
+            .createSignedUrl(filePath, 60);
+
+          if (signedUrlError) {
+            lastError = signedUrlError;
+            break;
+          }
+
           return filePath;
         }
 
         lastError = error;
-        console.error("[uploadShiftPhoto] supabase upload error", error);
       } catch (error) {
         lastError = error;
-        console.error("[uploadShiftPhoto] upload exception", error);
       }
 
-      const shouldRetry =
-        attempt < MAX_UPLOAD_RETRIES && isRetriableUploadError(lastError);
-
-      if (!shouldRetry) {
-        break;
-      }
+      const shouldRetry = attempt < MAX_UPLOAD_RETRIES && isRetriableUploadError(lastError);
+      if (!shouldRetry) break;
 
       await delay(350 * attempt);
     }

@@ -3,7 +3,7 @@ import { Camera, Check, Loader2, X } from "lucide-react";
 import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { uploadShiftPhoto, deleteShiftPhoto } from "@/lib/shift-photo-storage";
+import { uploadShiftPhoto, deleteShiftPhoto, prepareShiftPhotoForUpload } from "@/lib/shift-photo-storage";
 import { isNativePlatform, takePhotoCameraOnly } from "@/lib/capacitor-camera";
 
 interface PhotoCaptureCardProps {
@@ -49,27 +49,25 @@ export function PhotoCaptureCard({
       if (processingRef.current || uploading) return;
       processingRef.current = true;
 
-      // Generate preview using object URL (much faster + lighter than data URL on mobile)
-      try {
-        const objectUrl = URL.createObjectURL(blob);
-        setLocalPreview((prev) => {
-          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
-          return objectUrl;
-        });
-      } catch (e) {
-        console.warn("[PhotoCapture] preview generation failed", e);
-      }
-
       const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
-        type: "image/jpeg",
+        type: blob.type || "image/jpeg",
         lastModified: Date.now(),
       });
 
       setUploading(true);
 
       try {
+        const uploadFile = await prepareShiftPhotoForUpload(file);
+
+        // Show the exact file that will be uploaded, so iPhone/HEIC captures render reliably as thumbnails.
+        const objectUrl = URL.createObjectURL(uploadFile);
+        setLocalPreview((prev) => {
+          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
+
         const previousStoredPath = storedPath;
-        const path = await uploadShiftPhoto({ file, photoId });
+        const path = await uploadShiftPhoto({ file: uploadFile, photoId });
 
         console.log("[PhotoCapture] upload success", photoId, path);
         onUploaded(photoId, path);
@@ -78,7 +76,7 @@ export function PhotoCaptureCard({
           await deleteShiftPhoto(previousStoredPath).catch(() => {});
         }
 
-        toast({ title: "✅ התמונה הועלתה בהצלחה", description: label });
+        toast({ title: "✅ התמונה נטענה ונשמרה", description: label });
       } catch (error) {
         setLocalPreview(null);
         const message = error instanceof Error ? error.message : "אירעה שגיאה";
