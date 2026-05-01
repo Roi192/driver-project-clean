@@ -41,7 +41,10 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     let cancelled = false;
     (async () => {
       try {
-        const mod = await import("@capgo/capacitor-flash");
+        // Use a variable so Rollup/Vite does not try to resolve this at build time.
+        // The plugin only exists at runtime inside the native Capacitor shell.
+        const pkg = "@capgo/capacitor-flash";
+        const mod = await import(/* @vite-ignore */ pkg);
         if (cancelled) return;
         // Plugin exposes a `Flash` object
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,10 +117,36 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     setTorchOn(false);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
+      // For the rear camera, request `exact` so the browser exposes hardware
+      // controls like the LED torch (Chrome Android only exposes `torch` on
+      // the true back camera, not on a "fallback" front camera).
+      const videoConstraints: MediaTrackConstraints =
+        facing === "environment"
+          ? {
+              facingMode: { exact: "environment" },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            }
+          : {
+              facingMode: facing,
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            };
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false,
+        });
+      } catch (err) {
+        // Fallback when `exact` is not satisfiable (some devices/browsers)
+        console.warn("[CameraViewfinder] exact facingMode failed, retrying", err);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+      }
 
       streamRef.current = stream;
 
@@ -126,11 +155,19 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
         await videoRef.current.play();
         setReady(true);
 
-        // Detect torch support on the active video track
+        // Detect torch support on the active video track. Some Android
+        // devices only populate `getCapabilities()` after the track has
+        // actually started producing frames, so re-check after a short delay.
         const track = stream.getVideoTracks()[0];
-        const capabilities = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
-        // If native plugin already marked torch as supported, keep it.
-        setTorchSupported((prev) => prev || Boolean(capabilities.torch));
+        const checkTorch = () => {
+          const capabilities = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+          if (capabilities.torch) {
+            setTorchSupported(true);
+          }
+        };
+        checkTorch();
+        window.setTimeout(checkTorch, 400);
+        window.setTimeout(checkTorch, 1200);
       }
     } catch (err) {
       console.error("[CameraViewfinder] getUserMedia error", err);
@@ -315,7 +352,7 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
         </button>
         <span className="text-white text-sm font-bold truncate max-w-[50%]">{label}</span>
         <div className="flex items-center gap-1">
-          {torchSupported ? (
+          {facingMode === "environment" && torchSupported ? (
             <button
               type="button"
               onClick={handleToggleTorch}
@@ -328,14 +365,13 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
             >
               {torchOn ? <Zap className="h-7 w-7" /> : <ZapOff className="h-7 w-7" />}
             </button>
-          ) : isDarkScene && facingMode === "environment" ? (
+          ) : facingMode === "environment" ? (
             <span
-              className="text-yellow-300 p-2 flex items-center gap-1"
-              title="פלאש מסך פעיל - יואר בעת הצילום"
-              aria-label="פלאש מסך פעיל"
+              className="text-white/60 p-2 flex items-center gap-1"
+              title="הפלאש החומרתי לא נתמך במכשיר/דפדפן זה"
+              aria-label="פלאש לא זמין"
             >
-              <Zap className="h-6 w-6" />
-              <span className="text-[10px] font-bold">מסך</span>
+              <ZapOff className="h-6 w-6" />
             </span>
           ) : null}
           <button type="button" onClick={handleFlip} className="text-white p-2 rounded-full active:bg-white/20">
