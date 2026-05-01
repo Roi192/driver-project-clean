@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, X, SwitchCamera, Loader2 } from "lucide-react";
+import { X, SwitchCamera, Loader2, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CameraViewfinderProps {
@@ -11,12 +11,39 @@ interface CameraViewfinderProps {
 
 const JPEG_QUALITY = 0.85;
 
+// Brightness threshold (0-255) below which we consider the scene "dark"
+const DARK_BRIGHTNESS_THRESHOLD = 55;
+const BRIGHTNESS_SAMPLE_INTERVAL_MS = 1500;
+
 export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchAuto, setTorchAuto] = useState(true); // auto-enable torch in dark scenes
+  const [isDarkScene, setIsDarkScene] = useState(false);
+  const [screenFlashActive, setScreenFlashActive] = useState(false);
+  const userOverrodeTorchRef = useRef(false);
+
+  const applyTorch = useCallback(async (on: boolean) => {
+    const stream = streamRef.current;
+    if (!stream) return false;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return false;
+    const capabilities = (track.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+    if (!capabilities.torch) return false;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet & { torch: boolean }] });
+      setTorchOn(on);
+      return true;
+    } catch (err) {
+      console.warn("[CameraViewfinder] torch apply failed", err);
+      return false;
+    }
+  }, []);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -29,6 +56,8 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     stopStream();
     setReady(false);
     setError(null);
+    setTorchSupported(false);
+    setTorchOn(false);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -42,6 +71,11 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setReady(true);
+
+        // Detect torch support on the active video track
+        const track = stream.getVideoTracks()[0];
+        const capabilities = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+        setTorchSupported(Boolean(capabilities.torch));
       }
     } catch (err) {
       console.error("[CameraViewfinder] getUserMedia error", err);
@@ -68,7 +102,97 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode]);
 
-  const handleCapture = useCallback(() => {
+  // Reset user override when switching cameras
+  useEffect(() => {
+    userOverrodeTorchRef.current = false;
+    setTorchAuto(true);
+  }, [facingMode]);
+
+  // Auto-detect dark scene and toggle torch when supported (rear camera only)
+  useEffect(() => {
+    if (!ready || !torchSupported || facingMode !== "environment") return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const ctx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    let cancelled = false;
+
+    const sample = () => {
+      if (cancelled || userOverrodeTorchRef.current) return;
+      try {
+        ctx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
+        const { data } = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
+        let total = 0;
+        const pixels = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+          // Perceived luminance
+          total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        }
+        const avg = total / pixels;
+        const shouldBeOn = avg < DARK_BRIGHTNESS_THRESHOLD;
+        if (shouldBeOn !== torchOn) {
+          void applyTorch(shouldBeOn);
+        }
+      } catch {
+        // ignore sampling errors (e.g. video not ready yet)
+      }
+    };
+
+    // First sample slightly delayed so exposure settles
+    const initial = window.setTimeout(sample, 600);
+    const interval = window.setInterval(sample, BRIGHTNESS_SAMPLE_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+  }, [ready, torchSupported, facingMode, torchOn, applyTorch]);
+
+  // Independent dark-scene detection for the screen-flash fallback
+  // (works on iOS Safari where the Web torch API is not supported).
+  useEffect(() => {
+    if (!ready) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const ctx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    let cancelled = false;
+    const sample = () => {
+      if (cancelled) return;
+      try {
+        ctx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
+        const { data } = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
+        let total = 0;
+        const pixels = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+          total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        }
+        setIsDarkScene(total / pixels < DARK_BRIGHTNESS_THRESHOLD);
+      } catch {
+        // ignore
+      }
+    };
+    const initial = window.setTimeout(sample, 600);
+    const interval = window.setInterval(sample, BRIGHTNESS_SAMPLE_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+  }, [ready]);
+
+  const performCapture = useCallback(() => {
     const video = videoRef.current;
     if (!video || !streamRef.current) return;
 
@@ -92,9 +216,32 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     );
   }, [onCapture, stopStream]);
 
+  const handleCapture = useCallback(() => {
+    // Hardware torch already on (Android Chrome) → just capture.
+    // For iOS Safari / browsers without torch, show a white screen flash to illuminate dark scenes.
+    const needScreenFlash = !torchSupported && isDarkScene && facingMode === "environment";
+    if (!needScreenFlash) {
+      performCapture();
+      return;
+    }
+
+    setScreenFlashActive(true);
+    // Allow ~250ms for the white overlay to actually illuminate the subject before snapping
+    window.setTimeout(() => {
+      performCapture();
+      window.setTimeout(() => setScreenFlashActive(false), 100);
+    }, 250);
+  }, [performCapture, torchSupported, isDarkScene, facingMode]);
+
   const handleFlip = useCallback(() => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
   }, []);
+
+  const handleToggleTorch = useCallback(() => {
+    userOverrodeTorchRef.current = true;
+    setTorchAuto(false);
+    void applyTorch(!torchOn);
+  }, [applyTorch, torchOn]);
 
   const handleClose = useCallback(() => {
     stopStream();
@@ -111,10 +258,35 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
         <button type="button" onClick={handleClose} className="text-white p-2 rounded-full active:bg-white/20">
           <X className="h-7 w-7" />
         </button>
-        <span className="text-white text-sm font-bold truncate max-w-[60%]">{label}</span>
-        <button type="button" onClick={handleFlip} className="text-white p-2 rounded-full active:bg-white/20">
-          <SwitchCamera className="h-7 w-7" />
-        </button>
+        <span className="text-white text-sm font-bold truncate max-w-[50%]">{label}</span>
+        <div className="flex items-center gap-1">
+          {torchSupported ? (
+            <button
+              type="button"
+              onClick={handleToggleTorch}
+              className={cn(
+                "p-2 rounded-full active:bg-white/20 transition-colors",
+                torchOn ? "text-yellow-300" : "text-white"
+              )}
+              aria-label={torchOn ? "כבה פלאש" : "הפעל פלאש"}
+              title={torchAuto ? "פלאש אוטומטי" : torchOn ? "פלאש דולק" : "פלאש כבוי"}
+            >
+              {torchOn ? <Zap className="h-7 w-7" /> : <ZapOff className="h-7 w-7" />}
+            </button>
+          ) : isDarkScene && facingMode === "environment" ? (
+            <span
+              className="text-yellow-300 p-2 flex items-center gap-1"
+              title="פלאש מסך פעיל - יואר בעת הצילום"
+              aria-label="פלאש מסך פעיל"
+            >
+              <Zap className="h-6 w-6" />
+              <span className="text-[10px] font-bold">מסך</span>
+            </span>
+          ) : null}
+          <button type="button" onClick={handleFlip} className="text-white p-2 rounded-full active:bg-white/20">
+            <SwitchCamera className="h-7 w-7" />
+          </button>
+        </div>
       </div>
 
       {/* Viewfinder */}
@@ -157,6 +329,14 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
           <div className="h-14 w-14 rounded-full bg-white" />
         </button>
       </div>
+
+      {/* Screen-flash overlay (iOS Safari / no-torch fallback for dark scenes) */}
+      {screenFlashActive && (
+        <div
+          className="pointer-events-none fixed inset-0 bg-white"
+          style={{ zIndex: 100000 }}
+        />
+      )}
     </div>
   );
 

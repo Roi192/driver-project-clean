@@ -42,10 +42,19 @@ function LocationMarker({
   position: [number, number] | null;
   setPosition: (pos: [number, number]) => void;
 }) {
+  // iOS Safari sometimes swallows synthetic 'click' events on Leaflet maps.
+  // Listen to multiple event types to ensure taps register on iPhone.
   useMapEvents({
     click(e) {
       setPosition([e.latlng.lat, e.latlng.lng]);
     },
+    // Leaflet's tap handler fires on touch devices when 'tap: true'
+    // (cast: type def doesn't include 'tap' but Leaflet emits it)
+    ...({
+      tap(e: L.LeafletMouseEvent) {
+        setPosition([e.latlng.lat, e.latlng.lng]);
+      },
+    } as Record<string, unknown>),
   });
 
   return position ? <Marker position={position} /> : null;
@@ -150,6 +159,7 @@ export function MapPicker({ latitude, longitude, onLocationSelect }: MapPickerPr
           
           <div className="h-[350px] w-full">
             <MapContainer
+              {...({ tap: true, tapTolerance: 25 } as Record<string, unknown>)}
               center={position || defaultCenter}
               zoom={position ? 15 : 10}
               style={{ height: "100%", width: "100%" }}
