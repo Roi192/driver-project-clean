@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X, SwitchCamera, Loader2, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isNativePlatform } from "@/lib/capacitor-camera";
+import { toast } from "@/hooks/use-toast";
 
 interface CameraViewfinderProps {
   onCapture: (blob: Blob) => void;
@@ -24,13 +25,14 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [torchBusy, setTorchBusy] = useState(false);
   const [torchAuto, setTorchAuto] = useState(true); // auto-enable torch in dark scenes
   const [isDarkScene, setIsDarkScene] = useState(false);
   const [screenFlashActive, setScreenFlashActive] = useState(false);
   const userOverrodeTorchRef = useRef(false);
   const nativeFlashRef = useRef<null | {
     isAvailable: () => Promise<{ value: boolean }>;
-    switchOn: () => Promise<void>;
+    switchOn: (options?: { intensity?: number }) => Promise<void>;
     switchOff: () => Promise<void>;
   }>(null);
   const isNative = isNativePlatform();
@@ -76,7 +78,7 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     const nativeFlash = nativeFlashRef.current;
     if (isNative && nativeFlash) {
       try {
-        if (on) await nativeFlash.switchOn();
+        if (on) await nativeFlash.switchOn({ intensity: 1 });
         else await nativeFlash.switchOff();
         setTorchOn(on);
         return true;
@@ -93,6 +95,11 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     const capabilities = (track.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
     if (!capabilities.torch) return false;
     try {
+      // Some Android Chrome builds apply torch more reliably when the track is
+      // briefly switched through `false` before turning the rear LED on.
+      if (on) {
+        await track.applyConstraints({ advanced: [{ torch: false } as MediaTrackConstraintSet & { torch: boolean }] });
+      }
       await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet & { torch: boolean }] });
       setTorchOn(on);
       return true;
@@ -329,11 +336,24 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
   }, []);
 
-  const handleToggleTorch = useCallback(() => {
+  const handleToggleTorch = useCallback(async () => {
+    if (torchBusy) return;
     userOverrodeTorchRef.current = true;
     setTorchAuto(false);
-    void applyTorch(!torchOn);
-  }, [applyTorch, torchOn]);
+    const nextState = !torchOn;
+    setTorchBusy(true);
+    const applied = await applyTorch(nextState);
+    setTorchBusy(false);
+
+    if (!applied) {
+      setTorchOn(false);
+      toast({
+        title: "הפלאש החיצוני לא הופעל",
+        description: "Chrome/המכשיר לא מאפשרים כרגע שליטה בפלאש האחורי. ודא שנפתחה המצלמה האחורית ונסה לסגור ולפתוח את המצלמה מחדש.",
+        variant: "destructive",
+      });
+    }
+  }, [applyTorch, torchBusy, torchOn]);
 
   const handleClose = useCallback(() => {
     stopStream();
@@ -356,14 +376,16 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
             <button
               type="button"
               onClick={handleToggleTorch}
+              disabled={torchBusy}
               className={cn(
                 "p-2 rounded-full active:bg-white/20 transition-colors",
-                torchOn ? "text-yellow-300" : "text-white"
+                torchOn ? "text-yellow-300" : "text-white",
+                torchBusy && "opacity-60"
               )}
               aria-label={torchOn ? "כבה פלאש" : "הפעל פלאש"}
               title={torchAuto ? "פלאש אוטומטי" : torchOn ? "פלאש דולק" : "פלאש כבוי"}
             >
-              {torchOn ? <Zap className="h-7 w-7" /> : <ZapOff className="h-7 w-7" />}
+              {torchBusy ? <Loader2 className="h-7 w-7 animate-spin" /> : torchOn ? <Zap className="h-7 w-7" /> : <ZapOff className="h-7 w-7" />}
             </button>
           ) : facingMode === "environment" ? (
             <span
