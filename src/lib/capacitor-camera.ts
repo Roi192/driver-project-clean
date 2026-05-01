@@ -68,3 +68,46 @@ export const takePhotoNative = async (): Promise<File | null> => {
     throw error;
   }
 };
+
+/**
+ * Take a photo using the device's built-in camera ONLY (no gallery access).
+ * Used by the pre-shift form so drivers can't pick existing photos.
+ */
+export const takePhotoCameraOnly = async (): Promise<File | null> => {
+  try {
+    const { Camera, CameraResultType, CameraSource } = await import(
+      "@capacitor/camera"
+    );
+
+    const image = await Camera.getPhoto({
+      quality: 85,
+      allowEditing: false,
+      resultType: CameraResultType.DataUrl,
+      source: CameraSource.Camera, // Force camera, disallow gallery
+      width: 1920,
+      height: 1920,
+      correctOrientation: true,
+    });
+
+    if (!image.dataUrl) return null;
+
+    const response = await fetch(image.dataUrl);
+    const blob = await response.blob();
+    const extension = image.format || "jpeg";
+    const fileName = `photo_${Date.now()}.${extension}`;
+    return new File([blob], fileName, {
+      type: `image/${extension === "jpg" ? "jpeg" : extension}`,
+    });
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("cancelled") ||
+        error.message.includes("canceled") ||
+        error.message.includes("User cancelled"))
+    ) {
+      return null;
+    }
+    console.error("[CapCamera] Error taking camera-only photo:", error);
+    throw error;
+  }
+};

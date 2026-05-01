@@ -4,8 +4,7 @@ import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { uploadShiftPhoto, deleteShiftPhoto } from "@/lib/shift-photo-storage";
-import { isNativePlatform, takePhotoNative } from "@/lib/capacitor-camera";
-import { CameraViewfinder } from "./CameraViewfinder";
+import { isNativePlatform, takePhotoCameraOnly } from "@/lib/capacitor-camera";
 
 interface PhotoCaptureCardProps {
   photoId: string;
@@ -29,7 +28,7 @@ export function PhotoCaptureCard({
   const processingRef = useRef(false);
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isNative = isNativePlatform();
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
@@ -87,7 +86,7 @@ export function PhotoCaptureCard({
 
     if (isNative) {
       try {
-        const file = await takePhotoNative();
+        const file = await takePhotoCameraOnly();
         if (file) {
           await uploadBlob(file);
         }
@@ -102,14 +101,17 @@ export function PhotoCaptureCard({
       return;
     }
 
-    // Web: open getUserMedia viewfinder
-    setCameraOpen(true);
+    // Web: trigger native browser camera (no gallery on mobile thanks to capture attr)
+    fileInputRef.current?.click();
   }, [isDisabled, isNative, uploadBlob]);
 
-  const handleCameraCapture = useCallback(
-    (blob: Blob) => {
-      setCameraOpen(false);
-      void uploadBlob(blob);
+  const handleFileInputChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // reset so same file can be re-selected
+      event.target.value = "";
+      if (!file) return;
+      await uploadBlob(file);
     },
     [uploadBlob]
   );
@@ -150,13 +152,14 @@ export function PhotoCaptureCard({
         <PhotoOverlays hasPhoto={hasPhoto} uploading={uploading} label={label} onRemove={handleRemove} />
       </div>
 
-      {cameraOpen && (
-        <CameraViewfinder
-          label={label}
-          onCapture={handleCameraCapture}
-          onClose={() => setCameraOpen(false)}
-        />
-      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
     </>
   );
 }
