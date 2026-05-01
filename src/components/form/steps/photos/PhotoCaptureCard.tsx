@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, Loader2, X } from "lucide-react";
 import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
@@ -35,15 +35,30 @@ export function PhotoCaptureCard({
   const previewSrc = localPreview ?? storedPath ?? undefined;
   const isDisabled = disabled || uploading;
 
+  // Cleanup object URL on unmount or when replaced
+  useEffect(() => {
+    return () => {
+      if (localPreview && localPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(localPreview);
+      }
+    };
+  }, [localPreview]);
+
   const uploadBlob = useCallback(
     async (blob: Blob) => {
       if (processingRef.current || uploading) return;
       processingRef.current = true;
 
-      // Generate preview
-      const reader = new FileReader();
-      reader.onload = () => setLocalPreview(reader.result as string);
-      reader.readAsDataURL(blob);
+      // Generate preview using object URL (much faster + lighter than data URL on mobile)
+      try {
+        const objectUrl = URL.createObjectURL(blob);
+        setLocalPreview((prev) => {
+          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
+      } catch (e) {
+        console.warn("[PhotoCapture] preview generation failed", e);
+      }
 
       const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
         type: "image/jpeg",
