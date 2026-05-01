@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, SwitchCamera, Loader2, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isNativePlatform } from "@/lib/capacitor-camera";
 
 interface CameraViewfinderProps {
   onCapture: (blob: Blob) => void;
@@ -27,8 +28,61 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
   const [isDarkScene, setIsDarkScene] = useState(false);
   const [screenFlashActive, setScreenFlashActive] = useState(false);
   const userOverrodeTorchRef = useRef(false);
+  const nativeFlashRef = useRef<null | {
+    isAvailable: () => Promise<{ value: boolean }>;
+    switchOn: () => Promise<void>;
+    switchOff: () => Promise<void>;
+  }>(null);
+  const isNative = isNativePlatform();
+
+  // Lazy-load the native LED flash plugin (Capgo Flash) when running inside Capacitor
+  useEffect(() => {
+    if (!isNative) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mod = await import("@capgo/capacitor-flash");
+        if (cancelled) return;
+        // Plugin exposes a `Flash` object
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const Flash = (mod as any).Flash ?? (mod as any).default;
+        if (!Flash) return;
+        nativeFlashRef.current = Flash;
+        try {
+          const res = await Flash.isAvailable();
+          if (!cancelled && res?.value) setTorchSupported(true);
+        } catch (err) {
+          console.warn("[CameraViewfinder] native flash isAvailable failed", err);
+        }
+      } catch (err) {
+        console.warn("[CameraViewfinder] native flash plugin not available", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      // Make sure the LED is off when unmounting
+      const f = nativeFlashRef.current;
+      if (f) {
+        f.switchOff().catch(() => {});
+      }
+    };
+  }, [isNative]);
 
   const applyTorch = useCallback(async (on: boolean) => {
+    // Prefer the native LED plugin when running inside Capacitor (works on iOS too)
+    const nativeFlash = nativeFlashRef.current;
+    if (isNative && nativeFlash) {
+      try {
+        if (on) await nativeFlash.switchOn();
+        else await nativeFlash.switchOff();
+        setTorchOn(on);
+        return true;
+      } catch (err) {
+        console.warn("[CameraViewfinder] native torch toggle failed", err);
+        // fall through to web API attempt
+      }
+    }
+
     const stream = streamRef.current;
     if (!stream) return false;
     const track = stream.getVideoTracks()[0];
@@ -43,7 +97,7 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
       console.warn("[CameraViewfinder] torch apply failed", err);
       return false;
     }
-  }, []);
+  }, [isNative]);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -75,7 +129,8 @@ export function CameraViewfinder({ onCapture, onClose, label }: CameraViewfinder
         // Detect torch support on the active video track
         const track = stream.getVideoTracks()[0];
         const capabilities = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
-        setTorchSupported(Boolean(capabilities.torch));
+        // If native plugin already marked torch as supported, keep it.
+        setTorchSupported((prev) => prev || Boolean(capabilities.torch));
       }
     } catch (err) {
       console.error("[CameraViewfinder] getUserMedia error", err);
