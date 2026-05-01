@@ -4,7 +4,7 @@ import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { uploadShiftPhoto, deleteShiftPhoto, prepareShiftPhotoForUpload } from "@/lib/shift-photo-storage";
-import { isNativePlatform, takePhotoCameraOnly } from "@/lib/capacitor-camera";
+import { CameraViewfinder } from "./CameraViewfinder";
 
 interface PhotoCaptureCardProps {
   photoId: string;
@@ -28,8 +28,7 @@ export function PhotoCaptureCard({
   const processingRef = useRef(false);
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const isNative = isNativePlatform();
+  const [cameraOpen, setCameraOpen] = useState(false);
   const mountedRef = useRef(true);
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
@@ -112,37 +111,15 @@ export function PhotoCaptureCard({
 
   const handleCardClick = useCallback(async () => {
     if (isDisabled) return;
+    setCameraOpen(true);
+  }, [isDisabled]);
 
-    if (isNative) {
-      try {
-        const file = await takePhotoCameraOnly();
-        if (file) {
-          await uploadBlob(file);
-        }
-      } catch (error) {
-        console.error("[PhotoCapture] native camera error", error);
-        toast({
-          title: "שגיאה במצלמה",
-          description: "לא ניתן לפתוח את המצלמה. נסה שוב.",
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-
-    // Web: trigger native browser camera (no gallery on mobile thanks to capture attr)
-    fileInputRef.current?.click();
-  }, [isDisabled, isNative, uploadBlob]);
-
-  const handleFileInputChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      console.log("[PhotoCapture] file input change", photoId, file ? `name=${file.name} size=${file.size} type=${file.type}` : "(no file)");
-      if (!file) return;
-      try { event.target.value = ""; } catch {}
-      await uploadBlob(file);
+  const handleCameraCapture = useCallback(
+    async (blob: Blob) => {
+      setCameraOpen(false);
+      await uploadBlob(blob);
     },
-    [uploadBlob, photoId]
+    [uploadBlob]
   );
 
   const handleRemove = async (event: React.MouseEvent) => {
@@ -181,14 +158,13 @@ export function PhotoCaptureCard({
         <PhotoOverlays hasPhoto={hasPhoto} uploading={uploading} label={label} onRemove={handleRemove} />
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFileInputChange}
-      />
+      {cameraOpen && (
+        <CameraViewfinder
+          label={label}
+          onCapture={handleCameraCapture}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
     </>
   );
 }
