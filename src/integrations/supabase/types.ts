@@ -2841,7 +2841,7 @@ export type Database = {
           safety_vulnerabilities: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
           updated_at: string
-          user_id: string
+          user_id: string | null
           vardim_points: string | null
           vardim_procedure_explanation: string | null
           vehicle_notes: string | null
@@ -2877,7 +2877,7 @@ export type Database = {
           safety_vulnerabilities?: string | null
           shift_type: Database["public"]["Enums"]["shift_type"]
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           vardim_points?: string | null
           vardim_procedure_explanation?: string | null
           vehicle_notes?: string | null
@@ -2913,7 +2913,7 @@ export type Database = {
           safety_vulnerabilities?: string | null
           shift_type?: Database["public"]["Enums"]["shift_type"]
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           vardim_points?: string | null
           vardim_procedure_explanation?: string | null
           vehicle_notes?: string | null
@@ -3041,6 +3041,7 @@ export type Database = {
         Row: {
           civilian_license_expiry: string | null
           consecutive_low_months: number | null
+          control_removed_at: string | null
           correct_driving_in_service_date: string | null
           created_at: string
           current_safety_score: number | null
@@ -3064,6 +3065,7 @@ export type Database = {
         Insert: {
           civilian_license_expiry?: string | null
           consecutive_low_months?: number | null
+          control_removed_at?: string | null
           correct_driving_in_service_date?: string | null
           created_at?: string
           current_safety_score?: number | null
@@ -3087,6 +3089,7 @@ export type Database = {
         Update: {
           civilian_license_expiry?: string | null
           consecutive_low_months?: number | null
+          control_removed_at?: string | null
           correct_driving_in_service_date?: string | null
           created_at?: string
           current_safety_score?: number | null

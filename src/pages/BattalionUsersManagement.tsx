@@ -82,6 +82,7 @@ const BattalionUsersManagement = () => {
   const { isLoading: roleLoading } = useUserRole();
   
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [battalionFilter, setBattalionFilter] = useState<string>("all");
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [userEmails, setUserEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -117,7 +118,11 @@ const BattalionUsersManagement = () => {
       setLoading(true);
       
       const [profilesRes, rolesRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("user_type", "battalion").order("created_at", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("*")
+          .or("user_type.eq.battalion,department.eq.battalion")
+          .order("created_at", { ascending: false }),
         supabase.from("user_roles").select("user_id, role"),
       ]);
 
@@ -131,6 +136,30 @@ const BattalionUsersManagement = () => {
         const { data: emailData, error: emailError } = await supabase.functions.invoke('get-user-emails');
         if (!emailError && emailData?.emailMap) {
           setUserEmails(emailData.emailMap);
+        }
+        if (!emailError && Array.isArray(emailData?.authUsers)) {
+          const existingUserIds = new Set((profilesRes.data || []).map((p: any) => p.user_id));
+          const orphans: UserProfile[] = emailData.authUsers
+            .filter((u: any) => {
+              if (existingUserIds.has(u.id)) return false;
+              const dept = u.user_metadata?.department;
+              const utype = u.user_metadata?.user_type;
+              return utype === "battalion" || dept === "battalion";
+            })
+            .map((u: any) => ({
+              id: `auth-${u.id}`,
+              user_id: u.id,
+              full_name: u.user_metadata?.full_name || u.email || 'משתמש ללא פרופיל',
+              outpost: u.user_metadata?.outpost ?? null,
+              user_type: u.user_metadata?.user_type ?? 'battalion',
+              region: u.user_metadata?.region ?? null,
+              military_role: u.user_metadata?.military_role ?? null,
+              platoon: u.user_metadata?.platoon ?? null,
+              personal_number: u.user_metadata?.personal_number ?? null,
+              battalion_name: u.user_metadata?.battalion_name ?? null,
+              created_at: u.created_at,
+            }));
+          if (orphans.length > 0) setProfiles(prev => [...orphans, ...prev]);
         }
       } catch (e) {
         console.log('Could not fetch emails');
@@ -198,27 +227,39 @@ const BattalionUsersManagement = () => {
     if (!deletingUser) return;
     try {
       setDeleting(true);
-      const { error } = await supabase.functions.invoke('delete-user', {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
         body: { targetUserId: deletingUser.user_id }
       });
       if (error) throw error;
+      if (data && data.success === false) throw new Error(data.error || 'Unknown error');
       toast.success("המשתמש נמחק בהצלחה");
       setDeletingUser(null);
       fetchUsers();
     } catch (error: any) {
       console.error("Error deleting user:", error);
-      toast.error("שגיאה במחיקת המשתמש");
+      const detail = error?.context?.error || error?.message || JSON.stringify(error);
+      toast.error(`שגיאה במחיקת המשתמש: ${detail}`, { duration: 10000 });
     } finally {
       setDeleting(false);
     }
   };
 
-  const filteredProfiles = profiles.filter(p =>
-    p.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.outpost?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (p.personal_number?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (userEmails[p.user_id]?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const battalionNames = Array.from(
+    new Set(profiles.map(p => p.battalion_name).filter(Boolean) as string[])
+  ).sort();
+
+  const filteredProfiles = profiles.filter(p => {
+    if (battalionFilter !== "all" && p.battalion_name !== battalionFilter) return false;
+    const q = searchQuery.toLowerCase();
+    if (!q) return true;
+    return (
+      p.full_name.toLowerCase().includes(q) ||
+      (p.outpost?.toLowerCase().includes(q)) ||
+      (p.personal_number?.toLowerCase().includes(q)) ||
+      (p.battalion_name?.toLowerCase().includes(q)) ||
+      (userEmails[p.user_id]?.toLowerCase().includes(q))
+    );
+  });
 
   const getRoleBadgeStyle = (role: AppRole) => {
     switch (role) {
@@ -285,6 +326,25 @@ const BattalionUsersManagement = () => {
             className="pr-10 h-12 rounded-xl bg-muted/50 border-0"
           />
         </div>
+
+        {battalionNames.length > 0 && (
+          <div className="mb-4">
+            <Select value={battalionFilter} onValueChange={setBattalionFilter}>
+              <SelectTrigger className="h-12 rounded-xl bg-muted/50 border-0">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-indigo-500" />
+                  <SelectValue placeholder="סינון לפי שם גדוד" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border z-[10000]">
+                <SelectItem value="all">כל הגדודים</SelectItem>
+                {battalionNames.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-3">
           {filteredProfiles.map((profile) => {

@@ -74,16 +74,23 @@ Deno.serve(async (req) => {
         .eq('personal_number', profile.personal_number)
     }
 
-    // Delete related records first to avoid FK constraint errors
-    await supabaseAdmin.from('user_roles').delete().eq('user_id', targetUserId)
-    await supabaseAdmin.from('profiles').delete().eq('user_id', targetUserId)
+    // Delete related records first to avoid FK constraint errors.
+    // We intentionally KEEP user-generated content (shift_reports, photos,
+    // hagmar_*, equipment_tracking, work_schedule, etc.) because the
+    // foreign keys to auth.users on those tables are ON DELETE SET NULL.
+    const cleanupErrors: string[] = []
+    const rolesDel = await supabaseAdmin.from('user_roles').delete().eq('user_id', targetUserId)
+    if (rolesDel.error) cleanupErrors.push(`user_roles: ${rolesDel.error.message}`)
+    const profilesDel = await supabaseAdmin.from('profiles').delete().eq('user_id', targetUserId)
+    if (profilesDel.error) cleanupErrors.push(`profiles: ${profilesDel.error.message}`)
 
-    // Delete the user from auth.users
+    // Delete the user from auth.users (cascading FKs will handle related rows)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId)
 
     if (deleteError) {
       console.error('Error deleting user:', deleteError)
-      throw new Error('Failed to delete user')
+      const detail = [deleteError.message, ...cleanupErrors].filter(Boolean).join(' | ')
+      throw new Error(`מחיקת המשתמש נכשלה: ${detail}`)
     }
 
     return new Response(
@@ -94,8 +101,8 @@ Deno.serve(async (req) => {
   } catch (error: any) {
     console.error('Error:', error.message)
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

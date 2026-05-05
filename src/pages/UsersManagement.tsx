@@ -135,7 +135,12 @@ const UsersManagement = () => {
       setLoading(true);
       
       const [profilesRes, rolesRes, soldiersRes] = await Promise.all([
-        supabase.from("profiles").select("*").or("department.eq.planag,department.is.null").order("created_at", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("*")
+          .or("department.eq.planag,department.is.null")
+          .neq("user_type", "battalion")
+          .order("created_at", { ascending: false }),
         supabase.from("user_roles").select("user_id, role"),
         supabase.from("soldiers").select("id, personal_number"),
       ]);
@@ -159,7 +164,14 @@ const UsersManagement = () => {
         if (!emailError && Array.isArray(emailData?.authUsers)) {
           const existingUserIds = new Set((profilesRes.data || []).map((p: any) => p.user_id));
           const orphanProfiles: UserProfile[] = emailData.authUsers
-            .filter((u: any) => !existingUserIds.has(u.id))
+            .filter((u: any) => {
+              if (existingUserIds.has(u.id)) return false;
+              const dept = u.user_metadata?.department;
+              const utype = u.user_metadata?.user_type;
+              if (utype === "battalion") return false;
+              if (dept === "hagmar" || dept === "battalion") return false;
+              return true;
+            })
             .map((u: any) => ({
               id: `auth-${u.id}`,
               user_id: u.id,
@@ -251,12 +263,15 @@ const UsersManagement = () => {
     try {
       setDeleting(true);
       
-      const { error } = await supabase.functions.invoke('delete-user', {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
         body: { targetUserId: deletingUser.user_id }
       });
 
       if (error) {
         throw error;
+      }
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Unknown error');
       }
 
       toast.success("המשתמש נמחק בהצלחה");
@@ -264,10 +279,12 @@ const UsersManagement = () => {
       fetchUsers();
     } catch (error: any) {
       console.error("Error deleting user:", error);
-      const errorMessage = error.message?.includes('Cannot delete your own account') 
-        ? "לא ניתן למחוק את החשבון שלך"
-        : "שגיאה במחיקת המשתמש";
-      toast.error(errorMessage);
+      if (error.message?.includes('Cannot delete your own account')) {
+        toast.error("לא ניתן למחוק את החשבון שלך");
+      } else {
+        const detail = error?.context?.error || error?.message || JSON.stringify(error);
+        toast.error(`שגיאה במחיקת המשתמש: ${detail}`, { duration: 10000 });
+      }
     } finally {
       setDeleting(false);
     }
