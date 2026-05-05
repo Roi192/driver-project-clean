@@ -38,7 +38,8 @@ Deno.serve(async (req) => {
       .eq('user_id', callerUser.id)
       .single()
 
-    if (!roleData || roleData.role !== 'admin') {
+    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin', 'ravshatz']
+    if (!roleData || !allowedRoles.includes(roleData.role)) {
       throw new Error('Only admins can update users')
     }
 
@@ -68,38 +69,64 @@ Deno.serve(async (req) => {
 
       // Avoid sending an empty update
       if (Object.keys(profilePayload).length > 0) {
-        const { data: updatedProfile, error: profileUpdateError } = await supabaseAdmin
+        // Check if profile exists for this user
+        const { data: existingProfile, error: existingErr } = await supabaseAdmin
           .from('profiles')
-          .update(profilePayload)
-          .eq('user_id', targetUserId)
           .select('id')
+          .eq('user_id', targetUserId)
           .maybeSingle()
 
-        if (profileUpdateError) {
-          console.error('Error updating profile:', profileUpdateError)
-          throw new Error('Failed to update profile')
+        if (existingErr) {
+          console.error('Error checking profile:', existingErr)
+          throw new Error(`Failed to check profile: ${existingErr.message}`)
         }
 
-        // If the profile row doesn't exist, treat it as an error (shouldn't happen)
-        if (!updatedProfile) {
-          throw new Error('Profile not found for target user')
+        if (existingProfile) {
+          const { error: profileUpdateError } = await supabaseAdmin
+            .from('profiles')
+            .update(profilePayload)
+            .eq('user_id', targetUserId)
+
+          if (profileUpdateError) {
+            console.error('Error updating profile:', profileUpdateError)
+            throw new Error(`Failed to update profile: ${profileUpdateError.message}`)
+          }
+        } else {
+          // No profile exists yet (legacy/orphan auth user) — create one
+          const { error: insertErr } = await supabaseAdmin
+            .from('profiles')
+            .insert({ user_id: targetUserId, ...profilePayload })
+
+          if (insertErr) {
+            console.error('Error inserting profile:', insertErr)
+            throw new Error(`Failed to create profile: ${insertErr.message}`)
+          }
         }
 
         updates.profileUpdated = true
       }
     }
 
-    // Update display name in auth.users if provided
-    if (displayName !== undefined) {
-      const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(
-        targetUserId,
-        { user_metadata: { full_name: displayName } }
-      )
-      if (updateAuthError) {
-        console.error('Error updating auth user:', updateAuthError)
-        throw new Error('Failed to update auth user')
+    // Sync auth.users user_metadata so future orphan-merges show updated info
+    if (displayName !== undefined || profileUpdates !== undefined) {
+      const meta: Record<string, any> = {}
+      if (displayName !== undefined) meta.full_name = displayName
+      if (profileUpdates && typeof profileUpdates === 'object') {
+        for (const k of ['outpost','region','military_role','platoon','personal_number','battalion_name','department','user_type','settlement','id_number']) {
+          if (k in profileUpdates) meta[k] = (profileUpdates as any)[k]
+        }
       }
-      updates.displayNameUpdated = true
+      if (Object.keys(meta).length > 0) {
+        const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(
+          targetUserId,
+          { user_metadata: meta }
+        )
+        if (updateAuthError) {
+          console.error('Error updating auth user:', updateAuthError)
+          throw new Error(`Failed to update auth user: ${updateAuthError.message}`)
+        }
+        updates.displayNameUpdated = true
+      }
     }
 
     // Update role if provided

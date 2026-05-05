@@ -108,6 +108,8 @@ const UsersManagement = () => {
     platoon: "",
     personal_number: "",
     role: "driver" as AppRole,
+    department: "planag",
+    battalion_name: "",
   });
   const [saving, setSaving] = useState(false);
   
@@ -215,6 +217,8 @@ const UsersManagement = () => {
       platoon: profile.platoon || "",
       personal_number: profile.personal_number || "",
       role: getUserRole(profile.user_id),
+      department: (profile as any).department || "planag",
+      battalion_name: (profile as any).battalion_name || "",
     });
   };
 
@@ -233,11 +237,13 @@ const UsersManagement = () => {
           profileUpdates: {
             full_name: editFormData.full_name,
             outpost: editFormData.outpost || null,
-            user_type: editFormData.user_type || null,
+            user_type: editFormData.department === "battalion" ? "battalion" : (editFormData.user_type || null),
             region: editFormData.region || null,
             military_role: editFormData.military_role || null,
             platoon: editFormData.platoon || null,
             personal_number: editFormData.personal_number || null,
+            department: editFormData.department || "planag",
+            battalion_name: editFormData.department === "battalion" ? (editFormData.battalion_name || null) : null,
           },
         },
       });
@@ -647,6 +653,38 @@ const UsersManagement = () => {
                   className="h-12 rounded-xl"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label className="text-foreground">מחלקה (שיוך)</Label>
+                <Select
+                  value={editFormData.department}
+                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, department: value }))}
+                >
+                  <SelectTrigger className="h-12 rounded-xl bg-background text-foreground border-border">
+                    <SelectValue placeholder="בחר מחלקה" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border z-[10000]">
+                    <SelectItem value="planag">פלנ"ג</SelectItem>
+                    <SelectItem value="battalion">גדוד</SelectItem>
+                    <SelectItem value="hagmar">הגמ"ר</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  שינוי המחלקה יעביר את המשתמש לניהול המשתמשים של המחלקה הנבחרת
+                </p>
+              </div>
+
+              {editFormData.department === "battalion" && (
+                <div className="space-y-2">
+                  <Label className="text-foreground">שם הגדוד</Label>
+                  <Input
+                    value={editFormData.battalion_name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, battalion_name: e.target.value }))}
+                    placeholder="שם הגדוד"
+                    className="h-12 rounded-xl"
+                  />
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label className="text-foreground">סוג משתמש</Label>
