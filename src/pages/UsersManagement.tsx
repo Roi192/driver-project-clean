@@ -153,6 +153,29 @@ const UsersManagement = () => {
         if (!emailError && emailData?.emailMap) {
           setUserEmails(emailData.emailMap);
         }
+
+        // Merge in auth users that don't have a profile row yet, so admins
+        // can still see and manage them (e.g. delete from auth).
+        if (!emailError && Array.isArray(emailData?.authUsers)) {
+          const existingUserIds = new Set((profilesRes.data || []).map((p: any) => p.user_id));
+          const orphanProfiles: UserProfile[] = emailData.authUsers
+            .filter((u: any) => !existingUserIds.has(u.id))
+            .map((u: any) => ({
+              id: `auth-${u.id}`,
+              user_id: u.id,
+              full_name: u.user_metadata?.full_name || u.email || 'משתמש ללא פרופיל',
+              outpost: u.user_metadata?.outpost ?? null,
+              user_type: u.user_metadata?.user_type ?? null,
+              region: u.user_metadata?.region ?? null,
+              military_role: u.user_metadata?.military_role ?? null,
+              platoon: u.user_metadata?.platoon ?? null,
+              personal_number: u.user_metadata?.personal_number ?? null,
+              created_at: u.created_at,
+            }));
+          if (orphanProfiles.length > 0) {
+            setProfiles((prev) => [...orphanProfiles, ...prev]);
+          }
+        }
       } catch (e) {
         console.log('Could not fetch emails');
       }

@@ -1,74 +1,92 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
 const corsHeaders = {
-  // אפשר גם "*", אבל עדיף לשים את הדומיין שלך
-  "Access-Control-Allow-Origin": "https://driver-project.vercel.app",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 Deno.serve(async (req) => {
-  // CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      status: 200,
-      headers: corsHeaders,
-    });
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !serviceKey) {
-      console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-      return new Response(
-        JSON.stringify({ error: "Server env not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    
+    // Get the authorization header to verify the caller is an admin
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('Missing authorization header')
     }
 
-    // לקוח אדמין (service_role)
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-
-    // מביא את כל המשתמשים מה־Auth
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
-
-    if (error) {
-      console.error("listUsers error:", error);
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    // Create client with user's token to verify they're an admin
+    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }
+    })
+    
+    const { data: { user: callerUser }, error: authError } = await supabaseUser.auth.getUser()
+    if (authError || !callerUser) {
+      throw new Error('Unauthorized')
     }
 
-    // map: user_id -> email
-    const emailMap: Record<string, string> = {};
-    for (const user of data.users) {
+    // Check if caller is admin
+    const { data: roleData } = await supabaseUser
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', callerUser.id)
+      .single()
+
+    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin']
+    if (!roleData || !allowedRoles.includes(roleData.role)) {
+      throw new Error('Only admins can view user emails')
+    }
+
+    // Create admin client with service role key
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+
+    // Get all users
+    const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
+    
+    if (usersError) {
+      throw new Error('Failed to fetch users')
+    }
+
+    // Map user IDs to emails + return full auth user list (so frontend can show
+    // users that exist in auth but don't have a profile row yet)
+    const emailMap: Record<string, string> = {}
+    const authUsers = [] as Array<{
+      id: string
+      email: string | null
+      created_at: string
+      user_metadata: Record<string, any>
+    }>
+    for (const user of users) {
       if (user.email) {
-        emailMap[user.id] = user.email;
+        emailMap[user.id] = user.email
       }
+      authUsers.push({
+        id: user.id,
+        email: user.email ?? null,
+        created_at: user.created_at,
+        user_metadata: user.user_metadata ?? {},
+      })
     }
 
-    return new Response(JSON.stringify({ emailMap }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.error("Unhandled error in get-user-emails:", err);
     return new Response(
-      JSON.stringify({ error: "Internal error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+      JSON.stringify({ emailMap, authUsers }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+
+  } catch (error: any) {
+    console.error('Error:', error.message)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   }
-});
+})
