@@ -22,7 +22,7 @@ import { MONTHS_HEB } from "@/lib/constants";
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
-type DetailKind = "accident" | "released" | "plain";
+type DetailKind = "accident" | "released" | "intake" | "plain";
 
 interface DetailItem {
   title: string;
@@ -129,7 +129,7 @@ export default function YearlySummary() {
       const [
         soldierCourses, courses, soldiers, sectorEvents, inspections,
         punishments, workEvents, cleaning, interviews, reports,
-        monthlyScores, signatures
+        monthlyScores, signatures, deletedArchive
       ] = await Promise.all([
         fetchAll(supabase.from("soldier_courses").select("id, soldier_id, course_id, status, start_date, end_date").gte("start_date", start).lte("start_date", end)),
         fetchAll(supabase.from("courses").select("id, name, category")),
@@ -143,6 +143,7 @@ export default function YearlySummary() {
         safeFetchAll(supabase.from("shift_reports" as any).select("id, report_date, created_at, outpost, driver_name, shift_type").gte("report_date", start).lte("report_date", end)),
         safeFetchAll(supabase.from("monthly_safety_scores" as any).select("id, soldier_id, safety_score, score_month, kilometers, speed_violations, harsh_braking, harsh_turns, harsh_accelerations, illegal_overtakes").gte("score_month", start).lte("score_month", end)),
         safeFetchAll(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, full_name, created_at").gte("created_at", startTs).lte("created_at", endTs)),
+        safeFetchAll(supabase.from("deleted_soldiers_archive" as any).select("id, original_soldier_id, full_name, personal_number, outpost, release_reason, release_date, control_removed_at, soldier_created_at, deleted_at")),
       ]);
 
       // Filter sector events by year (event_date may be null — fall back to created_at later, but safer to filter here)
@@ -172,23 +173,45 @@ export default function YearlySummary() {
         coursesByName[name] = (coursesByName[name] || 0) + 1;
       });
 
-      const releases = soldiers.filter((s: any) => {
+      // Only include soldiers that ALREADY released/removed (not future-dated)
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const releasesFromActive = soldiers.filter((s: any) => {
         const rd = getDateKey(s.release_date);
         const rmv = getDateKey(s.control_removed_at);
-        return (rd && rd >= start && rd <= end) || (rmv && rmv >= start && rmv <= end);
+        const rdInRange = rd && rd >= start && rd <= end && rd <= todayKey;
+        const rmvInRange = rmv && rmv >= start && rmv <= end && rmv <= todayKey;
+        return rdInRange || rmvInRange;
       });
+      // Include permanently-deleted soldiers from archive — use deleted_at if no release/removal date
+      const archivedReleases = (deletedArchive as any[]).filter((a: any) => {
+        const rd = getDateKey(a.release_date);
+        const rmv = getDateKey(a.control_removed_at);
+        const del = getDateKey(a.deleted_at);
+        const effective = rd || rmv || del;
+        return effective && effective >= start && effective <= end && effective <= todayKey;
+      }).map((a: any) => ({
+        id: a.id,
+        full_name: a.full_name,
+        personal_number: a.personal_number,
+        outpost: a.outpost,
+        release_reason: a.release_reason || "נמחק מהמערכת",
+        release_date: a.release_date || a.control_removed_at || a.deleted_at,
+        control_removed_at: a.control_removed_at || a.deleted_at,
+        created_at: a.soldier_created_at,
+        _archived: true,
+        _archiveId: a.id,
+      }));
+      const releases = [...releasesFromActive, ...archivedReleases];
       const intake = soldiers.filter((s: any) => getDateKey(s.created_at) >= start && getDateKey(s.created_at) <= end);
       const activeSoldiersCount = soldiers.filter((s: any) => s.is_active).length;
       const netManpower = intake.length - releases.length;
 
-      // Classify accidents from safety_content directly
+      // Classify accidents — align with mעקב תאונות (only security + combat, ignore null)
       const isBts = (a: any) => String(a.driver_type || "").toLowerCase() === "security";
-      const isGdud = (a: any) => {
-        const t = String(a.driver_type || "").toLowerCase();
-        return t === "combat" || t === "gdud" || (!isBts(a) && t !== "");
-      };
+      const isGdudCombat = (a: any) => String(a.driver_type || "").toLowerCase() === "combat";
       const accidentsBtsList = accidents.filter(isBts);
-      const accidentsGdudList = accidents.filter((a: any) => !isBts(a)); // Everything not security counts as gdud
+      const accidentsGdudList = accidents.filter(isGdudCombat);
+      const accidentsCounted = [...accidentsBtsList, ...accidentsGdudList];
       const accidentsJudged = 0;
 
       const insScores = inspections.map((i: any) => Number(i.total_score)).filter((s: any) => Number.isFinite(s));
@@ -286,7 +309,7 @@ export default function YearlySummary() {
         { title: netManpower >= 0 ? "מגמת כוח אדם חיובית/יציבה" : "ירידה בכוח אדם", subtitle: `נקלטו ${intake.length}, השתחררו/הוסרו ${releases.length}, נטו ${netManpower}` },
         { title: lowSafetyScores > 0 ? "יש ציוני בטיחות שמצריכים טיפול" : "אין ציוני בטיחות חריגים מתחת 75", subtitle: `${lowSafetyScores} ציונים מתחת 75, ${excellentSafetyScores} ציונים 90+` },
         { title: procedureOverallPercent >= 90 ? "חתימות נהלים במצב טוב" : "כדאי להשלים חתימות נהלים", subtitle: `השלמה ממוצעת ${procedureOverallPercent}% מתוך ${activeSoldiersCount} חיילים פעילים` },
-        { title: accidents.length > 0 ? "תאונות לתחקור בסיכום תקופה" : "לא דווחו תאונות בתקופה", subtitle: `בט״ש ${accidentsBtsList.length}, גדוד ${accidentsGdudList.length}` },
+        { title: accidentsCounted.length > 0 ? "תאונות לתחקור בסיכום תקופה" : "לא דווחו תאונות בתקופה", subtitle: `בט״ש ${accidentsBtsList.length}, גדוד ${accidentsGdudList.length}` },
       ];
 
       const details: Record<string, DetailItem[]> = {
@@ -294,12 +317,12 @@ export default function YearlySummary() {
           const c = courseById.get(sc.course_id);
           return { title: soldierName(sc.soldier_id), subtitle: `${c?.name || "קורס ללא שם"} · ${sc.status || ""} · ${fmtDate(sc.start_date)}` };
         }),
-        intake: intake.map((s: any) => ({ title: s.full_name, subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}` })),
+        intake: intake.map((s: any) => ({ title: s.full_name, subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}`, kind: "intake" as DetailKind, id: s.id, raw: s })),
         released: releases.map(releasedToItem),
         releasedNafshi: releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).map(releasedToItem),
         accidentsBts: accidentsBtsList.map(accidentToItem),
         accidentsGdud: accidentsGdudList.map(accidentToItem),
-        accidentsTotal: accidents.map(accidentToItem),
+        accidentsTotal: accidentsCounted.map(accidentToItem),
         inspections: inspections.map((i: any) => ({ title: soldierName(i.soldier_id, "ביקורת"), subtitle: `${fmtDate(i.inspection_date)} · ציון ${i.total_score ?? "—"} · ${soldierSubtitle(i.soldier_id)}` })),
         punishments: punishments.map((p: any) => ({ title: soldierName(p.soldier_id), subtitle: `${fmtDate(p.punishment_date)} · ${p.offense || ""} · ${p.punishment || ""} · ${p.judge || ""}` })),
         workEvents: workEvents.map((e: any) => ({ title: e.title || "—", subtitle: `${fmtDate(e.event_date)} · ${e.category || ""} · ${e.status || ""}` })),
@@ -318,7 +341,7 @@ export default function YearlySummary() {
         releasedTotal: releases.length, releasedNafshi, releasedByReason,
         intakeTotal: intake.length, netManpower, activeSoldiersCount,
         accidentsBts: accidentsBtsList.length, accidentsGdud: accidentsGdudList.length,
-        accidentsTotal: accidents.length, accidentsJudged,
+        accidentsTotal: accidentsBtsList.length + accidentsGdudList.length, accidentsJudged,
         inspectionsTotal: inspections.length, inspectionsAvg, inspectionSectionAvg,
         punishmentsTotal: punishments.length, trainingDays, fitnessDays,
         workEventsTotal: workEvents.length, workEventsByCategory,
@@ -369,10 +392,14 @@ export default function YearlySummary() {
         const { error } = await supabase.from("safety_content").delete().eq("id", confirmDelete.id);
         if (error) throw error;
         toast.success("האירוע נמחק");
-      } else if (confirmDelete.kind === "released") {
-        // Delete soldier permanently
-        const { error } = await supabase.from("soldiers").delete().eq("id", confirmDelete.id);
+      } else if (confirmDelete.kind === "released" || confirmDelete.kind === "intake") {
+        // Try active soldiers first; if not found, try archive
+        const { error, count } = await supabase.from("soldiers").delete({ count: "exact" }).eq("id", confirmDelete.id);
         if (error) throw error;
+        if (!count) {
+          const { error: e2 } = await supabase.from("deleted_soldiers_archive" as any).delete().eq("id", confirmDelete.id);
+          if (e2) throw e2;
+        }
         toast.success("הנהג נמחק");
       }
       setConfirmDelete(null);
@@ -546,12 +573,14 @@ export default function YearlySummary() {
                         <div className="text-sm font-extrabold text-slate-900 break-words">{it.title}</div>
                         {it.subtitle && <div className="text-xs font-semibold text-slate-700 mt-1 break-words">{it.subtitle}</div>}
                       </div>
-                      {(it.kind === "accident" || it.kind === "released") && (
+                      {(it.kind === "accident" || it.kind === "released" || it.kind === "intake") && (
                         <div className="flex flex-col gap-1 shrink-0">
-                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => {
-                            if (it.kind === "accident") setEditAccident(it.raw);
-                            else setEditReleased(it.raw);
-                          }}><Pencil className="w-3 h-3" /></Button>
+                          {(it.kind === "accident" || it.kind === "released") && (
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => {
+                              if (it.kind === "accident") setEditAccident(it.raw);
+                              else setEditReleased(it.raw);
+                            }}><Pencil className="w-3 h-3" /></Button>
+                          )}
                           <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-red-600 border-red-300" onClick={() => setConfirmDelete({ kind: it.kind!, id: it.id!, title: it.title })}><Trash2 className="w-3 h-3" /></Button>
                         </div>
                       )}

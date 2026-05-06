@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.archive_deleted_soldier() FROM PUBLIC, anon, authenticated;

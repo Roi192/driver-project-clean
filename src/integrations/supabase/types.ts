@@ -787,6 +787,45 @@ export type Database = {
         }
         Relationships: []
       }
+      deleted_soldiers_archive: {
+        Row: {
+          control_removed_at: string | null
+          deleted_at: string
+          full_name: string | null
+          id: string
+          original_soldier_id: string | null
+          outpost: string | null
+          personal_number: string | null
+          release_date: string | null
+          release_reason: string | null
+          soldier_created_at: string | null
+        }
+        Insert: {
+          control_removed_at?: string | null
+          deleted_at?: string
+          full_name?: string | null
+          id?: string
+          original_soldier_id?: string | null
+          outpost?: string | null
+          personal_number?: string | null
+          release_date?: string | null
+          release_reason?: string | null
+          soldier_created_at?: string | null
+        }
+        Update: {
+          control_removed_at?: string | null
+          deleted_at?: string
+          full_name?: string | null
+          id?: string
+          original_soldier_id?: string | null
+          outpost?: string | null
+          personal_number?: string | null
+          release_date?: string | null
+          release_reason?: string | null
+          soldier_created_at?: string | null
+        }
+        Relationships: []
+      }
       drill_locations: {
         Row: {
           created_at: string
