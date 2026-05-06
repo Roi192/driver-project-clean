@@ -94,11 +94,24 @@ export function PhotoCaptureCard({
         if (mountedRef.current) {
           setLocalPreview(null);
         }
-        toast({
-          title: "❌ העלאת התמונה נכשלה",
-          description: `${label} - ${message}`,
-          variant: "destructive",
-        });
+        const isAuthError = message.includes("AUTH_REQUIRED") || message.toLowerCase().includes("jwt") || message.toLowerCase().includes("session");
+        if (isAuthError) {
+          toast({
+            title: "❌ פג תוקף ההתחברות",
+            description: "ההתחברות שלך פגה. מעביר אותך לדף ההתחברות כדי להתחבר מחדש ולהמשיך בטופס.",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            const current = window.location.pathname + window.location.search;
+            window.location.href = `/auth?redirect=${encodeURIComponent(current)}`;
+          }, 1800);
+        } else {
+          toast({
+            title: "❌ העלאת התמונה נכשלה",
+            description: `${label} - ${message}`,
+            variant: "destructive",
+          });
+        }
       } finally {
         if (mountedRef.current) {
           setUploading(false);

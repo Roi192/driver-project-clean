@@ -3058,6 +3058,7 @@ export type Database = {
           phone: string | null
           qualified_date: string | null
           release_date: string | null
+          release_reason: string | null
           rotation_group: string | null
           safety_status: string | null
           updated_at: string
@@ -3082,6 +3083,7 @@ export type Database = {
           phone?: string | null
           qualified_date?: string | null
           release_date?: string | null
+          release_reason?: string | null
           rotation_group?: string | null
           safety_status?: string | null
           updated_at?: string
@@ -3106,6 +3108,7 @@ export type Database = {
           phone?: string | null
           qualified_date?: string | null
           release_date?: string | null
+          release_reason?: string | null
           rotation_group?: string | null
           safety_status?: string | null
           updated_at?: string

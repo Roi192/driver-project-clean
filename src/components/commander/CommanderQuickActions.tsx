@@ -8,7 +8,8 @@ import {
   Sparkles,
   Shield,
   Activity,
-  Crosshair
+  Crosshair,
+  BarChart3
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -122,6 +123,17 @@ const getActions = (canAccessFitnessReport: boolean, canAccessEquipmentTracking:
       description: "ניהול ציוד לחימה מרוכז",
       gradient: "from-rose-500 to-rose-700",
       bgGlow: "bg-rose-400/20"
+    });
+  }
+
+  if (canAccessFitnessReport) {
+    actions.push({
+      to: "/yearly-summary",
+      icon: BarChart3,
+      label: "סיכום עד כאן",
+      description: "סקירה שנתית מרוכזת",
+      gradient: "from-emerald-500 to-teal-600",
+      bgGlow: "bg-emerald-400/20"
     });
   }
   

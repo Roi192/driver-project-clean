@@ -1,0 +1,1 @@
+ALTER TABLE public.soldiers ADD COLUMN IF NOT EXISTS release_reason text;

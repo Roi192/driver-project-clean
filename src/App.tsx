@@ -42,6 +42,7 @@ import WorkSchedule from "./pages/WorkSchedule";
 import ProcedureSignaturesTracking from "./pages/ProcedureSignaturesTracking";
 import WeeklyMeeting from "./pages/WeeklyMeeting";
 import EquipmentTracking from "./pages/EquipmentTracking";
+import YearlySummary from "./pages/YearlySummary";
 import DepartmentSelector from "./pages/DepartmentSelector";
 import HagmarAuth from "./pages/HagmarAuth";
 import HagmarHome from "./pages/HagmarHome";
@@ -447,6 +448,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <FitnessReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/yearly-summary"
+              element={
+                <ProtectedRoute>
+                  <YearlySummary />
                 </ProtectedRoute>
               }
             />
