@@ -9,7 +9,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import {
   GraduationCap, UserMinus, UserPlus, Car, ClipboardCheck, Gavel,
-  Activity, Calendar, BarChart3, AlertTriangle, Heart, FileSignature, TrendingUp
+  Activity, Calendar, BarChart3, AlertTriangle, Heart, FileSignature, TrendingUp,
+  Gauge, Route, ShieldCheck, Users, Target
 } from "lucide-react";
 import { MONTHS_HEB } from "@/lib/constants";
 
@@ -29,11 +30,15 @@ interface YearStats {
   releasedNafshi: number;
   releasedByReason: Record<string, number>;
   intakeTotal: number;
+  netManpower: number;
+  activeSoldiersCount: number;
   accidentsBts: number;
   accidentsGdud: number;
   accidentsTotal: number;
+  accidentsJudged: number;
   inspectionsTotal: number;
   inspectionsAvg: number;
+  inspectionSectionAvg: Record<string, number>;
   punishmentsTotal: number;
   trainingDays: number;
   fitnessDays: number;
@@ -47,7 +52,12 @@ interface YearStats {
   monthlySafetyAvg: { month: number; label: string; avg: number; count: number }[];
   procedureCompletion: { type: string; label: string; percent: number; signed: number; total: number }[];
   procedureOverallPercent: number;
+  totalKm: number;
+  speedViolations: number;
+  lowSafetyScores: number;
+  excellentSafetyScores: number;
   details: Record<string, DetailItem[]>;
+  insights: DetailItem[];
 }
 
 async function fetchAll<T = any>(query: any): Promise<T[]> {
@@ -65,9 +75,29 @@ async function fetchAll<T = any>(query: any): Promise<T[]> {
   return all;
 }
 
+const safeFetchAll = async <T = any,>(query: any): Promise<T[]> => {
+  try {
+    return await fetchAll<T>(query);
+  } catch (error) {
+    console.error("Yearly summary optional query failed", error);
+    return [];
+  }
+};
+
 const fmtDate = (d?: string | null) => {
   if (!d) return "";
   try { return new Date(d).toLocaleDateString("he-IL"); } catch { return d; }
+};
+
+const getDateKey = (value?: string | null) => value?.slice(0, 10) || null;
+
+const getMonthLabel = (month: number) => MONTHS_HEB.find((x: any) => x.value === month)?.label || String(month);
+
+const avg = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+
+const isBtsAccident = (a: any) => {
+  const type = String(a.driver_type || "").toLowerCase();
+  return ["security", "bts", "בטש", "בט\"ש", "בט״ש"].some((token) => type.includes(token));
 };
 
 export default function YearlySummary() {
@@ -80,45 +110,71 @@ export default function YearlySummary() {
   const startTs = `${start}T00:00:00.000Z`;
   const endTs = `${end}T23:59:59.999Z`;
 
-  const { data: stats, isLoading } = useQuery<YearStats>({
+  const { data: stats, isLoading, error } = useQuery<YearStats>({
     queryKey: ["yearly-summary", year],
     queryFn: async () => {
       const [
-        soldierCourses, releases, intake, accidents, inspections,
-        punishments, workEvents, cleaning, interviews,
-        reports, soldiers, monthlyScores, signatures, soldiersAll
+        soldierCourses, courses, soldiers, accidents, inspections,
+        punishments, workEvents, cleaning, interviews, reports,
+        monthlyScores, signatures
       ] = await Promise.all([
-        fetchAll(supabase.from("soldier_courses").select("status, start_date, courses(name, category), soldiers(full_name, personal_number)").gte("start_date", start).lte("start_date", end)),
-        fetchAll(supabase.from("soldiers").select("id, full_name, personal_number, release_date, release_reason, outpost").gte("release_date", start).lte("release_date", end)),
-        fetchAll(supabase.from("soldiers").select("id, full_name, personal_number, created_at, outpost").gte("created_at", startTs).lte("created_at", endTs)),
-        fetchAll(supabase.from("accidents").select("id, driver_type, driver_name, accident_date, severity, location, description, soldiers(full_name, personal_number)").gte("accident_date", start).lte("accident_date", end)),
-        fetchAll(supabase.from("inspections").select("id, total_score, inspection_date, soldiers(full_name)").gte("inspection_date", start).lte("inspection_date", end)),
-        fetchAll(supabase.from("punishments").select("id, punishment_date, reason, soldiers(full_name, personal_number)").gte("punishment_date", start).lte("punishment_date", end)),
-        fetchAll(supabase.from("work_plan_events").select("id, category, title, event_date").gte("event_date", start).lte("event_date", end)),
-        fetchAll(supabase.from("cleaning_parades" as any).select("id, created_at, area_name, status").gte("created_at", startTs).lte("created_at", endTs)).catch(() => []),
-        fetchAll(supabase.from("driver_interviews" as any).select("id, created_at, soldiers(full_name, personal_number)").gte("created_at", startTs).lte("created_at", endTs)).catch(() => []),
-        fetchAll(supabase.from("shift_reports" as any).select("id, created_at").gte("created_at", startTs).lte("created_at", endTs)).catch(() => []),
-        fetchAll(supabase.from("soldiers").select("current_safety_score, is_active")),
-        fetchAll(supabase.from("monthly_safety_scores" as any).select("safety_score, score_month").gte("score_month", start).lte("score_month", end)).catch(() => []),
-        fetchAll(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, created_at").gte("created_at", startTs).lte("created_at", endTs)).catch(() => []),
-        fetchAll(supabase.from("soldiers").select("id, is_active")),
+        fetchAll(supabase.from("soldier_courses").select("id, soldier_id, course_id, status, start_date, end_date").gte("start_date", start).lte("start_date", end)),
+        fetchAll(supabase.from("courses").select("id, name, category")),
+        fetchAll(supabase.from("soldiers").select("id, full_name, personal_number, release_date, release_reason, outpost, created_at, is_active, current_safety_score, control_removed_at, qualified_date")),
+        fetchAll(supabase.from("accidents").select("id, soldier_id, driver_type, driver_name, accident_date, severity, location, description, incident_type, was_judged, status").gte("accident_date", start).lte("accident_date", end)),
+        fetchAll(supabase.from("inspections").select("id, soldier_id, total_score, inspection_date, vehicle_score, procedures_score, safety_score, routes_familiarity_score, simulations_score").gte("inspection_date", start).lte("inspection_date", end)),
+        fetchAll(supabase.from("punishments").select("id, soldier_id, punishment_date, offense, punishment, judge").gte("punishment_date", start).lte("punishment_date", end)),
+        fetchAll(supabase.from("work_plan_events").select("id, category, title, event_date, status, content_cycle").gte("event_date", start).lte("event_date", end)),
+        safeFetchAll(supabase.from("cleaning_parades" as any).select("id, parade_date, outpost, responsible_driver, created_at").gte("parade_date", start).lte("parade_date", end)),
+        safeFetchAll(supabase.from("driver_interviews" as any).select("id, interview_date, created_at, soldier_id, driver_name").gte("interview_date", start).lte("interview_date", end)),
+        safeFetchAll(supabase.from("shift_reports" as any).select("id, report_date, created_at, outpost, driver_name, shift_type").gte("report_date", start).lte("report_date", end)),
+        safeFetchAll(supabase.from("monthly_safety_scores" as any).select("id, soldier_id, safety_score, score_month, kilometers, speed_violations, harsh_braking, harsh_turns, harsh_accelerations, illegal_overtakes").gte("score_month", start).lte("score_month", end)),
+        safeFetchAll(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, full_name, created_at").gte("created_at", startTs).lte("created_at", endTs)),
       ]);
+
+      const soldierById = new Map((soldiers as any[]).map((s: any) => [s.id, s]));
+      const courseById = new Map((courses as any[]).map((c: any) => [c.id, c]));
+      const soldierName = (id?: string | null, fallback = "ללא שם") => {
+        const soldier = id ? soldierById.get(id) : null;
+        return soldier?.full_name || fallback;
+      };
+      const soldierSubtitle = (id?: string | null) => {
+        const soldier = id ? soldierById.get(id) : null;
+        return [soldier?.personal_number, soldier?.outpost].filter(Boolean).join(" · ");
+      };
 
       const coursesByCategory: Record<string, number> = {};
       const coursesByName: Record<string, number> = {};
       soldierCourses.forEach((sc: any) => {
-        const cat = sc.courses?.category || "אחר";
-        const name = sc.courses?.name || "—";
+        const course = courseById.get(sc.course_id);
+        const cat = course?.category || "אחר";
+        const name = course?.name || "קורס ללא שם";
         coursesByCategory[cat] = (coursesByCategory[cat] || 0) + 1;
         coursesByName[name] = (coursesByName[name] || 0) + 1;
       });
 
-      // bts = security, gdud = anything else (combat/battalion)
-      const accBts = accidents.filter((a: any) => a.driver_type === "security" || a.driver_type === "bts").length;
-      const accGdud = accidents.filter((a: any) => a.driver_type && a.driver_type !== "security" && a.driver_type !== "bts").length;
+      const releases = soldiers.filter((s: any) => {
+        const releaseDate = getDateKey(s.release_date);
+        const removedDate = getDateKey(s.control_removed_at);
+        return (releaseDate && releaseDate >= start && releaseDate <= end) || (removedDate && removedDate >= start && removedDate <= end);
+      });
+      const intake = soldiers.filter((s: any) => getDateKey(s.created_at) >= start && getDateKey(s.created_at) <= end);
+      const activeSoldiersCount = soldiers.filter((s: any) => s.is_active).length;
+      const netManpower = intake.length - releases.length;
 
-      const insScores = inspections.map((i: any) => i.total_score).filter((s: any) => typeof s === "number");
-      const inspectionsAvg = insScores.length ? insScores.reduce((a: number, b: number) => a + b, 0) / insScores.length : 0;
+      const accidentsBtsList = accidents.filter(isBtsAccident);
+      const accidentsGdudList = accidents.filter((a: any) => !isBtsAccident(a));
+      const accidentsJudged = accidents.filter((a: any) => a.was_judged).length;
+
+      const insScores = inspections.map((i: any) => Number(i.total_score)).filter((s: any) => Number.isFinite(s));
+      const inspectionsAvg = avg(insScores);
+      const inspectionSectionAvg = {
+        "רכב": avg(inspections.map((i: any) => Number(i.vehicle_score)).filter(Number.isFinite)),
+        "נהלים": avg(inspections.map((i: any) => Number(i.procedures_score)).filter(Number.isFinite)),
+        "בטיחות": avg(inspections.map((i: any) => Number(i.safety_score)).filter(Number.isFinite)),
+        "צירים": avg(inspections.map((i: any) => Number(i.routes_familiarity_score)).filter(Number.isFinite)),
+        "סימולציות": avg(inspections.map((i: any) => Number(i.simulations_score)).filter(Number.isFinite)),
+      };
 
       const workEventsByCategory: Record<string, number> = {};
       let trainingDays = 0;
@@ -126,50 +182,48 @@ export default function YearlySummary() {
       workEvents.forEach((e: any) => {
         const cat = e.category || "אחר";
         workEventsByCategory[cat] = (workEventsByCategory[cat] || 0) + 1;
-        const t = (e.title || "").toLowerCase();
+        const t = `${e.title || ""} ${e.content_cycle || ""}`.toLowerCase();
         if (t.includes("השתלמות") || t.includes("הדרכ") || t.includes("אימון")) trainingDays++;
         if (t.includes("כשירות")) fitnessDays++;
       });
 
-      const safetyScores = soldiers.map((s: any) => s.current_safety_score).filter((s: any) => typeof s === "number" && s > 0);
-      const avgSafetyScore = safetyScores.length ? safetyScores.reduce((a: number, b: number) => a + b, 0) / safetyScores.length : 0;
+      const currentSafetyScores = soldiers.map((s: any) => Number(s.current_safety_score)).filter((s: any) => Number.isFinite(s) && s > 0);
+      const avgSafetyScore = avg(currentSafetyScores);
 
       const buckets: Record<number, number[]> = {};
       monthlyScores.forEach((s: any) => {
-        if (typeof s.safety_score !== "number") return;
+        const score = Number(s.safety_score);
+        if (!Number.isFinite(score)) return;
         const m = parseInt(String(s.score_month).slice(5, 7));
         if (!buckets[m]) buckets[m] = [];
-        buckets[m].push(s.safety_score);
+        buckets[m].push(score);
       });
       const monthlySafetyAvg = Array.from({ length: 12 }, (_, i) => {
-        const m = i + 1;
-        const arr = buckets[m] || [];
-        const avg = arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-        const label = MONTHS_HEB.find((x: any) => x.value === m)?.label || String(m);
-        return { month: m, label, avg, count: arr.length };
+        const month = i + 1;
+        const arr = buckets[month] || [];
+        return { month, label: getMonthLabel(month), avg: avg(arr), count: arr.length };
       });
-      const allYtdScores = monthlyScores.map((s: any) => s.safety_score).filter((v: any) => typeof v === "number");
-      const avgSafetyScoreYTD = allYtdScores.length
-        ? allYtdScores.reduce((a: number, b: number) => a + b, 0) / allYtdScores.length
-        : 0;
+      const allYtdScores = monthlyScores.map((s: any) => Number(s.safety_score)).filter(Number.isFinite);
+      const avgSafetyScoreYTD = avg(allYtdScores);
+      const totalKm = Math.round(monthlyScores.reduce((sum: number, s: any) => sum + Number(s.kilometers || 0), 0));
+      const speedViolations = monthlyScores.reduce((sum: number, s: any) => sum + Number(s.speed_violations || 0), 0);
+      const lowSafetyScores = monthlyScores.filter((s: any) => Number(s.safety_score) < 75).length;
+      const excellentSafetyScores = monthlyScores.filter((s: any) => Number(s.safety_score) >= 90).length;
 
-      const activeSoldiersCount = soldiersAll.filter((s: any) => s.is_active).length;
       const procedureTypes = [
         { type: "routine", label: "נהלי שגרה" },
         { type: "shift", label: "נהלים במהלך משמרת" },
         { type: "aluf70", label: "נוהל אלוף 70" },
       ];
       const procedureCompletion = procedureTypes.map(({ type, label }) => {
-        const signedUsers = new Set(
-          signatures.filter((s: any) => s.procedure_type === type).map((s: any) => s.user_id)
-        );
+        const signedUsers = new Set(signatures.filter((s: any) => s.procedure_type === type).map((s: any) => s.user_id));
         const signed = signedUsers.size;
         const total = activeSoldiersCount || 0;
         const percent = total ? Math.round((signed / total) * 100) : 0;
         return { type, label, percent, signed, total };
       });
       const procedureOverallPercent = procedureCompletion.length
-        ? Math.round(procedureCompletion.reduce((a, p) => a + p.percent, 0) / procedureCompletion.length)
+        ? Math.round(procedureCompletion.reduce((sum, p) => sum + p.percent, 0) / procedureCompletion.length)
         : 0;
 
       const releasedNafshi = releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).length;
@@ -180,61 +234,85 @@ export default function YearlySummary() {
       });
 
       const accidentToItem = (a: any): DetailItem => ({
-        title: a.soldiers?.full_name || a.driver_name || "ללא שם",
-        subtitle: `${fmtDate(a.accident_date)} · ${a.location || ""} · ${a.severity || ""}`,
+        title: soldierName(a.soldier_id, a.driver_name || "ללא שם"),
+        subtitle: `${fmtDate(a.accident_date)} · ${a.driver_type || "סוג לא הוזן"} · ${a.location || "ללא מיקום"} · ${a.severity || ""}`,
+      });
+      const scoreToItem = (s: any): DetailItem => ({
+        title: soldierName(s.soldier_id),
+        subtitle: `${getMonthLabel(parseInt(String(s.score_month).slice(5, 7)))} · ציון ${s.safety_score} · ${Number(s.kilometers || 0).toLocaleString("he-IL")} ק״מ · ${s.speed_violations || 0} חריגות`,
       });
 
+      const insights: DetailItem[] = [
+        {
+          title: netManpower >= 0 ? "מגמת כוח אדם חיובית/יציבה" : "ירידה בכוח אדם",
+          subtitle: `נקלטו ${intake.length}, השתחררו/הוסרו ${releases.length}, נטו ${netManpower}`,
+        },
+        {
+          title: lowSafetyScores > 0 ? "יש ציוני בטיחות שמצריכים טיפול" : "אין ציוני בטיחות חריגים מתחת 75",
+          subtitle: `${lowSafetyScores} ציונים מתחת 75, ${excellentSafetyScores} ציונים 90+`,
+        },
+        {
+          title: procedureOverallPercent >= 90 ? "חתימות נהלים במצב טוב" : "כדאי להשלים חתימות נהלים",
+          subtitle: `השלמה ממוצעת ${procedureOverallPercent}% מתוך ${activeSoldiersCount} חיילים פעילים`,
+        },
+        {
+          title: accidents.length > 0 ? "תאונות לתחקור בסיכום תקופה" : "לא דווחו תאונות בתקופה",
+          subtitle: `בט״ש ${accidentsBtsList.length}, גדוד ${accidentsGdudList.length}, נשפטו ${accidentsJudged}`,
+        },
+      ];
+
       const details: Record<string, DetailItem[]> = {
-        courses: soldierCourses.map((sc: any) => ({
-          title: sc.soldiers?.full_name || "—",
-          subtitle: `${sc.courses?.name || ""} · ${fmtDate(sc.start_date)}`,
-        })),
+        courses: soldierCourses.map((sc: any) => {
+          const course = courseById.get(sc.course_id);
+          return {
+            title: soldierName(sc.soldier_id),
+            subtitle: `${course?.name || "קורס ללא שם"} · ${sc.status || ""} · ${fmtDate(sc.start_date)}`,
+          };
+        }),
         intake: intake.map((s: any) => ({
           title: s.full_name,
           subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}`,
         })),
         released: releases.map((r: any) => ({
           title: r.full_name,
-          subtitle: `${r.personal_number || ""} · ${r.outpost || ""} · ${r.release_reason || "שחרור רגיל"} · ${fmtDate(r.release_date)}`,
+          subtitle: `${r.personal_number || ""} · ${r.outpost || ""} · ${r.release_reason || "שחרור רגיל"} · ${fmtDate(r.release_date || r.control_removed_at)}`,
         })),
         releasedNafshi: releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).map((r: any) => ({
           title: r.full_name,
-          subtitle: `${r.personal_number || ""} · ${fmtDate(r.release_date)}`,
+          subtitle: `${r.personal_number || ""} · ${fmtDate(r.release_date || r.control_removed_at)}`,
         })),
-        accidentsBts: accidents.filter((a: any) => a.driver_type === "security" || a.driver_type === "bts").map(accidentToItem),
-        accidentsGdud: accidents.filter((a: any) => a.driver_type && a.driver_type !== "security" && a.driver_type !== "bts").map(accidentToItem),
+        accidentsBts: accidentsBtsList.map(accidentToItem),
+        accidentsGdud: accidentsGdudList.map(accidentToItem),
         accidentsTotal: accidents.map(accidentToItem),
         inspections: inspections.map((i: any) => ({
-          title: i.soldiers?.full_name || "ביקורת",
-          subtitle: `${fmtDate(i.inspection_date)} · ציון ${i.total_score ?? "—"}`,
+          title: soldierName(i.soldier_id, "ביקורת"),
+          subtitle: `${fmtDate(i.inspection_date)} · ציון ${i.total_score ?? "—"} · ${soldierSubtitle(i.soldier_id)}`,
         })),
         punishments: punishments.map((p: any) => ({
-          title: p.soldiers?.full_name || "—",
-          subtitle: `${fmtDate(p.punishment_date)} · ${p.reason || ""}`,
+          title: soldierName(p.soldier_id),
+          subtitle: `${fmtDate(p.punishment_date)} · ${p.offense || ""} · ${p.punishment || ""} · ${p.judge || ""}`,
         })),
         workEvents: workEvents.map((e: any) => ({
           title: e.title || "—",
-          subtitle: `${fmtDate(e.event_date)} · ${e.category || ""}`,
+          subtitle: `${fmtDate(e.event_date)} · ${e.category || ""} · ${e.status || ""}`,
         })),
-        training: workEvents.filter((e: any) => {
-          const t = (e.title || "").toLowerCase();
-          return t.includes("השתלמות") || t.includes("הדרכ") || t.includes("אימון");
-        }).map((e: any) => ({ title: e.title, subtitle: fmtDate(e.event_date) })),
-        fitness: workEvents.filter((e: any) => (e.title || "").toLowerCase().includes("כשירות")).map((e: any) => ({
-          title: e.title, subtitle: fmtDate(e.event_date),
-        })),
+        training: workEvents.filter((e: any) => `${e.title || ""} ${e.content_cycle || ""}`.includes("השתל") || `${e.title || ""}`.includes("הדרכ") || `${e.title || ""}`.includes("אימון")).map((e: any) => ({ title: e.title, subtitle: fmtDate(e.event_date) })),
+        fitness: workEvents.filter((e: any) => `${e.title || ""} ${e.content_cycle || ""}`.includes("כשירות")).map((e: any) => ({ title: e.title, subtitle: fmtDate(e.event_date) })),
         cleaning: cleaning.map((c: any) => ({
-          title: c.area_name || "מסדר ניקיון",
-          subtitle: `${fmtDate(c.created_at)} · ${c.status || ""}`,
+          title: c.responsible_driver || "מסדר ניקיון",
+          subtitle: `${fmtDate(c.parade_date || c.created_at)} · ${c.outpost || ""}`,
         })),
         interviews: interviews.map((i: any) => ({
-          title: i.soldiers?.full_name || "ראיון",
-          subtitle: fmtDate(i.created_at),
+          title: soldierName(i.soldier_id, i.driver_name || "ראיון"),
+          subtitle: fmtDate(i.interview_date || i.created_at),
         })),
         reports: reports.map((r: any) => ({
-          title: "דיווח משמרת",
-          subtitle: fmtDate(r.created_at),
+          title: r.driver_name || "דיווח משמרת",
+          subtitle: `${fmtDate(r.report_date || r.created_at)} · ${r.outpost || ""} · ${r.shift_type || ""}`,
         })),
+        lowSafety: monthlyScores.filter((s: any) => Number(s.safety_score) < 75).map(scoreToItem),
+        excellentSafety: monthlyScores.filter((s: any) => Number(s.safety_score) >= 90).map(scoreToItem),
+        speedViolations: monthlyScores.filter((s: any) => Number(s.speed_violations || 0) > 0).map(scoreToItem),
       };
 
       return {
@@ -245,11 +323,15 @@ export default function YearlySummary() {
         releasedNafshi,
         releasedByReason,
         intakeTotal: intake.length,
-        accidentsBts: accBts,
-        accidentsGdud: accGdud,
+        netManpower,
+        activeSoldiersCount,
+        accidentsBts: accidentsBtsList.length,
+        accidentsGdud: accidentsGdudList.length,
         accidentsTotal: accidents.length,
+        accidentsJudged,
         inspectionsTotal: inspections.length,
         inspectionsAvg,
+        inspectionSectionAvg,
         punishmentsTotal: punishments.length,
         trainingDays,
         fitnessDays,
@@ -263,19 +345,22 @@ export default function YearlySummary() {
         monthlySafetyAvg,
         procedureCompletion,
         procedureOverallPercent,
+        totalKm,
+        speedViolations,
+        lowSafetyScores,
+        excellentSafetyScores,
         details,
+        insights,
       };
     },
     enabled: isAdmin || isSuperAdmin,
   });
 
-  if (authLoading) return null;
-  if (!isAdmin && !isSuperAdmin) return <Navigate to="/" replace />;
-
   const cards: { key: string | null; label: string; value: any; icon: any; color: string }[] = stats ? [
     { key: "courses", label: "סך קורסים שבוצעו", value: stats.coursesTotal, icon: GraduationCap, color: "from-violet-500 to-purple-600" },
     { key: "intake", label: "נהגים נקלטו", value: stats.intakeTotal, icon: UserPlus, color: "from-emerald-500 to-green-600" },
-    { key: "released", label: "נהגים השתחררו", value: stats.releasedTotal, icon: UserMinus, color: "from-slate-500 to-slate-700" },
+    { key: "released", label: "נהגים השתחררו/הוסרו", value: stats.releasedTotal, icon: UserMinus, color: "from-slate-500 to-slate-700" },
+    { key: null, label: "נטו כוח אדם", value: stats.netManpower > 0 ? `+${stats.netManpower}` : stats.netManpower, icon: Users, color: "from-teal-500 to-emerald-600" },
     { key: "releasedNafshi", label: "שחרור על נפשי", value: stats.releasedNafshi, icon: Heart, color: "from-fuchsia-500 to-pink-600" },
     { key: "accidentsBts", label: 'תאונות בט"ש', value: stats.accidentsBts, icon: Car, color: "from-orange-500 to-red-500" },
     { key: "accidentsGdud", label: "תאונות גדוד", value: stats.accidentsGdud, icon: Car, color: "from-red-500 to-rose-700" },
@@ -283,15 +368,19 @@ export default function YearlySummary() {
     { key: "inspections", label: "ביקורות שבוצעו", value: stats.inspectionsTotal, icon: ClipboardCheck, color: "from-blue-500 to-indigo-600" },
     { key: null, label: "ממוצע ציון ביקורת", value: stats.inspectionsAvg.toFixed(1), icon: BarChart3, color: "from-cyan-500 to-blue-600" },
     { key: "punishments", label: "עונשים", value: stats.punishmentsTotal, icon: Gavel, color: "from-rose-500 to-pink-600" },
-    { key: "fitness", label: "ימי כשירות", value: stats.fitnessDays, icon: Heart, color: "from-pink-500 to-rose-600" },
+    { key: "fitness", label: "ימי כשירות", value: stats.fitnessDays, icon: ShieldCheck, color: "from-pink-500 to-rose-600" },
     { key: "training", label: "ימי השתלמות / הדרכה", value: stats.trainingDays, icon: Activity, color: "from-amber-500 to-orange-600" },
     { key: "workEvents", label: "סך מופעים בתוכנית", value: stats.workEventsTotal, icon: Calendar, color: "from-teal-500 to-emerald-600" },
     { key: "cleaning", label: "מסדרי ניקיון", value: stats.cleaningParades, icon: ClipboardCheck, color: "from-purple-500 to-fuchsia-600" },
     { key: "interviews", label: "ראיונות נהגים", value: stats.driverInterviews, icon: ClipboardCheck, color: "from-indigo-500 to-violet-600" },
     { key: "reports", label: "דיווחי משמרת", value: stats.shiftReports, icon: ClipboardCheck, color: "from-sky-500 to-blue-600" },
-    { key: null, label: "ממוצע ציון בטיחות", value: stats.avgSafetyScore.toFixed(1), icon: BarChart3, color: "from-green-500 to-emerald-600" },
+    { key: null, label: "ממוצע ציון בטיחות נוכחי", value: stats.avgSafetyScore.toFixed(1), icon: BarChart3, color: "from-green-500 to-emerald-600" },
     { key: null, label: "ממוצע בטיחות מתחילת שנה", value: stats.avgSafetyScoreYTD.toFixed(1), icon: TrendingUp, color: "from-emerald-500 to-teal-600" },
     { key: null, label: "אחוז השלמת חתימות נהלים", value: `${stats.procedureOverallPercent}%`, icon: FileSignature, color: "from-indigo-500 to-blue-600" },
+    { key: null, label: "סה״כ ק״מ מדווח", value: stats.totalKm.toLocaleString("he-IL"), icon: Route, color: "from-lime-500 to-emerald-600" },
+    { key: "speedViolations", label: "חריגות מהירות", value: stats.speedViolations, icon: Gauge, color: "from-amber-600 to-red-600" },
+    { key: "lowSafety", label: "ציונים מתחת 75", value: stats.lowSafetyScores, icon: Target, color: "from-red-500 to-red-700" },
+    { key: "excellentSafety", label: "ציונים 90+", value: stats.excellentSafetyScores, icon: TrendingUp, color: "from-emerald-500 to-green-700" },
   ] : [];
 
   const detailLabel = useMemo(() => {
@@ -300,18 +389,21 @@ export default function YearlySummary() {
 
   const detailItems: DetailItem[] = (stats && detailKey) ? (stats.details[detailKey] || []) : [];
 
+  if (authLoading) return null;
+  if (!isAdmin && !isSuperAdmin) return <Navigate to="/" replace />;
+
   return (
     <AppLayout>
-      <div dir="rtl" className="p-4 pb-24 space-y-6">
+      <div dir="rtl" className="p-4 pb-24 space-y-6 bg-background min-h-screen">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-black text-slate-800">סיכום עד כאן</h1>
-          <p className="text-sm text-slate-700">סקירה שנתית מרוכזת לסיכום ביצועים</p>
+          <p className="text-sm text-slate-700">סקירה שנתית מרוכזת לסיכומי תקופה ושנה</p>
           <p className="text-xs text-slate-600">לחץ על כרטיסיה לפירוט מלא</p>
         </div>
 
         <div className="flex justify-center">
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-            <SelectTrigger className="w-48 bg-card text-slate-800 font-bold">
+            <SelectTrigger className="w-48 bg-card text-slate-800 font-bold border-border">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -324,7 +416,14 @@ export default function YearlySummary() {
 
         {isLoading ? (
           <div className="text-center text-slate-700 py-12">טוען נתונים...</div>
-        ) : (
+        ) : error ? (
+          <Card className="bg-red-50 border-red-200">
+            <CardContent className="p-4 text-right">
+              <div className="font-black text-red-700 mb-2">שגיאה בטעינת הסיכום</div>
+              <div className="text-sm text-red-700 whitespace-pre-wrap">{(error as any)?.message || String(error)}</div>
+            </CardContent>
+          </Card>
+        ) : stats ? (
           <>
             <div className="grid grid-cols-2 gap-3">
               {cards.map((c) => {
@@ -340,22 +439,36 @@ export default function YearlySummary() {
                       <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg mb-3`}>
                         <Icon className="w-5 h-5 text-white" />
                       </div>
-                      <div className="text-3xl font-black text-slate-800">{c.value}</div>
-                      <div className="text-sm font-bold text-slate-700 mt-1">{c.label}</div>
+                      <div className="text-3xl font-black text-slate-800 break-words">{c.value}</div>
+                      <div className="text-sm font-bold text-slate-700 mt-1 leading-tight">{c.label}</div>
                     </CardContent>
                   </Card>
                 );
               })}
             </div>
 
-            {stats && Object.keys(stats.coursesByName).length > 0 && (
+            <Card className="bg-card border-border/50">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-slate-800">נקודות לסיכום תקופה</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {stats.insights.map((insight, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
+                    <div className="text-sm font-bold text-slate-800">{insight.title}</div>
+                    <div className="text-xs text-slate-600 mt-1">{insight.subtitle}</div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {Object.keys(stats.coursesByName).length > 0 && (
               <Card className="bg-card border-border/50">
                 <CardHeader>
                   <CardTitle className="text-lg font-bold text-slate-800">פירוט קורסים לפי סוג</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {Object.entries(stats.coursesByName).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([name, count]) => (
-                    <div key={name} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                    <div key={name} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
                       <span className="text-sm font-bold text-slate-800">{name}</span>
                       <span className="text-lg font-black text-primary">{count as number}</span>
                     </div>
@@ -364,14 +477,30 @@ export default function YearlySummary() {
               </Card>
             )}
 
-            {stats && Object.keys(stats.workEventsByCategory).length > 0 && (
+            {Object.keys(stats.inspectionSectionAvg).length > 0 && stats.inspectionsTotal > 0 && (
+              <Card className="bg-card border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-slate-800">ממוצעי ביקורות לפי תחום</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {Object.entries(stats.inspectionSectionAvg).map(([section, value]) => (
+                    <div key={section} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
+                      <span className="text-sm font-bold text-slate-800">{section}</span>
+                      <span className="text-lg font-black text-primary">{value ? value.toFixed(1) : "—"}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {Object.keys(stats.workEventsByCategory).length > 0 && (
               <Card className="bg-card border-border/50">
                 <CardHeader>
                   <CardTitle className="text-lg font-bold text-slate-800">מופעים בתוכנית עבודה לפי קטגוריה</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {Object.entries(stats.workEventsByCategory).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([cat, count]) => (
-                    <div key={cat} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                    <div key={cat} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
                       <span className="text-sm font-bold text-slate-800">{cat}</span>
                       <span className="text-lg font-black text-primary">{count as number}</span>
                     </div>
@@ -380,14 +509,14 @@ export default function YearlySummary() {
               </Card>
             )}
 
-            {stats && Object.keys(stats.releasedByReason).length > 0 && (
+            {Object.keys(stats.releasedByReason).length > 0 && (
               <Card className="bg-card border-border/50">
                 <CardHeader>
                   <CardTitle className="text-lg font-bold text-slate-800">פירוט שחרורים לפי סיבה</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {Object.entries(stats.releasedByReason).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([reason, count]) => (
-                    <div key={reason} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                    <div key={reason} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
                       <span className="text-sm font-bold text-slate-800">{reason}</span>
                       <span className="text-lg font-black text-primary">{count as number}</span>
                     </div>
@@ -396,20 +525,18 @@ export default function YearlySummary() {
               </Card>
             )}
 
-            {stats && stats.monthlySafetyAvg.some((m) => m.count > 0) && (
+            {stats.monthlySafetyAvg.some((m) => m.count > 0) && (
               <Card className="bg-card border-border/50">
                 <CardHeader>
                   <CardTitle className="text-lg font-bold text-slate-800">ממוצע ציוני בטיחות לפי חודש</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {stats.monthlySafetyAvg.map((m) => (
-                    <div key={m.month} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                    <div key={m.month} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
                       <span className="text-sm font-bold text-slate-800">{m.label}</span>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-slate-600">{m.count} ציונים</span>
-                        <span className="text-lg font-black text-primary">
-                          {m.count > 0 ? m.avg.toFixed(1) : "—"}
-                        </span>
+                        <span className="text-lg font-black text-primary">{m.count > 0 ? m.avg.toFixed(1) : "—"}</span>
                       </div>
                     </div>
                   ))}
@@ -417,14 +544,14 @@ export default function YearlySummary() {
               </Card>
             )}
 
-            {stats && stats.procedureCompletion.length > 0 && (
+            {stats.procedureCompletion.length > 0 && (
               <Card className="bg-card border-border/50">
                 <CardHeader>
                   <CardTitle className="text-lg font-bold text-slate-800">השלמת חתימות נהלים</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {stats.procedureCompletion.map((p) => (
-                    <div key={p.type} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                    <div key={p.type} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
                       <span className="text-sm font-bold text-slate-800">{p.label}</span>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-slate-600">{p.signed}/{p.total}</span>
@@ -436,6 +563,8 @@ export default function YearlySummary() {
               </Card>
             )}
           </>
+        ) : (
+          <div className="text-center text-slate-700 py-12">אין נתונים להצגה</div>
         )}
 
         <Dialog open={!!detailKey} onOpenChange={(o) => !o && setDetailKey(null)}>
@@ -448,9 +577,9 @@ export default function YearlySummary() {
                 <div className="text-center text-slate-600 py-8">אין נתונים להצגה</div>
               ) : (
                 detailItems.map((it, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-muted/40 border border-border/40">
-                    <div className="text-sm font-bold text-slate-800">{it.title}</div>
-                    {it.subtitle && <div className="text-xs text-slate-600 mt-1">{it.subtitle}</div>}
+                  <div key={idx} className="p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
+                    <div className="text-sm font-extrabold text-slate-900">{it.title}</div>
+                    {it.subtitle && <div className="text-xs font-semibold text-slate-700 mt-1">{it.subtitle}</div>}
                   </div>
                 ))
               )}

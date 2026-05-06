@@ -50,6 +50,11 @@ interface Soldier {
   personal_number: string;
   full_name: string;
   outpost?: string | null;
+  is_active?: boolean;
+  release_date?: string | null;
+  control_removed_at?: string | null;
+  qualified_date?: string | null;
+  created_at?: string | null;
 }
 
 interface SafetyScore {
@@ -219,6 +224,39 @@ export default function SafetyScoresManagement() {
     };
   };
 
+  const getDateKey = (value?: string | null) => value?.slice(0, 10) || null;
+
+  const getMonthBounds = (year: number, month: number) => {
+    const start = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = new Date(year, month, 0);
+    const end = `${year}-${String(month).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+    return { start, end };
+  };
+
+  const getEarliestDateKey = (...values: Array<string | null | undefined>) =>
+    values.map(getDateKey).filter(Boolean).sort()[0] || null;
+
+  const wasSoldierInUnitDuringMonth = (soldier: Soldier, year: number, month: number) => {
+    const { start, end } = getMonthBounds(year, month);
+    const startDateKey = getEarliestDateKey(soldier.qualified_date, soldier.created_at);
+    const endDateKey = getDateKey(soldier.release_date) || getDateKey(soldier.control_removed_at);
+
+    if (startDateKey && startDateKey > end) return false;
+    if (endDateKey && endDateKey < start) return false;
+    return true;
+  };
+
+  const wasSoldierInUnitDuringRange = (soldier: Soldier) => {
+    const { start } = getMonthBounds(startYear, startMonth);
+    const { end } = getMonthBounds(endYear, endMonth);
+    const startDateKey = getEarliestDateKey(soldier.qualified_date, soldier.created_at);
+    const endDateKey = getDateKey(soldier.release_date) || getDateKey(soldier.control_removed_at);
+
+    if (startDateKey && startDateKey > end) return false;
+    if (endDateKey && endDateKey < start) return false;
+    return true;
+  };
+
   useEffect(() => {
     if (authLoading) return;
     // Wait for role resolution to avoid redirecting before roles load
@@ -250,11 +288,11 @@ export default function SafetyScoresManagement() {
   const fetchData = async () => {
     setLoading(true);
     
-    // Fetch soldiers
+    // Fetch ALL soldiers (active + released) so historical month views still
+    // resolve names of soldiers that have since been released.
     const { data: soldiersData } = await supabase
       .from("soldiers")
-      .select("id, personal_number, full_name, outpost")
-      .eq("is_active", true)
+      .select("id, personal_number, full_name, outpost, is_active, release_date, control_removed_at, qualified_date, created_at")
       .order("full_name");
     
     if (soldiersData) setSoldiers(soldiersData);
@@ -313,6 +351,8 @@ export default function SafetyScoresManagement() {
         
         if (scoresData) setSafetyScores(scoresData);
       }
+    } else if (viewMode === "soldiers") {
+      setSafetyScores([]);
     }
     
     setLoading(false);
@@ -322,11 +362,24 @@ export default function SafetyScoresManagement() {
     return soldiers.find(s => s.id === soldierId)?.full_name || "לא ידוע";
   };
 
+  const getSoldierMeta = (soldierId: string) => soldiers.find(s => s.id === soldierId) || null;
+
+  const activeSoldiers = soldiers.filter(s => s.is_active !== false);
+  const soldiersForSelectedMonth = soldiers.filter(s => wasSoldierInUnitDuringMonth(s, selectedYear, selectedMonth));
+  const soldiersForSelectedRange = soldiers.filter(wasSoldierInUnitDuringRange);
+  const soldiersForFormMonth = soldiers.filter(s => wasSoldierInUnitDuringMonth(s, formYear, formMonth));
+  const soldiersForRangeSelect = Array.from(
+    new Map(
+      [...soldiersForSelectedRange, ...safetyScores.map(score => getSoldierMeta(score.soldier_id)).filter(Boolean) as Soldier[]]
+        .map(soldier => [soldier.id, soldier]),
+    ).values(),
+  );
+
   // Get soldiers with their last 2 months scores for filtering
   const getSoldiersWithScores = (): SoldierWithScores[] => {
     const { lastMonthStr, prevMonthStr } = getLastTwoMonths();
     
-    return soldiers.map(soldier => {
+    return activeSoldiers.map(soldier => {
       const lastMonthScoreRecord = allScores.find(
         s => s.soldier_id === soldier.id && s.score_month === lastMonthStr
       );
@@ -519,9 +572,18 @@ export default function SafetyScoresManagement() {
     setDialogOpen(true);
   };
 
-  const openScoreEntryForSoldier = (soldier: Soldier) => {
-    setSelectedSoldierForEntry(soldier);
+  const openScoreEntryForSoldier = (soldier: Soldier, year = selectedYear, month = selectedMonth) => {
     resetForm();
+    setSelectedSoldierForEntry(soldier);
+    setFormYear(year);
+    setFormMonth(month);
+    setDialogOpen(true);
+  };
+
+  const openAddScoreDialog = () => {
+    resetForm();
+    setFormYear(selectedYear);
+    setFormMonth(selectedMonth);
     setDialogOpen(true);
   };
   
@@ -861,7 +923,7 @@ export default function SafetyScoresManagement() {
     const monthStr = getSelectedMonthStr();
 
     for (const row of importData) {
-      const soldier = soldiers.find(s => s.personal_number === String(row.personal_number));
+      const soldier = soldiersForSelectedMonth.find(s => s.personal_number === String(row.personal_number));
       if (!soldier) {
         errorCount++;
         continue;
@@ -898,7 +960,7 @@ export default function SafetyScoresManagement() {
   };
 
   const downloadTemplate = () => {
-    const templateData = soldiers.map(s => ({
+    const templateData = soldiersForSelectedMonth.map(s => ({
       'מספר אישי': s.personal_number,
       'שם מלא': s.full_name,
       'ציון בטיחות': '',
@@ -957,10 +1019,32 @@ export default function SafetyScoresManagement() {
     return true;
   });
 
-  const filteredScores = safetyScores.filter(score => {
+  const visibleScores = safetyScores.filter(score => {
+    const soldier = getSoldierMeta(score.soldier_id);
+    if (!soldier) return true;
+    const [year, month] = score.score_month.split("-").map(Number);
+    return wasSoldierInUnitDuringMonth(soldier, year, month);
+  });
+
+  const filteredScores = visibleScores.filter(score => {
     const soldierName = getSoldierName(score.soldier_id);
     return soldierName.includes(searchTerm);
   });
+
+  const singleMonthScoreRows = !isRangeMode
+    ? Array.from(
+        new Map([
+          ...soldiersForSelectedMonth.map(soldier => [
+            soldier.id,
+            { id: soldier.id, soldier, score: visibleScores.find(score => score.soldier_id === soldier.id) || null },
+          ] as const),
+          ...visibleScores.map(score => [
+            score.soldier_id,
+            { id: score.soldier_id, soldier: getSoldierMeta(score.soldier_id), score },
+          ] as const),
+        ]).values(),
+      ).filter(row => (row.soldier?.full_name || getSoldierName(row.id)).includes(searchTerm))
+    : [];
 
   const getScoreColor = (score: number) => {
     if (score >= 75) return "bg-emerald-500";
@@ -974,15 +1058,15 @@ export default function SafetyScoresManagement() {
   const testCount = soldiersWithScores.filter(s => s.needsTest && !s.hasTestDone).length;
 
   // Stats for scores view
-  const averageScore = safetyScores.length > 0
-    ? Math.round(safetyScores.reduce((sum, s) => sum + s.safety_score, 0) / safetyScores.length)
+  const averageScore = visibleScores.length > 0
+    ? Math.round(visibleScores.reduce((sum, s) => sum + s.safety_score, 0) / visibleScores.length)
     : 0;
 
   const stats = {
-    total: safetyScores.length,
-    good: safetyScores.filter(s => s.safety_score >= 75).length,
-    warning: safetyScores.filter(s => s.safety_score >= 60 && s.safety_score < 75).length,
-    critical: safetyScores.filter(s => s.safety_score < 60).length,
+    total: visibleScores.length,
+    good: visibleScores.filter(s => s.safety_score >= 75).length,
+    warning: visibleScores.filter(s => s.safety_score >= 60 && s.safety_score < 75).length,
+    critical: visibleScores.filter(s => s.safety_score < 60).length,
   };
 
   if (authLoading || loading) {
@@ -1013,16 +1097,16 @@ export default function SafetyScoresManagement() {
             <h1 className="text-2xl font-black text-white mb-2">ניהול ציוני בטיחות חודשיים</h1>
             <p className="text-amber-200 text-sm">
               {viewMode === "soldiers" 
-                ? `${soldiers.length} חיילים פעילים`
+                ? `${activeSoldiers.length} חיילים פעילים`
                 : viewMode === "excellence"
                   ? `${excellenceWinners.length} מצטיינים`
                   : isRangeMode 
                     ? selectedSoldierId === "all" 
-                      ? `${safetyScores.length} ציונים לכל החיילים`
+                      ? `${visibleScores.length} ציונים לכל החיילים`
                       : selectedSoldierId 
-                        ? `${safetyScores.length} ציונים ל${getSoldierName(selectedSoldierId)}`
+                        ? `${visibleScores.length} ציונים ל${getSoldierName(selectedSoldierId)}`
                         : "בחר חייל לצפייה בציונים"
-                    : `${safetyScores.length} ציונים ל${getMonthLabel()}`
+                    : `${visibleScores.length} ציונים ל${getMonthLabel()}`
               }
             </p>
           </div>
@@ -1068,7 +1152,7 @@ export default function SafetyScoresManagement() {
                       className="rounded-xl"
                     >
                       <Users className="w-4 h-4 ml-1" />
-                      כל החיילים ({soldiers.length})
+                      כל החיילים ({activeSoldiers.length})
                     </Button>
                     <Button
                       variant={alertFilter === "clarification" ? "default" : "outline"}
@@ -1411,7 +1495,7 @@ export default function SafetyScoresManagement() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">כל החיילים</SelectItem>
-                            {soldiers.map(soldier => (
+                            {soldiersForRangeSelect.map(soldier => (
                               <SelectItem key={soldier.id} value={soldier.id}>
                                 {soldier.full_name} ({soldier.personal_number})
                               </SelectItem>
@@ -1509,8 +1593,8 @@ export default function SafetyScoresManagement() {
 
               {/* Actions */}
               <div className="flex gap-3">
-                <Button
-                  onClick={() => { resetForm(); setDialogOpen(true); }}
+                    <Button
+                      onClick={openAddScoreDialog}
                   className="flex-1 bg-gradient-to-r from-primary to-teal text-white py-6 rounded-2xl shadow-lg"
                 >
                   <Plus className="w-5 h-5 ml-2" />
@@ -1565,7 +1649,7 @@ export default function SafetyScoresManagement() {
                 <CardHeader>
                   <CardTitle className="text-slate-800">
                     {isRangeMode && selectedSoldierId 
-                      ? `ציוני בטיחות - ${getSoldierName(selectedSoldierId)}`
+                      ? selectedSoldierId === "all" ? "ציוני בטיחות - כל החיילים" : `ציוני בטיחות - ${getSoldierName(selectedSoldierId)}`
                       : `ציוני בטיחות - ${getMonthLabel()}`
                     }
                   </CardTitle>
@@ -1578,12 +1662,12 @@ export default function SafetyScoresManagement() {
                           <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>בחר חייל לצפייה בציונים</p>
                         </div>
-                      ) : filteredScores.length === 0 ? (
+                      ) : isRangeMode && filteredScores.length === 0 ? (
                         <div className="text-center py-12 text-slate-500">
                           <Gauge className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>אין ציונים {isRangeMode ? 'בטווח הנבחר' : 'לחודש זה'}</p>
                         </div>
-                      ) : (
+                      ) : isRangeMode ? (
                         filteredScores.map(score => (
                           <div
                             key={score.id}
@@ -1595,7 +1679,9 @@ export default function SafetyScoresManagement() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                                   {isRangeMode ? (
-                                    <h4 className="font-bold text-slate-800">{getMonthLabelFromDate(score.score_month)}</h4>
+                                    <h4 className="font-bold text-slate-800">
+                                      {selectedSoldierId === "all" ? `${getSoldierName(score.soldier_id)} · ` : ""}{getMonthLabelFromDate(score.score_month)}
+                                    </h4>
                                   ) : (
                                     <h4 className="font-bold text-slate-800">{getSoldierName(score.soldier_id)}</h4>
                                   )}
@@ -1641,6 +1727,63 @@ export default function SafetyScoresManagement() {
                             </div>
                           </div>
                         ))
+                      ) : singleMonthScoreRows.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500">
+                          <Gauge className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                          <p>אין חיילים רלוונטיים לחודש זה</p>
+                        </div>
+                      ) : (
+                        singleMonthScoreRows.map(({ id, soldier, score }) => (
+                          <div
+                            key={id}
+                            className={`p-4 rounded-2xl border transition-all ${
+                              score?.safety_score && score.safety_score < 75 ? "bg-red-50/50 border-red-200" : "bg-slate-50 border-slate-200"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                  <h4 className="font-bold text-slate-800">{soldier?.full_name || getSoldierName(id)}</h4>
+                                  {soldier?.is_active === false && <Badge variant="outline" className="text-slate-600 border-slate-300">שוחרר/הוסר</Badge>}
+                                  {score ? (
+                                    <Badge className={`${getScoreColor(score.safety_score)} text-white text-sm font-bold`}>{score.safety_score}</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-slate-500 border-slate-300">לא הוזן</Badge>
+                                  )}
+                                </div>
+                                {score ? (
+                                  <div className="grid grid-cols-3 gap-2 text-sm text-slate-500">
+                                    <div>ק"מ: {score.kilometers || 0}</div>
+                                    <div>מהירות: {score.speed_violations || 0}</div>
+                                    <div>בלימות: {score.harsh_braking || 0}</div>
+                                    <div>פניות: {score.harsh_turns || 0}</div>
+                                    <div>האצות: {score.harsh_accelerations || 0}</div>
+                                    <div>עקיפות: {score.illegal_overtakes || 0}</div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-slate-500">החייל היה רלוונטי בחודש זה, אך עדיין אין לו ציון בטיחות.</p>
+                                )}
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                {score ? (
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(score)} className="rounded-xl">
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                ) : soldier ? (
+                                  <Button variant="default" size="sm" onClick={() => openScoreEntryForSoldier(soldier, selectedYear, selectedMonth)} className="rounded-xl">
+                                    <Plus className="w-4 h-4 ml-1" />
+                                    הזן
+                                  </Button>
+                                ) : null}
+                                {score && (
+                                  <Button variant="ghost" size="icon" onClick={() => { setScoreToDelete(score); setDeleteConfirmOpen(true); }} className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
                   </ScrollArea>
@@ -1677,7 +1820,7 @@ export default function SafetyScoresManagement() {
                       <SelectValue placeholder="בחר חייל" />
                     </SelectTrigger>
                     <SelectContent>
-                      {soldiers.map(soldier => (
+                      {soldiersForFormMonth.map(soldier => (
                         <SelectItem key={soldier.id} value={soldier.id}>
                           {soldier.full_name} ({soldier.personal_number})
                         </SelectItem>
@@ -1996,7 +2139,7 @@ export default function SafetyScoresManagement() {
               <ScrollArea className="h-[300px] border rounded-xl p-3">
                 <div className="space-y-2">
                   {importData.map((row, idx) => {
-                    const soldier = soldiers.find(s => s.personal_number === String(row.personal_number));
+                    const soldier = soldiersForSelectedMonth.find(s => s.personal_number === String(row.personal_number));
                     return (
                       <div 
                         key={idx}
@@ -2028,10 +2171,10 @@ export default function SafetyScoresManagement() {
               
               <p className="text-sm text-slate-500">
                 <CheckCircle className="w-4 h-4 inline ml-1 text-green-600" />
-                {importData.filter(r => soldiers.some(s => s.personal_number === String(r.personal_number))).length} רשומות תקינות
+                {importData.filter(r => soldiersForSelectedMonth.some(s => s.personal_number === String(r.personal_number))).length} רשומות תקינות
                 <span className="mx-2">|</span>
                 <AlertTriangle className="w-4 h-4 inline ml-1 text-red-600" />
-                {importData.filter(r => !soldiers.some(s => s.personal_number === String(r.personal_number))).length} לא נמצאו
+                {importData.filter(r => !soldiersForSelectedMonth.some(s => s.personal_number === String(r.personal_number))).length} לא נמצאו
               </p>
             </div>
 
@@ -2239,7 +2382,7 @@ export default function SafetyScoresManagement() {
                     <SelectValue placeholder="בחר חייל" />
                   </SelectTrigger>
                   <SelectContent>
-                    {soldiers.map(soldier => (
+                    {activeSoldiers.map(soldier => (
                       <SelectItem key={soldier.id} value={soldier.id}>
                         {soldier.full_name} ({soldier.personal_number})
                       </SelectItem>
