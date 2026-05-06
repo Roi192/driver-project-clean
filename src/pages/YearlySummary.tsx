@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import {
   GraduationCap, UserMinus, UserPlus, Car, ClipboardCheck, Gavel,
   Activity, Calendar, BarChart3, AlertTriangle, Heart, FileSignature, TrendingUp,
-  Gauge, Route, ShieldCheck, Users, Target, Pencil, Trash2
+  Gauge, Route, ShieldCheck, Users, Target, Pencil, Trash2, Plus
 } from "lucide-react";
 import { MONTHS_HEB } from "@/lib/constants";
 
@@ -30,6 +30,9 @@ interface DetailItem {
   kind?: DetailKind;
   id?: string;
   raw?: any;
+  _manual?: boolean;
+  _overrideId?: string;
+  _reason?: string;
 }
 
 interface YearStats {
@@ -116,7 +119,9 @@ export default function YearlySummary() {
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [editAccident, setEditAccident] = useState<any | null>(null);
   const [editReleased, setEditReleased] = useState<any | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<{ kind: DetailKind; id: string; title: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: DetailKind; id: string; title: string; manualOverrideId?: string } | null>(null);
+  const [addOpen, setAddOpen] = useState<null | "released" | "intake" | "accidentsBts" | "accidentsGdud">(null);
+  const [releasedReasonFilter, setReleasedReasonFilter] = useState<string | null>(null);
 
   const start = `${year}-01-01`;
   const end = `${year}-12-31`;
@@ -129,7 +134,7 @@ export default function YearlySummary() {
       const [
         soldierCourses, courses, soldiers, sectorEvents, inspections,
         punishments, workEvents, cleaning, interviews, reports,
-        monthlyScores, signatures, deletedArchive
+        monthlyScores, signatures, deletedArchive, overrides
       ] = await Promise.all([
         fetchAll(supabase.from("soldier_courses").select("id, soldier_id, course_id, status, start_date, end_date").gte("start_date", start).lte("start_date", end)),
         fetchAll(supabase.from("courses").select("id, name, category")),
@@ -144,7 +149,24 @@ export default function YearlySummary() {
         safeFetchAll(supabase.from("monthly_safety_scores" as any).select("id, soldier_id, safety_score, score_month, kilometers, speed_violations, harsh_braking, harsh_turns, harsh_accelerations, illegal_overtakes").gte("score_month", start).lte("score_month", end)),
         safeFetchAll(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, full_name, created_at").gte("created_at", startTs).lte("created_at", endTs)),
         safeFetchAll(supabase.from("deleted_soldiers_archive" as any).select("id, original_soldier_id, full_name, personal_number, outpost, release_reason, release_date, control_removed_at, soldier_created_at, deleted_at")),
+        safeFetchAll(supabase.from("yearly_summary_overrides" as any).select("id, year, kind, action, original_id, payload").eq("year", year)),
       ]);
+
+      const hiddenByKind = new Map<string, Set<string>>();
+      const manualByKind = new Map<string, any[]>();
+      (overrides as any[]).forEach((o: any) => {
+        if (o.action === "hide") {
+          const set = hiddenByKind.get(o.kind) || new Set<string>();
+          set.add(String(o.original_id));
+          hiddenByKind.set(o.kind, set);
+        } else if (o.action === "manual") {
+          const arr = manualByKind.get(o.kind) || [];
+          arr.push({ ...o.payload, _manual: true, _overrideId: o.id });
+          manualByKind.set(o.kind, arr);
+        }
+      });
+      const isHidden = (kind: string, id?: string | null) => !!(id && hiddenByKind.get(kind)?.has(String(id)));
+      const manualOf = (kind: string) => manualByKind.get(kind) || [];
 
       // Filter sector events by year (event_date may be null — fall back to created_at later, but safer to filter here)
       const accidents = sectorEvents.filter((s: any) => {
@@ -201,16 +223,28 @@ export default function YearlySummary() {
         _archived: true,
         _archiveId: a.id,
       }));
-      const releases = [...releasesFromActive, ...archivedReleases];
-      const intake = soldiers.filter((s: any) => getDateKey(s.created_at) >= start && getDateKey(s.created_at) <= end);
+      const releasesAll = [...releasesFromActive, ...archivedReleases];
+      const releases = releasesAll.filter((r: any) => !isHidden("released", r.id));
+      const releasesManual = manualOf("released");
+      const releasesCombined = [...releases, ...releasesManual];
+      const intakeAll = soldiers.filter((s: any) => getDateKey(s.created_at) >= start && getDateKey(s.created_at) <= end);
+      const intake = intakeAll.filter((s: any) => !isHidden("intake", s.id));
+      const intakeManual = manualOf("intake");
+      const intakeCombined = [...intake, ...intakeManual];
       const activeSoldiersCount = soldiers.filter((s: any) => s.is_active).length;
-      const netManpower = intake.length - releases.length;
+      const netManpower = intakeCombined.length - releasesCombined.length;
 
       // Classify accidents — align with mעקב תאונות (only security + combat, ignore null)
       const isBts = (a: any) => String(a.driver_type || "").toLowerCase() === "security";
       const isGdudCombat = (a: any) => String(a.driver_type || "").toLowerCase() === "combat";
-      const accidentsBtsList = accidents.filter(isBts);
-      const accidentsGdudList = accidents.filter(isGdudCombat);
+      const accidentsBtsList = [
+        ...accidents.filter((a: any) => isBts(a) && !isHidden("accidentsBts", a.id)),
+        ...manualOf("accidentsBts"),
+      ];
+      const accidentsGdudList = [
+        ...accidents.filter((a: any) => isGdudCombat(a) && !isHidden("accidentsGdud", a.id)),
+        ...manualOf("accidentsGdud"),
+      ];
       const accidentsCounted = [...accidentsBtsList, ...accidentsGdudList];
       const accidentsJudged = 0;
 
@@ -274,9 +308,9 @@ export default function YearlySummary() {
         ? Math.round(procedureCompletion.reduce((sum, p) => sum + p.percent, 0) / procedureCompletion.length)
         : 0;
 
-      const releasedNafshi = releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).length;
+      const releasedNafshi = releasesCombined.filter((r: any) => (r.release_reason || "").includes("נפשי")).length;
       const releasedByReason: Record<string, number> = {};
-      releases.forEach((r: any) => {
+      releasesCombined.forEach((r: any) => {
         const reason = r.release_reason || "שחרור רגיל";
         releasedByReason[reason] = (releasedByReason[reason] || 0) + 1;
       });
@@ -290,6 +324,8 @@ export default function YearlySummary() {
           kind: "accident",
           id: a.id,
           raw: a,
+          _manual: a._manual,
+          _overrideId: a._overrideId,
         };
       };
       const scoreToItem = (s: any): DetailItem => ({
@@ -303,10 +339,13 @@ export default function YearlySummary() {
         kind: "released",
         id: r.id,
         raw: r,
+        _manual: r._manual,
+        _overrideId: r._overrideId,
+        _reason: r.release_reason || "שחרור רגיל",
       });
 
       const insights: DetailItem[] = [
-        { title: netManpower >= 0 ? "מגמת כוח אדם חיובית/יציבה" : "ירידה בכוח אדם", subtitle: `נקלטו ${intake.length}, השתחררו/הוסרו ${releases.length}, נטו ${netManpower}` },
+        { title: netManpower >= 0 ? "מגמת כוח אדם חיובית/יציבה" : "ירידה בכוח אדם", subtitle: `נקלטו ${intakeCombined.length}, השתחררו/הוסרו ${releasesCombined.length}, נטו ${netManpower}` },
         { title: lowSafetyScores > 0 ? "יש ציוני בטיחות שמצריכים טיפול" : "אין ציוני בטיחות חריגים מתחת 75", subtitle: `${lowSafetyScores} ציונים מתחת 75, ${excellentSafetyScores} ציונים 90+` },
         { title: procedureOverallPercent >= 90 ? "חתימות נהלים במצב טוב" : "כדאי להשלים חתימות נהלים", subtitle: `השלמה ממוצעת ${procedureOverallPercent}% מתוך ${activeSoldiersCount} חיילים פעילים` },
         { title: accidentsCounted.length > 0 ? "תאונות לתחקור בסיכום תקופה" : "לא דווחו תאונות בתקופה", subtitle: `בט״ש ${accidentsBtsList.length}, גדוד ${accidentsGdudList.length}` },
@@ -317,9 +356,9 @@ export default function YearlySummary() {
           const c = courseById.get(sc.course_id);
           return { title: soldierName(sc.soldier_id), subtitle: `${c?.name || "קורס ללא שם"} · ${sc.status || ""} · ${fmtDate(sc.start_date)}` };
         }),
-        intake: intake.map((s: any) => ({ title: s.full_name, subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}`, kind: "intake" as DetailKind, id: s.id, raw: s })),
-        released: releases.map(releasedToItem),
-        releasedNafshi: releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).map(releasedToItem),
+        intake: intakeCombined.map((s: any) => ({ title: s.full_name, subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}`, kind: "intake" as DetailKind, id: s.id, raw: s, _manual: s._manual, _overrideId: s._overrideId })),
+        released: releasesCombined.map(releasedToItem),
+        releasedNafshi: releasesCombined.filter((r: any) => (r.release_reason || "").includes("נפשי")).map(releasedToItem),
         accidentsBts: accidentsBtsList.map(accidentToItem),
         accidentsGdud: accidentsGdudList.map(accidentToItem),
         accidentsTotal: accidentsCounted.map(accidentToItem),
@@ -338,8 +377,8 @@ export default function YearlySummary() {
 
       return {
         coursesTotal: soldierCourses.length, coursesByCategory, coursesByName,
-        releasedTotal: releases.length, releasedNafshi, releasedByReason,
-        intakeTotal: intake.length, netManpower, activeSoldiersCount,
+        releasedTotal: releasesCombined.length, releasedNafshi, releasedByReason,
+        intakeTotal: intakeCombined.length, netManpower, activeSoldiersCount,
         accidentsBts: accidentsBtsList.length, accidentsGdud: accidentsGdudList.length,
         accidentsTotal: accidentsBtsList.length + accidentsGdudList.length, accidentsJudged,
         inspectionsTotal: inspections.length, inspectionsAvg, inspectionSectionAvg,
@@ -358,7 +397,7 @@ export default function YearlySummary() {
   const cards: { key: string | null; label: string; value: any; icon: any; color: string }[] = stats ? [
     { key: "courses", label: "סך קורסים שבוצעו", value: stats.coursesTotal, icon: GraduationCap, color: "from-violet-500 to-purple-600" },
     { key: "intake", label: "נהגים נקלטו", value: stats.intakeTotal, icon: UserPlus, color: "from-emerald-500 to-green-600" },
-    { key: "released", label: "נהגים השתחררו/הוסרו", value: stats.releasedTotal, icon: UserMinus, color: "from-slate-500 to-slate-700" },
+    { key: "released", label: "סך הכל משתחררים", value: stats.releasedTotal, icon: UserMinus, color: "from-slate-500 to-slate-700" },
     { key: null, label: "נטו כוח אדם", value: stats.netManpower > 0 ? `+${stats.netManpower}` : stats.netManpower, icon: Users, color: "from-teal-500 to-emerald-600" },
     { key: "releasedNafshi", label: "שחרור על נפשי", value: stats.releasedNafshi, icon: Heart, color: "from-fuchsia-500 to-pink-600" },
     { key: "accidentsBts", label: 'תאונות בט"ש', value: stats.accidentsBts, icon: Car, color: "from-orange-500 to-red-500" },
@@ -383,25 +422,43 @@ export default function YearlySummary() {
   ] : [];
 
   const detailLabel = useMemo(() => cards.find((c) => c.key === detailKey)?.label || "פירוט", [cards, detailKey]);
-  const detailItems: DetailItem[] = (stats && detailKey) ? (stats.details[detailKey] || []) : [];
+  const baseDetailItems: DetailItem[] = (stats && detailKey) ? (stats.details[detailKey] || []) : [];
+  const detailItems: DetailItem[] = (detailKey === "released" && releasedReasonFilter)
+    ? baseDetailItems.filter((it) => (it._reason || "שחרור רגיל") === releasedReasonFilter)
+    : baseDetailItems;
+  const canAdd = detailKey && ["released", "intake", "accidentsBts", "accidentsGdud"].includes(detailKey);
+  const releasedReasonCounts = useMemo(() => {
+    if (detailKey !== "released") return [] as { reason: string; count: number }[];
+    const m = new Map<string, number>();
+    baseDetailItems.forEach((it) => {
+      const r = it._reason || "שחרור רגיל";
+      m.set(r, (m.get(r) || 0) + 1);
+    });
+    return Array.from(m.entries()).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+  }, [detailKey, baseDetailItems]);
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
     try {
-      if (confirmDelete.kind === "accident") {
-        const { error } = await supabase.from("safety_content").delete().eq("id", confirmDelete.id);
+      // If it's a manual entry, just delete the override row
+      if (confirmDelete.manualOverrideId) {
+        const { error } = await supabase.from("yearly_summary_overrides" as any).delete().eq("id", confirmDelete.manualOverrideId);
         if (error) throw error;
-        toast.success("האירוע נמחק");
-      } else if (confirmDelete.kind === "released" || confirmDelete.kind === "intake") {
-        // Try active soldiers first; if not found, try archive
-        const { error, count } = await supabase.from("soldiers").delete({ count: "exact" }).eq("id", confirmDelete.id);
-        if (error) throw error;
-        if (!count) {
-          const { error: e2 } = await supabase.from("deleted_soldiers_archive" as any).delete().eq("id", confirmDelete.id);
-          if (e2) throw e2;
+      } else {
+        // Hide from list only — never touch source data
+        let kind = "";
+        if (confirmDelete.kind === "released") kind = "released";
+        else if (confirmDelete.kind === "intake") kind = "intake";
+        else if (confirmDelete.kind === "accident") {
+          // figure out bts vs gdud from current detailKey
+          kind = detailKey === "accidentsBts" ? "accidentsBts" : detailKey === "accidentsGdud" ? "accidentsGdud" : "accidentsBts";
         }
-        toast.success("הנהג נמחק");
+        const { error } = await supabase.from("yearly_summary_overrides" as any).insert({
+          year, kind, action: "hide", original_id: confirmDelete.id,
+        });
+        if (error) throw error;
       }
+      toast.success("הוסר מהרשימה");
       setConfirmDelete(null);
       await refetch();
     } catch (e: any) {
@@ -559,9 +616,36 @@ export default function YearlySummary() {
         )}
 
         {/* Detail dialog */}
-        <Dialog open={!!detailKey} onOpenChange={(o) => !o && setDetailKey(null)}>
+        <Dialog open={!!detailKey} onOpenChange={(o) => { if (!o) { setDetailKey(null); setReleasedReasonFilter(null); } }}>
           <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto bg-white">
-            <DialogHeader><DialogTitle className="text-slate-800 font-black">{detailLabel} ({detailItems.length})</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <div className="flex items-center justify-between gap-2">
+                <DialogTitle className="text-slate-800 font-black">{detailLabel} ({detailItems.length})</DialogTitle>
+                {canAdd && (
+                  <Button size="sm" onClick={() => setAddOpen(detailKey as any)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                    <Plus className="w-4 h-4" /> הוספה
+                  </Button>
+                )}
+              </div>
+            </DialogHeader>
+            {detailKey === "released" && releasedReasonCounts.length > 0 && (
+              <div className="space-y-2 mb-2">
+                <div className="text-xs font-bold text-slate-700">פילוח לפי סיבת שחרור (לחץ לסינון)</div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setReleasedReasonFilter(null)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 ${!releasedReasonFilter ? "bg-primary text-primary-foreground border-primary" : "bg-white text-slate-800 border-slate-300"}`}
+                  >הכל ({baseDetailItems.length})</button>
+                  {releasedReasonCounts.map((r) => (
+                    <button
+                      key={r.reason}
+                      onClick={() => setReleasedReasonFilter(r.reason === releasedReasonFilter ? null : r.reason)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 ${releasedReasonFilter === r.reason ? "bg-primary text-primary-foreground border-primary" : "bg-white text-slate-800 border-slate-300"}`}
+                    >{r.reason} ({r.count})</button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               {detailItems.length === 0 ? (
                 <div className="text-center text-slate-600 py-8">אין נתונים להצגה</div>
@@ -575,13 +659,13 @@ export default function YearlySummary() {
                       </div>
                       {(it.kind === "accident" || it.kind === "released" || it.kind === "intake") && (
                         <div className="flex flex-col gap-1 shrink-0">
-                          {(it.kind === "accident" || it.kind === "released") && (
+                          {(it.kind === "accident" || it.kind === "released") && !it._manual && (
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => {
                               if (it.kind === "accident") setEditAccident(it.raw);
                               else setEditReleased(it.raw);
                             }}><Pencil className="w-3 h-3" /></Button>
                           )}
-                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-red-600 border-red-300" onClick={() => setConfirmDelete({ kind: it.kind!, id: it.id!, title: it.title })}><Trash2 className="w-3 h-3" /></Button>
+                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-red-600 border-red-300" onClick={() => setConfirmDelete({ kind: it.kind!, id: it.id!, title: it.title, manualOverrideId: it._overrideId })}><Trash2 className="w-3 h-3" /></Button>
                         </div>
                       )}
                     </div>
@@ -591,6 +675,16 @@ export default function YearlySummary() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Manual add dialog */}
+        {addOpen && (
+          <ManualAddDialog
+            kind={addOpen}
+            year={year}
+            onClose={() => setAddOpen(null)}
+            onSaved={async () => { setAddOpen(null); await refetch(); }}
+          />
+        )}
 
         {/* Edit accident */}
         {editAccident && (
@@ -613,11 +707,11 @@ export default function YearlySummary() {
         {/* Confirm delete */}
         <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
           <DialogContent dir="rtl" className="bg-white">
-            <DialogHeader><DialogTitle className="text-slate-800 font-black">מחיקה</DialogTitle></DialogHeader>
-            <div className="text-sm text-slate-700">האם למחוק את "{confirmDelete?.title}"? פעולה זו לא ניתנת לביטול.</div>
+            <DialogHeader><DialogTitle className="text-slate-800 font-black">הסרה מהרשימה</DialogTitle></DialogHeader>
+            <div className="text-sm text-slate-700">האם להסיר את "{confirmDelete?.title}" מרשימת הסיכום? הנתון המקורי במערכת לא יושפע.</div>
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setConfirmDelete(null)}>ביטול</Button>
-              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>מחק</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>הסר</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -739,6 +833,134 @@ function EditReleasedDialog({ soldier, onClose, onSaved }: { soldier: any; onClo
           </div>
           {reasonValue === "אחר" && (
             <div><Label className="text-slate-800 font-bold">פירוט סיבה</Label><Input value={customReason} onChange={(e) => setCustomReason(e.target.value)} /></div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "שומר..." : "שמור"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManualAddDialog({ kind, year, onClose, onSaved }: { kind: "released" | "intake" | "accidentsBts" | "accidentsGdud"; year: number; onClose: () => void; onSaved: () => void; }) {
+  const isReleased = kind === "released";
+  const isIntake = kind === "intake";
+  const isAccident = kind === "accidentsBts" || kind === "accidentsGdud";
+  const [saving, setSaving] = useState(false);
+
+  // Released
+  const [fullName, setFullName] = useState("");
+  const [personalNumber, setPersonalNumber] = useState("");
+  const [outpost, setOutpost] = useState("");
+  const [reasonValue, setReasonValue] = useState("regular");
+  const [customReason, setCustomReason] = useState("");
+  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+
+  // Accident
+  const [title, setTitle] = useState("");
+  const [driverName, setDriverName] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [severity, setSeverity] = useState("minor");
+  const [description, setDescription] = useState("");
+
+  const titleHeader = isReleased ? "הוספת משתחרר/הוסר ידנית"
+    : isIntake ? "הוספת נהג שנקלט ידנית"
+    : kind === "accidentsBts" ? 'הוספת תאונת בט"ש ידנית' : "הוספת תאונת גדוד ידנית";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      let payload: any = {};
+      if (isReleased) {
+        const finalReason = reasonValue === "regular" ? "שחרור רגיל" : (reasonValue === "אחר" ? (customReason || "אחר") : reasonValue);
+        payload = {
+          full_name: fullName || "ללא שם",
+          personal_number: personalNumber,
+          outpost,
+          release_reason: finalReason,
+          release_date: date,
+        };
+      } else if (isIntake) {
+        payload = {
+          full_name: fullName || "ללא שם",
+          personal_number: personalNumber,
+          outpost,
+          created_at: date,
+        };
+      } else {
+        payload = {
+          title: title || "תאונה",
+          driver_name: driverName,
+          driver_type: kind === "accidentsBts" ? "security" : "combat",
+          event_date: date,
+          severity,
+          outpost,
+          vehicle_number: vehicleNumber,
+          description,
+        };
+      }
+      const { error } = await supabase.from("yearly_summary_overrides" as any).insert({
+        year, kind, action: "manual", payload,
+      });
+      if (error) throw error;
+      toast.success("נוסף בהצלחה");
+      onSaved();
+    } catch (e: any) {
+      toast.error(`שגיאה בהוספה: ${e?.message || e}`);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent dir="rtl" className="bg-white max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="text-slate-800 font-black">{titleHeader}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          {(isReleased || isIntake) && (
+            <>
+              <div><Label className="text-slate-800 font-bold">שם מלא</Label><Input value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">מספר אישי</Label><Input value={personalNumber} onChange={(e) => setPersonalNumber(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">מוצב</Label><Input value={outpost} onChange={(e) => setOutpost(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">{isReleased ? "תאריך שחרור" : "תאריך קליטה"}</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+              {isReleased && (
+                <>
+                  <div>
+                    <Label className="text-slate-800 font-bold">סיבת שחרור</Label>
+                    <Select value={reasonValue} onValueChange={setReasonValue}>
+                      <SelectTrigger className="bg-white text-slate-800"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {RELEASE_REASONS.map((r) => (<SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {reasonValue === "אחר" && (
+                    <div><Label className="text-slate-800 font-bold">פירוט סיבה</Label><Input value={customReason} onChange={(e) => setCustomReason(e.target.value)} /></div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+          {isAccident && (
+            <>
+              <div><Label className="text-slate-800 font-bold">כותרת</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">תאריך</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">שם נהג</Label><Input value={driverName} onChange={(e) => setDriverName(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">מיקום / מוצב</Label><Input value={outpost} onChange={(e) => setOutpost(e.target.value)} /></div>
+              <div><Label className="text-slate-800 font-bold">מספר רכב</Label><Input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} /></div>
+              <div>
+                <Label className="text-slate-800 font-bold">חומרה</Label>
+                <Select value={severity} onValueChange={setSeverity}>
+                  <SelectTrigger className="bg-white text-slate-800"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minor">קלה</SelectItem>
+                    <SelectItem value="moderate">בינונית</SelectItem>
+                    <SelectItem value="severe">חמורה</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-slate-800 font-bold">תיאור</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+            </>
           )}
         </div>
         <DialogFooter className="gap-2">

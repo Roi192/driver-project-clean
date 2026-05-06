@@ -3770,6 +3770,39 @@ export type Database = {
           },
         ]
       }
+      yearly_summary_overrides: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          original_id: string | null
+          payload: Json | null
+          year: number
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          original_id?: string | null
+          payload?: Json | null
+          year: number
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          original_id?: string | null
+          payload?: Json | null
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       soldiers_basic: {
