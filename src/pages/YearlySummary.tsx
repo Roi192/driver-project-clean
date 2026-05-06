@@ -2,24 +2,34 @@ import { useMemo, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useQuery } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   GraduationCap, UserMinus, UserPlus, Car, ClipboardCheck, Gavel,
   Activity, Calendar, BarChart3, AlertTriangle, Heart, FileSignature, TrendingUp,
-  Gauge, Route, ShieldCheck, Users, Target
+  Gauge, Route, ShieldCheck, Users, Target, Pencil, Trash2
 } from "lucide-react";
 import { MONTHS_HEB } from "@/lib/constants";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
+type DetailKind = "accident" | "released" | "plain";
+
 interface DetailItem {
   title: string;
   subtitle?: string;
+  kind?: DetailKind;
+  id?: string;
+  raw?: any;
 }
 
 interface YearStats {
@@ -76,52 +86,55 @@ async function fetchAll<T = any>(query: any): Promise<T[]> {
 }
 
 const safeFetchAll = async <T = any,>(query: any): Promise<T[]> => {
-  try {
-    return await fetchAll<T>(query);
-  } catch (error) {
-    console.error("Yearly summary optional query failed", error);
-    return [];
-  }
+  try { return await fetchAll<T>(query); } catch (e) { console.error(e); return []; }
 };
 
 const fmtDate = (d?: string | null) => {
   if (!d) return "";
   try { return new Date(d).toLocaleDateString("he-IL"); } catch { return d; }
 };
-
 const getDateKey = (value?: string | null) => value?.slice(0, 10) || null;
-
-const getMonthLabel = (month: number) => MONTHS_HEB.find((x: any) => x.value === month)?.label || String(month);
-
+const getMonthLabel = (m: number) => MONTHS_HEB.find((x: any) => x.value === m)?.label || String(m);
 const avg = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
 
-const isBtsAccident = (a: any) => {
-  const type = String(a.driver_type || "").toLowerCase();
-  return ["security", "bts", "בטש", "בט\"ש", "בט״ש"].some((token) => type.includes(token));
-};
+const RELEASE_REASONS = [
+  { value: "regular", label: "שחרור רגיל" },
+  { value: "נפשי", label: "שחרור על נפשי" },
+  { value: "שינוי מקצוע", label: "שינוי מקצוע" },
+  { value: "פסילת מקצוע", label: "פסילת מקצוע" },
+  { value: "רפואי", label: "רפואי" },
+  { value: "משמעתי", label: "משמעתי" },
+  { value: "העברה ליחידה אחרת", label: "העברה ליחידה אחרת" },
+  { value: "הוסר מטבלת השליטה", label: "הוסר מטבלת השליטה" },
+  { value: "אחר", label: "אחר" },
+];
 
 export default function YearlySummary() {
   const { isAdmin, isSuperAdmin, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const [year, setYear] = useState<number>(currentYear);
   const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [editAccident, setEditAccident] = useState<any | null>(null);
+  const [editReleased, setEditReleased] = useState<any | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: DetailKind; id: string; title: string } | null>(null);
 
   const start = `${year}-01-01`;
   const end = `${year}-12-31`;
   const startTs = `${start}T00:00:00.000Z`;
   const endTs = `${end}T23:59:59.999Z`;
 
-  const { data: stats, isLoading, error } = useQuery<YearStats>({
+  const { data: stats, isLoading, error, refetch } = useQuery<YearStats>({
     queryKey: ["yearly-summary", year],
     queryFn: async () => {
       const [
-        soldierCourses, courses, soldiers, accidents, inspections,
+        soldierCourses, courses, soldiers, sectorEvents, inspections,
         punishments, workEvents, cleaning, interviews, reports,
         monthlyScores, signatures
       ] = await Promise.all([
         fetchAll(supabase.from("soldier_courses").select("id, soldier_id, course_id, status, start_date, end_date").gte("start_date", start).lte("start_date", end)),
         fetchAll(supabase.from("courses").select("id, name, category")),
         fetchAll(supabase.from("soldiers").select("id, full_name, personal_number, release_date, release_reason, outpost, created_at, is_active, current_safety_score, control_removed_at, qualified_date")),
-        fetchAll(supabase.from("accidents").select("id, soldier_id, driver_type, driver_name, accident_date, severity, location, description, incident_type, was_judged, status").gte("accident_date", start).lte("accident_date", end)),
+        fetchAll(supabase.from("safety_content").select("id, category, title, description, soldier_id, driver_type, driver_name, vehicle_number, event_date, event_type, severity, region, outpost").eq("category", "sector_events")),
         fetchAll(supabase.from("inspections").select("id, soldier_id, total_score, inspection_date, vehicle_score, procedures_score, safety_score, routes_familiarity_score, simulations_score").gte("inspection_date", start).lte("inspection_date", end)),
         fetchAll(supabase.from("punishments").select("id, soldier_id, punishment_date, offense, punishment, judge").gte("punishment_date", start).lte("punishment_date", end)),
         fetchAll(supabase.from("work_plan_events").select("id, category, title, event_date, status, content_cycle").gte("event_date", start).lte("event_date", end)),
@@ -132,39 +145,51 @@ export default function YearlySummary() {
         safeFetchAll(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, full_name, created_at").gte("created_at", startTs).lte("created_at", endTs)),
       ]);
 
+      // Filter sector events by year (event_date may be null — fall back to created_at later, but safer to filter here)
+      const accidents = sectorEvents.filter((s: any) => {
+        const d = getDateKey(s.event_date);
+        return d && d >= start && d <= end;
+      });
+
       const soldierById = new Map((soldiers as any[]).map((s: any) => [s.id, s]));
       const courseById = new Map((courses as any[]).map((c: any) => [c.id, c]));
       const soldierName = (id?: string | null, fallback = "ללא שם") => {
-        const soldier = id ? soldierById.get(id) : null;
-        return soldier?.full_name || fallback;
+        const s = id ? soldierById.get(id) : null;
+        return s?.full_name || fallback;
       };
       const soldierSubtitle = (id?: string | null) => {
-        const soldier = id ? soldierById.get(id) : null;
-        return [soldier?.personal_number, soldier?.outpost].filter(Boolean).join(" · ");
+        const s = id ? soldierById.get(id) : null;
+        return [s?.personal_number, s?.outpost].filter(Boolean).join(" · ");
       };
 
       const coursesByCategory: Record<string, number> = {};
       const coursesByName: Record<string, number> = {};
       soldierCourses.forEach((sc: any) => {
-        const course = courseById.get(sc.course_id);
-        const cat = course?.category || "אחר";
-        const name = course?.name || "קורס ללא שם";
+        const c = courseById.get(sc.course_id);
+        const cat = c?.category || "אחר";
+        const name = c?.name || "קורס ללא שם";
         coursesByCategory[cat] = (coursesByCategory[cat] || 0) + 1;
         coursesByName[name] = (coursesByName[name] || 0) + 1;
       });
 
       const releases = soldiers.filter((s: any) => {
-        const releaseDate = getDateKey(s.release_date);
-        const removedDate = getDateKey(s.control_removed_at);
-        return (releaseDate && releaseDate >= start && releaseDate <= end) || (removedDate && removedDate >= start && removedDate <= end);
+        const rd = getDateKey(s.release_date);
+        const rmv = getDateKey(s.control_removed_at);
+        return (rd && rd >= start && rd <= end) || (rmv && rmv >= start && rmv <= end);
       });
       const intake = soldiers.filter((s: any) => getDateKey(s.created_at) >= start && getDateKey(s.created_at) <= end);
       const activeSoldiersCount = soldiers.filter((s: any) => s.is_active).length;
       const netManpower = intake.length - releases.length;
 
-      const accidentsBtsList = accidents.filter(isBtsAccident);
-      const accidentsGdudList = accidents.filter((a: any) => !isBtsAccident(a));
-      const accidentsJudged = accidents.filter((a: any) => a.was_judged).length;
+      // Classify accidents from safety_content directly
+      const isBts = (a: any) => String(a.driver_type || "").toLowerCase() === "security";
+      const isGdud = (a: any) => {
+        const t = String(a.driver_type || "").toLowerCase();
+        return t === "combat" || t === "gdud" || (!isBts(a) && t !== "");
+      };
+      const accidentsBtsList = accidents.filter(isBts);
+      const accidentsGdudList = accidents.filter((a: any) => !isBts(a)); // Everything not security counts as gdud
+      const accidentsJudged = 0;
 
       const insScores = inspections.map((i: any) => Number(i.total_score)).filter((s: any) => Number.isFinite(s));
       const inspectionsAvg = avg(insScores);
@@ -233,124 +258,75 @@ export default function YearlySummary() {
         releasedByReason[reason] = (releasedByReason[reason] || 0) + 1;
       });
 
-      const accidentToItem = (a: any): DetailItem => ({
-        title: soldierName(a.soldier_id, a.driver_name || "ללא שם"),
-        subtitle: `${fmtDate(a.accident_date)} · ${a.driver_type || "סוג לא הוזן"} · ${a.location || "ללא מיקום"} · ${a.severity || ""}`,
-      });
+      const accidentToItem = (a: any): DetailItem => {
+        const name = soldierName(a.soldier_id, a.driver_name || "ללא שם נהג");
+        const dt = a.driver_type === "security" ? 'בט"ש' : a.driver_type === "combat" ? "גדוד" : (a.driver_type || "סוג לא הוזן");
+        return {
+          title: `${name} — ${a.title || "תאונה"}`,
+          subtitle: `${fmtDate(a.event_date)} · ${dt} · ${a.outpost || "ללא מיקום"} · ${a.severity || ""}`,
+          kind: "accident",
+          id: a.id,
+          raw: a,
+        };
+      };
       const scoreToItem = (s: any): DetailItem => ({
         title: soldierName(s.soldier_id),
         subtitle: `${getMonthLabel(parseInt(String(s.score_month).slice(5, 7)))} · ציון ${s.safety_score} · ${Number(s.kilometers || 0).toLocaleString("he-IL")} ק״מ · ${s.speed_violations || 0} חריגות`,
       });
 
+      const releasedToItem = (r: any): DetailItem => ({
+        title: r.full_name,
+        subtitle: `${r.personal_number || ""} · ${r.outpost || ""} · ${r.release_reason || "שחרור רגיל"} · ${fmtDate(r.release_date || r.control_removed_at)}`,
+        kind: "released",
+        id: r.id,
+        raw: r,
+      });
+
       const insights: DetailItem[] = [
-        {
-          title: netManpower >= 0 ? "מגמת כוח אדם חיובית/יציבה" : "ירידה בכוח אדם",
-          subtitle: `נקלטו ${intake.length}, השתחררו/הוסרו ${releases.length}, נטו ${netManpower}`,
-        },
-        {
-          title: lowSafetyScores > 0 ? "יש ציוני בטיחות שמצריכים טיפול" : "אין ציוני בטיחות חריגים מתחת 75",
-          subtitle: `${lowSafetyScores} ציונים מתחת 75, ${excellentSafetyScores} ציונים 90+`,
-        },
-        {
-          title: procedureOverallPercent >= 90 ? "חתימות נהלים במצב טוב" : "כדאי להשלים חתימות נהלים",
-          subtitle: `השלמה ממוצעת ${procedureOverallPercent}% מתוך ${activeSoldiersCount} חיילים פעילים`,
-        },
-        {
-          title: accidents.length > 0 ? "תאונות לתחקור בסיכום תקופה" : "לא דווחו תאונות בתקופה",
-          subtitle: `בט״ש ${accidentsBtsList.length}, גדוד ${accidentsGdudList.length}, נשפטו ${accidentsJudged}`,
-        },
+        { title: netManpower >= 0 ? "מגמת כוח אדם חיובית/יציבה" : "ירידה בכוח אדם", subtitle: `נקלטו ${intake.length}, השתחררו/הוסרו ${releases.length}, נטו ${netManpower}` },
+        { title: lowSafetyScores > 0 ? "יש ציוני בטיחות שמצריכים טיפול" : "אין ציוני בטיחות חריגים מתחת 75", subtitle: `${lowSafetyScores} ציונים מתחת 75, ${excellentSafetyScores} ציונים 90+` },
+        { title: procedureOverallPercent >= 90 ? "חתימות נהלים במצב טוב" : "כדאי להשלים חתימות נהלים", subtitle: `השלמה ממוצעת ${procedureOverallPercent}% מתוך ${activeSoldiersCount} חיילים פעילים` },
+        { title: accidents.length > 0 ? "תאונות לתחקור בסיכום תקופה" : "לא דווחו תאונות בתקופה", subtitle: `בט״ש ${accidentsBtsList.length}, גדוד ${accidentsGdudList.length}` },
       ];
 
       const details: Record<string, DetailItem[]> = {
         courses: soldierCourses.map((sc: any) => {
-          const course = courseById.get(sc.course_id);
-          return {
-            title: soldierName(sc.soldier_id),
-            subtitle: `${course?.name || "קורס ללא שם"} · ${sc.status || ""} · ${fmtDate(sc.start_date)}`,
-          };
+          const c = courseById.get(sc.course_id);
+          return { title: soldierName(sc.soldier_id), subtitle: `${c?.name || "קורס ללא שם"} · ${sc.status || ""} · ${fmtDate(sc.start_date)}` };
         }),
-        intake: intake.map((s: any) => ({
-          title: s.full_name,
-          subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}`,
-        })),
-        released: releases.map((r: any) => ({
-          title: r.full_name,
-          subtitle: `${r.personal_number || ""} · ${r.outpost || ""} · ${r.release_reason || "שחרור רגיל"} · ${fmtDate(r.release_date || r.control_removed_at)}`,
-        })),
-        releasedNafshi: releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).map((r: any) => ({
-          title: r.full_name,
-          subtitle: `${r.personal_number || ""} · ${fmtDate(r.release_date || r.control_removed_at)}`,
-        })),
+        intake: intake.map((s: any) => ({ title: s.full_name, subtitle: `${s.personal_number || ""} · ${s.outpost || ""} · נקלט ${fmtDate(s.created_at)}` })),
+        released: releases.map(releasedToItem),
+        releasedNafshi: releases.filter((r: any) => (r.release_reason || "").includes("נפשי")).map(releasedToItem),
         accidentsBts: accidentsBtsList.map(accidentToItem),
         accidentsGdud: accidentsGdudList.map(accidentToItem),
         accidentsTotal: accidents.map(accidentToItem),
-        inspections: inspections.map((i: any) => ({
-          title: soldierName(i.soldier_id, "ביקורת"),
-          subtitle: `${fmtDate(i.inspection_date)} · ציון ${i.total_score ?? "—"} · ${soldierSubtitle(i.soldier_id)}`,
-        })),
-        punishments: punishments.map((p: any) => ({
-          title: soldierName(p.soldier_id),
-          subtitle: `${fmtDate(p.punishment_date)} · ${p.offense || ""} · ${p.punishment || ""} · ${p.judge || ""}`,
-        })),
-        workEvents: workEvents.map((e: any) => ({
-          title: e.title || "—",
-          subtitle: `${fmtDate(e.event_date)} · ${e.category || ""} · ${e.status || ""}`,
-        })),
+        inspections: inspections.map((i: any) => ({ title: soldierName(i.soldier_id, "ביקורת"), subtitle: `${fmtDate(i.inspection_date)} · ציון ${i.total_score ?? "—"} · ${soldierSubtitle(i.soldier_id)}` })),
+        punishments: punishments.map((p: any) => ({ title: soldierName(p.soldier_id), subtitle: `${fmtDate(p.punishment_date)} · ${p.offense || ""} · ${p.punishment || ""} · ${p.judge || ""}` })),
+        workEvents: workEvents.map((e: any) => ({ title: e.title || "—", subtitle: `${fmtDate(e.event_date)} · ${e.category || ""} · ${e.status || ""}` })),
         training: workEvents.filter((e: any) => `${e.title || ""} ${e.content_cycle || ""}`.includes("השתל") || `${e.title || ""}`.includes("הדרכ") || `${e.title || ""}`.includes("אימון")).map((e: any) => ({ title: e.title, subtitle: fmtDate(e.event_date) })),
         fitness: workEvents.filter((e: any) => `${e.title || ""} ${e.content_cycle || ""}`.includes("כשירות")).map((e: any) => ({ title: e.title, subtitle: fmtDate(e.event_date) })),
-        cleaning: cleaning.map((c: any) => ({
-          title: c.responsible_driver || "מסדר ניקיון",
-          subtitle: `${fmtDate(c.parade_date || c.created_at)} · ${c.outpost || ""}`,
-        })),
-        interviews: interviews.map((i: any) => ({
-          title: soldierName(i.soldier_id, i.driver_name || "ראיון"),
-          subtitle: fmtDate(i.interview_date || i.created_at),
-        })),
-        reports: reports.map((r: any) => ({
-          title: r.driver_name || "דיווח משמרת",
-          subtitle: `${fmtDate(r.report_date || r.created_at)} · ${r.outpost || ""} · ${r.shift_type || ""}`,
-        })),
+        cleaning: cleaning.map((c: any) => ({ title: c.responsible_driver || "מסדר ניקיון", subtitle: `${fmtDate(c.parade_date || c.created_at)} · ${c.outpost || ""}` })),
+        interviews: interviews.map((i: any) => ({ title: soldierName(i.soldier_id, i.driver_name || "ראיון"), subtitle: fmtDate(i.interview_date || i.created_at) })),
+        reports: reports.map((r: any) => ({ title: r.driver_name || "דיווח משמרת", subtitle: `${fmtDate(r.report_date || r.created_at)} · ${r.outpost || ""} · ${r.shift_type || ""}` })),
         lowSafety: monthlyScores.filter((s: any) => Number(s.safety_score) < 75).map(scoreToItem),
         excellentSafety: monthlyScores.filter((s: any) => Number(s.safety_score) >= 90).map(scoreToItem),
         speedViolations: monthlyScores.filter((s: any) => Number(s.speed_violations || 0) > 0).map(scoreToItem),
       };
 
       return {
-        coursesTotal: soldierCourses.length,
-        coursesByCategory,
-        coursesByName,
-        releasedTotal: releases.length,
-        releasedNafshi,
-        releasedByReason,
-        intakeTotal: intake.length,
-        netManpower,
-        activeSoldiersCount,
-        accidentsBts: accidentsBtsList.length,
-        accidentsGdud: accidentsGdudList.length,
-        accidentsTotal: accidents.length,
-        accidentsJudged,
-        inspectionsTotal: inspections.length,
-        inspectionsAvg,
-        inspectionSectionAvg,
-        punishmentsTotal: punishments.length,
-        trainingDays,
-        fitnessDays,
-        workEventsTotal: workEvents.length,
-        workEventsByCategory,
-        cleaningParades: cleaning.length,
-        driverInterviews: interviews.length,
-        shiftReports: reports.length,
-        avgSafetyScore,
-        avgSafetyScoreYTD,
-        monthlySafetyAvg,
-        procedureCompletion,
-        procedureOverallPercent,
-        totalKm,
-        speedViolations,
-        lowSafetyScores,
-        excellentSafetyScores,
-        details,
-        insights,
+        coursesTotal: soldierCourses.length, coursesByCategory, coursesByName,
+        releasedTotal: releases.length, releasedNafshi, releasedByReason,
+        intakeTotal: intake.length, netManpower, activeSoldiersCount,
+        accidentsBts: accidentsBtsList.length, accidentsGdud: accidentsGdudList.length,
+        accidentsTotal: accidents.length, accidentsJudged,
+        inspectionsTotal: inspections.length, inspectionsAvg, inspectionSectionAvg,
+        punishmentsTotal: punishments.length, trainingDays, fitnessDays,
+        workEventsTotal: workEvents.length, workEventsByCategory,
+        cleaningParades: cleaning.length, driverInterviews: interviews.length, shiftReports: reports.length,
+        avgSafetyScore, avgSafetyScoreYTD, monthlySafetyAvg,
+        procedureCompletion, procedureOverallPercent,
+        totalKm, speedViolations, lowSafetyScores, excellentSafetyScores,
+        details, insights,
       };
     },
     enabled: isAdmin || isSuperAdmin,
@@ -383,11 +359,28 @@ export default function YearlySummary() {
     { key: "excellentSafety", label: "ציונים 90+", value: stats.excellentSafetyScores, icon: TrendingUp, color: "from-emerald-500 to-green-700" },
   ] : [];
 
-  const detailLabel = useMemo(() => {
-    return cards.find((c) => c.key === detailKey)?.label || "פירוט";
-  }, [cards, detailKey]);
-
+  const detailLabel = useMemo(() => cards.find((c) => c.key === detailKey)?.label || "פירוט", [cards, detailKey]);
   const detailItems: DetailItem[] = (stats && detailKey) ? (stats.details[detailKey] || []) : [];
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      if (confirmDelete.kind === "accident") {
+        const { error } = await supabase.from("safety_content").delete().eq("id", confirmDelete.id);
+        if (error) throw error;
+        toast.success("האירוע נמחק");
+      } else if (confirmDelete.kind === "released") {
+        // Delete soldier permanently
+        const { error } = await supabase.from("soldiers").delete().eq("id", confirmDelete.id);
+        if (error) throw error;
+        toast.success("הנהג נמחק");
+      }
+      setConfirmDelete(null);
+      await refetch();
+    } catch (e: any) {
+      toast.error(`שגיאה במחיקה: ${e?.message || e}`);
+    }
+  };
 
   if (authLoading) return null;
   if (!isAdmin && !isSuperAdmin) return <Navigate to="/" replace />;
@@ -403,13 +396,9 @@ export default function YearlySummary() {
 
         <div className="flex justify-center">
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-            <SelectTrigger className="w-48 bg-card text-slate-800 font-bold border-border">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-48 bg-card text-slate-800 font-bold border-border"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {YEARS.map((y) => (
-                <SelectItem key={y} value={String(y)}>שנת {y}</SelectItem>
-              ))}
+              {YEARS.map((y) => (<SelectItem key={y} value={String(y)}>שנת {y}</SelectItem>))}
             </SelectContent>
           </Select>
         </div>
@@ -417,12 +406,7 @@ export default function YearlySummary() {
         {isLoading ? (
           <div className="text-center text-slate-700 py-12">טוען נתונים...</div>
         ) : error ? (
-          <Card className="bg-red-50 border-red-200">
-            <CardContent className="p-4 text-right">
-              <div className="font-black text-red-700 mb-2">שגיאה בטעינת הסיכום</div>
-              <div className="text-sm text-red-700 whitespace-pre-wrap">{(error as any)?.message || String(error)}</div>
-            </CardContent>
-          </Card>
+          <Card className="bg-red-50 border-red-200"><CardContent className="p-4 text-right"><div className="font-black text-red-700 mb-2">שגיאה בטעינת הסיכום</div><div className="text-sm text-red-700 whitespace-pre-wrap">{(error as any)?.message || String(error)}</div></CardContent></Card>
         ) : stats ? (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -430,15 +414,9 @@ export default function YearlySummary() {
                 const Icon = c.icon;
                 const clickable = !!c.key;
                 return (
-                  <Card
-                    key={c.label}
-                    className={`bg-card border-border/50 overflow-hidden ${clickable ? "cursor-pointer active:scale-95 transition-transform" : ""}`}
-                    onClick={() => clickable && setDetailKey(c.key)}
-                  >
+                  <Card key={c.label} className={`bg-card border-border/50 overflow-hidden ${clickable ? "cursor-pointer active:scale-95 transition-transform" : ""}`} onClick={() => clickable && setDetailKey(c.key)}>
                     <CardContent className="p-4">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg mb-3`}>
-                        <Icon className="w-5 h-5 text-white" />
-                      </div>
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg mb-3`}><Icon className="w-5 h-5 text-white" /></div>
                       <div className="text-3xl font-black text-slate-800 break-words">{c.value}</div>
                       <div className="text-sm font-bold text-slate-700 mt-1 leading-tight">{c.label}</div>
                     </CardContent>
@@ -448,9 +426,7 @@ export default function YearlySummary() {
             </div>
 
             <Card className="bg-card border-border/50">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold text-slate-800">נקודות לסיכום תקופה</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg font-bold text-slate-800">נקודות לסיכום תקופה</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {stats.insights.map((insight, idx) => (
                   <div key={idx} className="p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
@@ -461,11 +437,23 @@ export default function YearlySummary() {
               </CardContent>
             </Card>
 
+            {Object.keys(stats.releasedByReason).length > 0 && (
+              <Card className="bg-card border-border/50">
+                <CardHeader><CardTitle className="text-lg font-bold text-slate-800">פירוט שחרורים לפי סיבה</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  {Object.entries(stats.releasedByReason).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([reason, count]) => (
+                    <div key={reason} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
+                      <span className="text-sm font-bold text-slate-800">{reason}</span>
+                      <span className="text-lg font-black text-primary">{count as number}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {Object.keys(stats.coursesByName).length > 0 && (
               <Card className="bg-card border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-slate-800">פירוט קורסים לפי סוג</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg font-bold text-slate-800">פירוט קורסים לפי סוג</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {Object.entries(stats.coursesByName).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([name, count]) => (
                     <div key={name} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
@@ -477,11 +465,9 @@ export default function YearlySummary() {
               </Card>
             )}
 
-            {Object.keys(stats.inspectionSectionAvg).length > 0 && stats.inspectionsTotal > 0 && (
+            {stats.inspectionsTotal > 0 && (
               <Card className="bg-card border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-slate-800">ממוצעי ביקורות לפי תחום</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg font-bold text-slate-800">ממוצעי ביקורות לפי תחום</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {Object.entries(stats.inspectionSectionAvg).map(([section, value]) => (
                     <div key={section} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
@@ -495,9 +481,7 @@ export default function YearlySummary() {
 
             {Object.keys(stats.workEventsByCategory).length > 0 && (
               <Card className="bg-card border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-slate-800">מופעים בתוכנית עבודה לפי קטגוריה</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg font-bold text-slate-800">מופעים בתוכנית עבודה לפי קטגוריה</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {Object.entries(stats.workEventsByCategory).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([cat, count]) => (
                     <div key={cat} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
@@ -509,27 +493,9 @@ export default function YearlySummary() {
               </Card>
             )}
 
-            {Object.keys(stats.releasedByReason).length > 0 && (
-              <Card className="bg-card border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-slate-800">פירוט שחרורים לפי סיבה</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {Object.entries(stats.releasedByReason).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([reason, count]) => (
-                    <div key={reason} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
-                      <span className="text-sm font-bold text-slate-800">{reason}</span>
-                      <span className="text-lg font-black text-primary">{count as number}</span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
             {stats.monthlySafetyAvg.some((m) => m.count > 0) && (
               <Card className="bg-card border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-slate-800">ממוצע ציוני בטיחות לפי חודש</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg font-bold text-slate-800">ממוצע ציוני בטיחות לפי חודש</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {stats.monthlySafetyAvg.map((m) => (
                     <div key={m.month} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
@@ -546,9 +512,7 @@ export default function YearlySummary() {
 
             {stats.procedureCompletion.length > 0 && (
               <Card className="bg-card border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold text-slate-800">השלמת חתימות נהלים</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg font-bold text-slate-800">השלמת חתימות נהלים</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {stats.procedureCompletion.map((p) => (
                     <div key={p.type} className="flex items-center justify-between p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
@@ -567,26 +531,192 @@ export default function YearlySummary() {
           <div className="text-center text-slate-700 py-12">אין נתונים להצגה</div>
         )}
 
+        {/* Detail dialog */}
         <Dialog open={!!detailKey} onOpenChange={(o) => !o && setDetailKey(null)}>
-          <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-slate-800 font-black">{detailLabel} ({detailItems.length})</DialogTitle>
-            </DialogHeader>
+          <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto bg-white">
+            <DialogHeader><DialogTitle className="text-slate-800 font-black">{detailLabel} ({detailItems.length})</DialogTitle></DialogHeader>
             <div className="space-y-2">
               {detailItems.length === 0 ? (
                 <div className="text-center text-slate-600 py-8">אין נתונים להצגה</div>
               ) : (
                 detailItems.map((it, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
-                    <div className="text-sm font-extrabold text-slate-900">{it.title}</div>
-                    {it.subtitle && <div className="text-xs font-semibold text-slate-700 mt-1">{it.subtitle}</div>}
+                  <div key={it.id || idx} className="p-3 rounded-xl bg-white border-2 border-slate-300 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-extrabold text-slate-900 break-words">{it.title}</div>
+                        {it.subtitle && <div className="text-xs font-semibold text-slate-700 mt-1 break-words">{it.subtitle}</div>}
+                      </div>
+                      {(it.kind === "accident" || it.kind === "released") && (
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => {
+                            if (it.kind === "accident") setEditAccident(it.raw);
+                            else setEditReleased(it.raw);
+                          }}><Pencil className="w-3 h-3" /></Button>
+                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-red-600 border-red-300" onClick={() => setConfirmDelete({ kind: it.kind!, id: it.id!, title: it.title })}><Trash2 className="w-3 h-3" /></Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit accident */}
+        {editAccident && (
+          <EditAccidentDialog
+            accident={editAccident}
+            onClose={() => setEditAccident(null)}
+            onSaved={async () => { setEditAccident(null); await refetch(); }}
+          />
+        )}
+
+        {/* Edit released soldier */}
+        {editReleased && (
+          <EditReleasedDialog
+            soldier={editReleased}
+            onClose={() => setEditReleased(null)}
+            onSaved={async () => { setEditReleased(null); await refetch(); }}
+          />
+        )}
+
+        {/* Confirm delete */}
+        <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+          <DialogContent dir="rtl" className="bg-white">
+            <DialogHeader><DialogTitle className="text-slate-800 font-black">מחיקה</DialogTitle></DialogHeader>
+            <div className="text-sm text-slate-700">האם למחוק את "{confirmDelete?.title}"? פעולה זו לא ניתנת לביטול.</div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setConfirmDelete(null)}>ביטול</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>מחק</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
+  );
+}
+
+function EditAccidentDialog({ accident, onClose, onSaved }: { accident: any; onClose: () => void; onSaved: () => void; }) {
+  const [form, setForm] = useState({
+    title: accident.title || "",
+    description: accident.description || "",
+    event_date: getDateKey(accident.event_date) || "",
+    driver_type: accident.driver_type || "combat",
+    driver_name: accident.driver_name || "",
+    severity: accident.severity || "minor",
+    outpost: accident.outpost || "",
+    vehicle_number: accident.vehicle_number || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("safety_content").update({
+        title: form.title,
+        description: form.description || null,
+        event_date: form.event_date || null,
+        driver_type: form.driver_type,
+        driver_name: form.driver_name || null,
+        severity: form.severity,
+        outpost: form.outpost || null,
+        vehicle_number: form.vehicle_number || null,
+      }).eq("id", accident.id);
+      if (error) throw error;
+      toast.success("האירוע עודכן");
+      onSaved();
+    } catch (e: any) {
+      toast.error(`שגיאה בעדכון: ${e?.message || e}`);
+    } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent dir="rtl" className="bg-white max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="text-slate-800 font-black">עריכת תאונה</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label className="text-slate-800 font-bold">כותרת</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+          <div><Label className="text-slate-800 font-bold">תאריך</Label><Input type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} /></div>
+          <div>
+            <Label className="text-slate-800 font-bold">סוג נהג</Label>
+            <Select value={form.driver_type} onValueChange={(v) => setForm({ ...form, driver_type: v })}>
+              <SelectTrigger className="bg-white text-slate-800"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="security">בט"ש</SelectItem>
+                <SelectItem value="combat">גדוד</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label className="text-slate-800 font-bold">שם נהג</Label><Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} placeholder="שם הנהג שעשה את התאונה" /></div>
+          <div><Label className="text-slate-800 font-bold">מיקום / מוצב</Label><Input value={form.outpost} onChange={(e) => setForm({ ...form, outpost: e.target.value })} /></div>
+          <div><Label className="text-slate-800 font-bold">מספר רכב</Label><Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} /></div>
+          <div>
+            <Label className="text-slate-800 font-bold">חומרה</Label>
+            <Select value={form.severity} onValueChange={(v) => setForm({ ...form, severity: v })}>
+              <SelectTrigger className="bg-white text-slate-800"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="minor">קלה</SelectItem>
+                <SelectItem value="moderate">בינונית</SelectItem>
+                <SelectItem value="severe">חמורה</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label className="text-slate-800 font-bold">תיאור</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "שומר..." : "שמור"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditReleasedDialog({ soldier, onClose, onSaved }: { soldier: any; onClose: () => void; onSaved: () => void; }) {
+  const initialReason = soldier.release_reason || "";
+  const matched = RELEASE_REASONS.find((r) => r.value === initialReason);
+  const [reasonValue, setReasonValue] = useState<string>(matched?.value || (initialReason ? "אחר" : "regular"));
+  const [customReason, setCustomReason] = useState<string>(matched ? "" : initialReason);
+  const [releaseDate, setReleaseDate] = useState<string>(getDateKey(soldier.release_date) || "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const finalReason = reasonValue === "regular" ? null : (reasonValue === "אחר" ? (customReason || "אחר") : reasonValue);
+      const { error } = await supabase.from("soldiers").update({
+        release_reason: finalReason,
+        release_date: releaseDate || null,
+      }).eq("id", soldier.id);
+      if (error) throw error;
+      toast.success("עודכן בהצלחה");
+      onSaved();
+    } catch (e: any) {
+      toast.error(`שגיאה בעדכון: ${e?.message || e}`);
+    } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent dir="rtl" className="bg-white max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="text-slate-800 font-black">עריכת שחרור — {soldier.full_name}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label className="text-slate-800 font-bold">תאריך שחרור</Label><Input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} /></div>
+          <div>
+            <Label className="text-slate-800 font-bold">סיבת שחרור</Label>
+            <Select value={reasonValue} onValueChange={setReasonValue}>
+              <SelectTrigger className="bg-white text-slate-800"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RELEASE_REASONS.map((r) => (<SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          {reasonValue === "אחר" && (
+            <div><Label className="text-slate-800 font-bold">פירוט סיבה</Label><Input value={customReason} onChange={(e) => setCustomReason(e.target.value)} /></div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "שומר..." : "שמור"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
