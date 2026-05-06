@@ -24,6 +24,7 @@ import {
   Gavel,
   UserCheck,
   FileSearch,
+  BarChart3,
   Car,
   Map,
   UserCog,
@@ -1110,6 +1111,26 @@ export function MobileNav() {
                   </div>
                   <span className="font-bold text-base relative z-10 flex-1">דוח כשירות מרוכז</span>
                   <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-green-400 group-hover:-translate-x-1 transition-all duration-300" />
+                </NavLink>
+              )}
+
+              {/* Yearly Summary - Admin only (מ"פ נהגים) */}
+              {canAccessFitnessReport && (
+                <NavLink
+                  to="/yearly-summary"
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-gold/30",
+                    "hover:bg-gradient-to-l hover:from-gold/20 hover:to-transparent hover:border-gold/60"
+                  )}
+                  activeClassName="bg-gradient-to-l from-gold/30 to-transparent text-gold border-gold/60 shadow-lg shadow-gold/20"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-gold/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <BarChart3 className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-base relative z-10 flex-1">סיכום עד כאן</span>
+                  <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 group-hover:-translate-x-1 transition-all duration-300" />
                 </NavLink>
               )}
 
