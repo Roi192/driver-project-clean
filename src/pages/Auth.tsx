@@ -72,35 +72,7 @@ export default function Auth() {
       return;
     }
     setFailedAttempts(0);
-    // Verify department matches this login page (BT"SH drivers only)
-    const { data: { user: loggedInUser } } = await supabase.auth.getUser();
-    if (loggedInUser) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('department, user_type')
-        .eq('user_id', loggedInUser.id)
-        .maybeSingle();
-      
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', loggedInUser.id)
-        .maybeSingle();
-      
-      // Allow super_admin to login from anywhere
-      if (roleData?.role !== 'super_admin') {
-        if (profile?.department === 'hagmar' || profile?.user_type === 'battalion') {
-          await signOut();
-          setIsLoading(false);
-          toast({
-            title: 'שגיאה בהתחברות',
-            description: 'משתמש זה לא רשום כנהג בט"ש. יש להשתמש בלינק ההתחברות המתאים למחלקה שלך.',
-            variant: 'destructive',
-          });
-          return;
-        }
-      }
-    }
+    // Successful login - Index page will route user to the correct department dashboard
     setIsLoading(false);
   };
 

@@ -460,7 +460,7 @@ const parseRoutePoints = (points: any): Array<{ lat: number; lng: number }> => {
 const KnowTheArea = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isAdmin, canEdit, canDelete } = useUserRole();
+  const { isAdmin, canEdit, canDelete, isBattalionAdmin } = useUserRole();
   const mapRef = useRef<L.Map | null>(null);
   
   // Data states
@@ -781,7 +781,7 @@ const KnowTheArea = () => {
       setRoutePoints(prev => [...prev, pos]);
     } else if (isDrawingBoundary) {
       setBoundaryPoints(prev => [...prev, pos]);
-    } else if (isAdmin) {
+    } else if (isAdmin || isBattalionAdmin) {
       setClickPosition(pos);
       setShowMapClickMenu(true);
     }
@@ -1929,7 +1929,7 @@ const KnowTheArea = () => {
               
               <MapClickHandler 
                 onMapClick={handleMapClick} 
-                enabled={isAdmin || isDrawingRoute || isDrawingBoundary} 
+                enabled={isAdmin || isBattalionAdmin || isDrawingRoute || isDrawingBoundary} 
               />
               
               <FlyToLocation position={flyToPosition} />
@@ -2254,14 +2254,14 @@ const KnowTheArea = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
-            <Button
+            {isAdmin && (<Button
               variant="outline"
               className="h-24 flex-col gap-2"
               onClick={handleAddOutpostFromMenu}
             >
               <Building2 className="w-8 h-8 text-amber-500" />
               <span>מוצב</span>
-            </Button>
+            </Button>)}
             <Button
               variant="outline"
               className="h-24 flex-col gap-2"
