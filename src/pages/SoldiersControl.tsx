@@ -978,9 +978,11 @@ export default function SoldiersControl() {
                           )
                         : null;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={soldier.id}
-                          className="flex items-center gap-3 p-3 rounded-xl bg-white/80 border border-red-200"
+                          onClick={() => openEditDialog(soldier)}
+                          className="w-full text-right flex items-center gap-3 p-3 rounded-xl bg-white/80 border border-red-200 hover:bg-white hover:border-red-400 active:scale-[0.99] transition-all cursor-pointer"
                         >
                           <div className="flex-1">
                             <p className="font-bold text-slate-800">
@@ -1011,7 +1013,7 @@ export default function SoldiersControl() {
                               )}
                             </div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1041,9 +1043,11 @@ export default function SoldiersControl() {
                           )
                         : null;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={soldier.id}
-                          className="flex items-center gap-3 p-3 rounded-xl bg-white/80 border border-orange-200"
+                          onClick={() => openEditDialog(soldier)}
+                          className="w-full text-right flex items-center gap-3 p-3 rounded-xl bg-white/80 border border-orange-200 hover:bg-white hover:border-orange-400 active:scale-[0.99] transition-all cursor-pointer"
                         >
                           <div className="flex-1">
                             <p className="font-bold text-slate-800">
@@ -1057,7 +1061,7 @@ export default function SoldiersControl() {
                                 : "לא בוצע מטווח"}
                             </Badge>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
