@@ -43,6 +43,7 @@ import ProcedureSignaturesTracking from "./pages/ProcedureSignaturesTracking";
 import WeeklyMeeting from "./pages/WeeklyMeeting";
 import EquipmentTracking from "./pages/EquipmentTracking";
 import YearlySummary from "./pages/YearlySummary";
+import ExitRequests from "./pages/ExitRequests";
 import DepartmentSelector from "./pages/DepartmentSelector";
 import HagmarAuth from "./pages/HagmarAuth";
 import HagmarHome from "./pages/HagmarHome";
@@ -384,6 +385,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <PunishmentsTracking />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exit-requests"
+              element={
+                <ProtectedRoute>
+                  <ExitRequests />
                 </ProtectedRoute>
               }
             />

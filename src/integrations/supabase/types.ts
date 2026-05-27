@@ -1061,6 +1061,69 @@ export type Database = {
           },
         ]
       }
+      exit_requests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
+          exit_date: string
+          id: string
+          reason: string | null
+          request_date: string
+          request_type: string
+          soldier_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          exit_date: string
+          id?: string
+          reason?: string | null
+          request_date?: string
+          request_type: string
+          soldier_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          exit_date?: string
+          id?: string
+          reason?: string | null
+          request_date?: string
+          request_type?: string
+          soldier_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exit_requests_soldier_id_fkey"
+            columns: ["soldier_id"]
+            isOneToOne: false
+            referencedRelation: "soldiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exit_requests_soldier_id_fkey"
+            columns: ["soldier_id"]
+            isOneToOne: false
+            referencedRelation: "soldiers_basic"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hagmar_certifications: {
         Row: {
           cert_type: string
