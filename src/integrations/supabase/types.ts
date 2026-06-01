@@ -667,6 +667,62 @@ export type Database = {
         }
         Relationships: []
       }
+      company_tasks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          department: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          is_active: boolean
+          name: string
+          parent_task_id: string | null
+          recurrence: string | null
+          target_audience: string
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          parent_task_id?: string | null
+          recurrence?: string | null
+          target_audience?: string
+          task_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          parent_task_id?: string | null
+          recurrence?: string | null
+          target_audience?: string
+          task_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "company_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_cycle_overrides: {
         Row: {
           absence_reason: string | null
@@ -3139,6 +3195,57 @@ export type Database = {
           },
         ]
       }
+      soldier_warnings: {
+        Row: {
+          action_taken: string | null
+          attachment_path: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_date: string
+          id: string
+          severity: string
+          signature_data: string | null
+          signed_at: string | null
+          soldier_id: string
+          soldier_signature: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_taken?: string | null
+          attachment_path?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          id?: string
+          severity?: string
+          signature_data?: string | null
+          signed_at?: string | null
+          soldier_id: string
+          soldier_signature?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_taken?: string | null
+          attachment_path?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          id?: string
+          severity?: string
+          signature_data?: string | null
+          signed_at?: string | null
+          soldier_id?: string
+          soldier_signature?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       soldiers: {
         Row: {
           civilian_license_expiry: string | null
@@ -3216,6 +3323,73 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      task_assignments: {
+        Row: {
+          created_at: string
+          id: string
+          soldier_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          soldier_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          soldier_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "company_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_completions: {
+        Row: {
+          completed_at: string
+          completed_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          soldier_id: string
+          task_id: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          soldier_id: string
+          task_id: string
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          soldier_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_completions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "company_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       training_videos: {
         Row: {
@@ -3316,6 +3490,30 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      warning_categories: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
         }
         Relationships: []
       }

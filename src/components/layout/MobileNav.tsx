@@ -43,6 +43,7 @@ import {
   Building,
   FolderArchive,
   DoorOpen,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,7 @@ const getNavItems = (userType: string | null, isBattalionAdmin: boolean) => {
     { to: "/training-videos", icon: Video, label: "סרטוני הדרכה" },
     { to: "/procedures", icon: BookOpen, label: "נהלים" },
     { to: "/my-reports", icon: ClipboardList, label: "הדיווחים שלי" },
+    { to: "/my-warnings", icon: ShieldAlert, label: "האזהרות שלי" },
   ];
   
   // For battalion users, only show: home, drill-locations, safety-files, safety-events, training-videos
@@ -935,6 +937,46 @@ export function MobileNav() {
                   </div>
                   <span className="font-bold text-base relative z-10 flex-1">מעקב בקשות יציאה</span>
                   <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-blue-400 group-hover:-translate-x-1 transition-all duration-300" />
+                </NavLink>
+              )}
+
+              {/* Warnings - Admin and Platoon Commander only (planag) */}
+              {(isAdmin || isPlatoonCommander) && (
+                <NavLink
+                  to="/warnings"
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-gold/30",
+                    "hover:bg-gradient-to-l hover:from-gold/20 hover:to-transparent hover:border-gold/60"
+                  )}
+                  activeClassName="bg-gradient-to-l from-gold/30 to-transparent text-gold border-gold/60 shadow-lg shadow-gold/20"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-gold/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500 to-orange-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-base relative z-10 flex-1">אזהרות וענישה</span>
+                  <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-red-400 group-hover:-translate-x-1 transition-all duration-300" />
+                </NavLink>
+              )}
+
+              {/* Tasks Tracking - Admin and Platoon Commander only (planag) */}
+              {(isAdmin || isPlatoonCommander) && (
+                <NavLink
+                  to="/tasks-tracking"
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-gold/30",
+                    "hover:bg-gradient-to-l hover:from-gold/20 hover:to-transparent hover:border-gold/60"
+                  )}
+                  activeClassName="bg-gradient-to-l from-gold/30 to-transparent text-gold border-gold/60 shadow-lg shadow-gold/20"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-gold/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <ClipboardCheck className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-base relative z-10 flex-1">מעקב משימות</span>
+                  <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 group-hover:-translate-x-1 transition-all duration-300" />
                 </NavLink>
               )}
 

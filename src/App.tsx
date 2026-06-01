@@ -44,6 +44,9 @@ import WeeklyMeeting from "./pages/WeeklyMeeting";
 import EquipmentTracking from "./pages/EquipmentTracking";
 import YearlySummary from "./pages/YearlySummary";
 import ExitRequests from "./pages/ExitRequests";
+import Warnings from "./pages/Warnings";
+import TasksTracking from "./pages/TasksTracking";
+import MyWarnings from "./pages/MyWarnings";
 import DepartmentSelector from "./pages/DepartmentSelector";
 import HagmarAuth from "./pages/HagmarAuth";
 import HagmarHome from "./pages/HagmarHome";
@@ -393,6 +396,30 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ExitRequests />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/warnings"
+              element={
+                <ProtectedRoute>
+                  <Warnings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/my-warnings"
+              element={
+                <ProtectedRoute>
+                  <MyWarnings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tasks-tracking"
+              element={
+                <ProtectedRoute>
+                  <TasksTracking />
                 </ProtectedRoute>
               }
             />
