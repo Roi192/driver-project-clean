@@ -49,6 +49,7 @@ import TasksTracking from "./pages/TasksTracking";
 import MyWarnings from "./pages/MyWarnings";
 import DepartmentSelector from "./pages/DepartmentSelector";
 import HagmarAuth from "./pages/HagmarAuth";
+import BrigadeAuth from "./pages/BrigadeAuth";
 import HagmarHome from "./pages/HagmarHome";
 import HagmarUsersManagement from "./pages/HagmarUsersManagement";
 import WeaponHoldersTracking from "./pages/WeaponHoldersTracking";
@@ -72,6 +73,11 @@ import ReadinessWeightsSettings from "./pages/ReadinessWeightsSettings";
 import HagmarThreatRatings from "./pages/HagmarThreatRatings";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import BattalionUsersManagement from "./pages/BattalionUsersManagement";
+import BrigadeOutpostsManagement from "./pages/BrigadeOutpostsManagement";
+import BrigadeContextSelector from "./pages/BrigadeContextSelector";
+import DivisionReport from "./pages/DivisionReport";
+import DivisionMap from "./pages/DivisionMap";
+import DivisionFitness from "./pages/DivisionFitness";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
@@ -94,12 +100,45 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/gdud" element={<AuthBattalion />} />
             <Route path="/auth/hagmar" element={<HagmarAuth />} />
+            <Route path="/auth/brigade/:code" element={<BrigadeAuth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/department-selector"
               element={
                 <ProtectedRoute>
                   <DepartmentSelector />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/brigade-context"
+              element={
+                <ProtectedRoute>
+                  <BrigadeContextSelector />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/division/report"
+              element={
+                <ProtectedRoute>
+                  <DivisionReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/division/map"
+              element={
+                <ProtectedRoute>
+                  <DivisionMap />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/division/fitness"
+              element={
+                <ProtectedRoute>
+                  <DivisionFitness />
                 </ProtectedRoute>
               }
             />
@@ -460,6 +499,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <UsersManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/brigade-outposts"
+              element={
+                <ProtectedRoute>
+                  <BrigadeOutpostsManagement />
                 </ProtectedRoute>
               }
             />
