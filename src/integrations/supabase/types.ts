@@ -17,6 +17,7 @@ export type Database = {
       accidents: {
         Row: {
           accident_date: string
+          brigade: string
           checklist: Json | null
           closed_at: string | null
           created_at: string
@@ -39,6 +40,7 @@ export type Database = {
         }
         Insert: {
           accident_date: string
+          brigade?: string
           checklist?: Json | null
           closed_at?: string | null
           created_at?: string
@@ -61,6 +63,7 @@ export type Database = {
         }
         Update: {
           accident_date?: string
+          brigade?: string
           checklist?: Json | null
           closed_at?: string | null
           created_at?: string
@@ -108,6 +111,7 @@ export type Database = {
       bom_tasks: {
         Row: {
           assigned_to: string
+          brigade: string
           created_at: string
           created_by: string | null
           description: string | null
@@ -120,6 +124,7 @@ export type Database = {
         }
         Insert: {
           assigned_to: string
+          brigade?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -132,6 +137,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string
+          brigade?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -144,8 +150,36 @@ export type Database = {
         }
         Relationships: []
       }
+      brigade_outposts: {
+        Row: {
+          brigade: string
+          created_at: string
+          id: string
+          name: string
+          region: string | null
+          updated_at: string
+        }
+        Insert: {
+          brigade: string
+          created_at?: string
+          id?: string
+          name: string
+          region?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brigade?: string
+          created_at?: string
+          id?: string
+          name?: string
+          region?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       calendar_holidays: {
         Row: {
+          brigade: string
           category: string
           created_at: string
           event_date: string
@@ -154,6 +188,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          brigade?: string
           category: string
           created_at?: string
           event_date: string
@@ -162,6 +197,7 @@ export type Database = {
           title: string
         }
         Update: {
+          brigade?: string
           category?: string
           created_at?: string
           event_date?: string
@@ -173,6 +209,7 @@ export type Database = {
       }
       cleaning_checklist_completions: {
         Row: {
+          brigade: string
           checklist_item_id: string
           completed_at: string
           id: string
@@ -180,6 +217,7 @@ export type Database = {
           submission_id: string
         }
         Insert: {
+          brigade?: string
           checklist_item_id: string
           completed_at?: string
           id?: string
@@ -187,6 +225,7 @@ export type Database = {
           submission_id: string
         }
         Update: {
+          brigade?: string
           checklist_item_id?: string
           completed_at?: string
           id?: string
@@ -212,6 +251,7 @@ export type Database = {
       }
       cleaning_checklist_items: {
         Row: {
+          brigade: string
           created_at: string
           deadline_time: string | null
           default_shift_type: string | null
@@ -228,6 +268,7 @@ export type Database = {
           source_schedule_shift: string | null
         }
         Insert: {
+          brigade?: string
           created_at?: string
           deadline_time?: string | null
           default_shift_type?: string | null
@@ -244,6 +285,7 @@ export type Database = {
           source_schedule_shift?: string | null
         }
         Update: {
+          brigade?: string
           created_at?: string
           deadline_time?: string | null
           default_shift_type?: string | null
@@ -285,6 +327,7 @@ export type Database = {
       }
       cleaning_item_assignments: {
         Row: {
+          brigade: string
           created_at: string
           deadline_time: string | null
           id: string
@@ -295,6 +338,7 @@ export type Database = {
           shift_type: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           deadline_time?: string | null
           id?: string
@@ -305,6 +349,7 @@ export type Database = {
           shift_type: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           deadline_time?: string | null
           id?: string
@@ -340,6 +385,7 @@ export type Database = {
       }
       cleaning_manual_assignments: {
         Row: {
+          brigade: string
           created_at: string
           day_of_week: string
           id: string
@@ -348,6 +394,7 @@ export type Database = {
           week_start_date: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           day_of_week: string
           id?: string
@@ -356,6 +403,7 @@ export type Database = {
           week_start_date: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           day_of_week?: string
           id?: string
@@ -427,6 +475,7 @@ export type Database = {
       }
       cleaning_parade_config: {
         Row: {
+          brigade: string
           created_at: string
           day_of_week: number
           id: string
@@ -434,6 +483,7 @@ export type Database = {
           outpost: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           day_of_week: number
           id?: string
@@ -441,6 +491,7 @@ export type Database = {
           outpost: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           day_of_week?: number
           id?: string
@@ -451,6 +502,7 @@ export type Database = {
       }
       cleaning_parade_submissions: {
         Row: {
+          brigade: string
           completed_at: string | null
           created_at: string
           day_of_week: string
@@ -461,6 +513,7 @@ export type Database = {
           soldier_id: string
         }
         Insert: {
+          brigade?: string
           completed_at?: string | null
           created_at?: string
           day_of_week: string
@@ -471,6 +524,7 @@ export type Database = {
           soldier_id: string
         }
         Update: {
+          brigade?: string
           completed_at?: string | null
           created_at?: string
           day_of_week?: string
@@ -499,6 +553,7 @@ export type Database = {
       }
       cleaning_parades: {
         Row: {
+          brigade: string
           created_at: string
           day_of_week: string
           id: string
@@ -511,6 +566,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           day_of_week: string
           id?: string
@@ -523,6 +579,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           day_of_week?: string
           id?: string
@@ -538,6 +595,7 @@ export type Database = {
       }
       cleaning_reference_photos: {
         Row: {
+          brigade: string
           checklist_item_id: string | null
           created_at: string
           description: string | null
@@ -547,6 +605,7 @@ export type Database = {
           outpost: string
         }
         Insert: {
+          brigade?: string
           checklist_item_id?: string | null
           created_at?: string
           description?: string | null
@@ -556,6 +615,7 @@ export type Database = {
           outpost: string
         }
         Update: {
+          brigade?: string
           checklist_item_id?: string | null
           created_at?: string
           description?: string | null
@@ -576,6 +636,7 @@ export type Database = {
       }
       cleaning_responsibility_areas: {
         Row: {
+          brigade: string
           created_at: string
           deadline_time: string | null
           id: string
@@ -588,6 +649,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           deadline_time?: string | null
           id?: string
@@ -600,6 +662,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           deadline_time?: string | null
           id?: string
@@ -630,6 +693,7 @@ export type Database = {
       }
       commander_weekly_schedule: {
         Row: {
+          brigade: string
           commander_id: string
           completed: boolean | null
           created_at: string
@@ -642,6 +706,7 @@ export type Database = {
           week_start_date: string
         }
         Insert: {
+          brigade?: string
           commander_id: string
           completed?: boolean | null
           created_at?: string
@@ -654,6 +719,7 @@ export type Database = {
           week_start_date: string
         }
         Update: {
+          brigade?: string
           commander_id?: string
           completed?: boolean | null
           created_at?: string
@@ -669,6 +735,7 @@ export type Database = {
       }
       company_tasks: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           department: string | null
@@ -684,6 +751,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           department?: string | null
@@ -699,6 +767,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           department?: string | null
@@ -726,6 +795,7 @@ export type Database = {
       content_cycle_overrides: {
         Row: {
           absence_reason: string | null
+          brigade: string
           completion_date: string | null
           content_cycle: string
           created_at: string
@@ -736,6 +806,7 @@ export type Database = {
         }
         Insert: {
           absence_reason?: string | null
+          brigade?: string
           completion_date?: string | null
           content_cycle: string
           created_at?: string
@@ -746,6 +817,7 @@ export type Database = {
         }
         Update: {
           absence_reason?: string | null
+          brigade?: string
           completion_date?: string | null
           content_cycle?: string
           created_at?: string
@@ -773,6 +845,7 @@ export type Database = {
       }
       courses: {
         Row: {
+          brigade: string
           category: string | null
           created_at: string
           description: string | null
@@ -783,6 +856,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           category?: string | null
           created_at?: string
           description?: string | null
@@ -793,6 +867,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           category?: string | null
           created_at?: string
           description?: string | null
@@ -806,6 +881,7 @@ export type Database = {
       }
       dangerous_routes: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           danger_type: string | null
@@ -818,6 +894,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           danger_type?: string | null
@@ -830,6 +907,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           danger_type?: string | null
@@ -845,6 +923,7 @@ export type Database = {
       }
       deleted_soldiers_archive: {
         Row: {
+          brigade: string
           control_removed_at: string | null
           deleted_at: string
           full_name: string | null
@@ -857,6 +936,7 @@ export type Database = {
           soldier_created_at: string | null
         }
         Insert: {
+          brigade?: string
           control_removed_at?: string | null
           deleted_at?: string
           full_name?: string | null
@@ -869,6 +949,7 @@ export type Database = {
           soldier_created_at?: string | null
         }
         Update: {
+          brigade?: string
           control_removed_at?: string | null
           deleted_at?: string
           full_name?: string | null
@@ -884,6 +965,7 @@ export type Database = {
       }
       drill_locations: {
         Row: {
+          brigade: string
           created_at: string
           description: string | null
           drill_type: Database["public"]["Enums"]["drill_type"]
@@ -897,6 +979,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           description?: string | null
           drill_type: Database["public"]["Enums"]["drill_type"]
@@ -910,6 +993,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           description?: string | null
           drill_type?: Database["public"]["Enums"]["drill_type"]
@@ -928,6 +1012,7 @@ export type Database = {
         Row: {
           additional_notes: string | null
           battalion: string
+          brigade: string
           civilian_license_expiry: string | null
           created_at: string
           defensive_driving_passed: boolean | null
@@ -952,6 +1037,7 @@ export type Database = {
         Insert: {
           additional_notes?: string | null
           battalion: string
+          brigade?: string
           civilian_license_expiry?: string | null
           created_at?: string
           defensive_driving_passed?: boolean | null
@@ -976,6 +1062,7 @@ export type Database = {
         Update: {
           additional_notes?: string | null
           battalion?: string
+          brigade?: string
           civilian_license_expiry?: string | null
           created_at?: string
           defensive_driving_passed?: boolean | null
@@ -1017,6 +1104,7 @@ export type Database = {
       equipment_tracking: {
         Row: {
           actual_quantity: number
+          brigade: string
           created_at: string
           created_by: string | null
           expected_quantity: number
@@ -1030,6 +1118,7 @@ export type Database = {
         }
         Insert: {
           actual_quantity?: number
+          brigade?: string
           created_at?: string
           created_by?: string | null
           expected_quantity?: number
@@ -1043,6 +1132,7 @@ export type Database = {
         }
         Update: {
           actual_quantity?: number
+          brigade?: string
           created_at?: string
           created_by?: string | null
           expected_quantity?: number
@@ -1060,6 +1150,7 @@ export type Database = {
         Row: {
           absence_reason: string | null
           attended: boolean | null
+          brigade: string
           completed: boolean | null
           created_at: string
           event_id: string
@@ -1072,6 +1163,7 @@ export type Database = {
         Insert: {
           absence_reason?: string | null
           attended?: boolean | null
+          brigade?: string
           completed?: boolean | null
           created_at?: string
           event_id: string
@@ -1084,6 +1176,7 @@ export type Database = {
         Update: {
           absence_reason?: string | null
           attended?: boolean | null
+          brigade?: string
           completed?: boolean | null
           created_at?: string
           event_id?: string
@@ -1119,6 +1212,7 @@ export type Database = {
       }
       exit_requests: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           decided_at: string | null
@@ -1134,6 +1228,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           decided_at?: string | null
@@ -1149,6 +1244,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           decided_at?: string | null
@@ -2101,6 +2197,7 @@ export type Database = {
       }
       inspections: {
         Row: {
+          brigade: string
           combat_debrief_by: string | null
           combat_driver_in_debrief: boolean | null
           combat_driver_participated: boolean | null
@@ -2146,6 +2243,7 @@ export type Database = {
           vehicle_work_card: boolean | null
         }
         Insert: {
+          brigade?: string
           combat_debrief_by?: string | null
           combat_driver_in_debrief?: boolean | null
           combat_driver_participated?: boolean | null
@@ -2191,6 +2289,7 @@ export type Database = {
           vehicle_work_card?: boolean | null
         }
         Update: {
+          brigade?: string
           combat_debrief_by?: string | null
           combat_driver_in_debrief?: boolean | null
           combat_driver_participated?: boolean | null
@@ -2254,6 +2353,7 @@ export type Database = {
       }
       map_points_of_interest: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           description: string | null
@@ -2267,6 +2367,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2280,6 +2381,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2298,6 +2400,7 @@ export type Database = {
         Row: {
           accidents_count: number | null
           avg_inspection_score: number | null
+          brigade: string
           calculated_score: number
           cleaning_parades_on_time: boolean | null
           created_at: string
@@ -2313,6 +2416,7 @@ export type Database = {
         Insert: {
           accidents_count?: number | null
           avg_inspection_score?: number | null
+          brigade?: string
           calculated_score: number
           cleaning_parades_on_time?: boolean | null
           created_at?: string
@@ -2328,6 +2432,7 @@ export type Database = {
         Update: {
           accidents_count?: number | null
           avg_inspection_score?: number | null
+          brigade?: string
           calculated_score?: number
           cleaning_parades_on_time?: boolean | null
           created_at?: string
@@ -2359,6 +2464,7 @@ export type Database = {
       }
       monthly_safety_scores: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           harsh_accelerations: number | null
@@ -2375,6 +2481,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           harsh_accelerations?: number | null
@@ -2391,6 +2498,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           harsh_accelerations?: number | null
@@ -2425,6 +2533,7 @@ export type Database = {
       }
       mp_weekly_notes: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           general_notes: string | null
@@ -2434,6 +2543,7 @@ export type Database = {
           week_start_date: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           general_notes?: string | null
@@ -2443,6 +2553,7 @@ export type Database = {
           week_start_date: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           general_notes?: string | null
@@ -2455,6 +2566,7 @@ export type Database = {
       }
       procedure_signatures: {
         Row: {
+          brigade: string
           created_at: string
           full_name: string
           id: string
@@ -2464,6 +2576,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           full_name: string
           id?: string
@@ -2473,6 +2586,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           full_name?: string
           id?: string
@@ -2485,6 +2599,7 @@ export type Database = {
       }
       procedures: {
         Row: {
+          brigade: string
           created_at: string
           description: string | null
           file_url: string | null
@@ -2493,6 +2608,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           description?: string | null
           file_url?: string | null
@@ -2501,6 +2617,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           description?: string | null
           file_url?: string | null
@@ -2513,6 +2630,7 @@ export type Database = {
       profiles: {
         Row: {
           battalion_name: string | null
+          brigade: string
           created_at: string
           department: string | null
           full_name: string
@@ -2530,6 +2648,7 @@ export type Database = {
         }
         Insert: {
           battalion_name?: string | null
+          brigade?: string
           created_at?: string
           department?: string | null
           full_name: string
@@ -2547,6 +2666,7 @@ export type Database = {
         }
         Update: {
           battalion_name?: string | null
+          brigade?: string
           created_at?: string
           department?: string | null
           full_name?: string
@@ -2566,6 +2686,7 @@ export type Database = {
       }
       punishments: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           id: string
@@ -2578,6 +2699,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -2590,6 +2712,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -2719,6 +2842,7 @@ export type Database = {
       }
       safety_content: {
         Row: {
+          brigade: string
           category: string
           created_at: string
           description: string | null
@@ -2741,6 +2865,7 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          brigade?: string
           category: string
           created_at?: string
           description?: string | null
@@ -2763,6 +2888,7 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          brigade?: string
           category?: string
           created_at?: string
           description?: string | null
@@ -2803,6 +2929,7 @@ export type Database = {
       }
       safety_events: {
         Row: {
+          brigade: string
           category: Database["public"]["Enums"]["safety_event_category"]
           created_at: string
           description: string | null
@@ -2816,6 +2943,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           category: Database["public"]["Enums"]["safety_event_category"]
           created_at?: string
           description?: string | null
@@ -2829,6 +2957,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           category?: Database["public"]["Enums"]["safety_event_category"]
           created_at?: string
           description?: string | null
@@ -2845,6 +2974,7 @@ export type Database = {
       }
       safety_files: {
         Row: {
+          brigade: string
           category: Database["public"]["Enums"]["safety_category"]
           content: string | null
           created_at: string
@@ -2858,6 +2988,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           category: Database["public"]["Enums"]["safety_category"]
           content?: string | null
           created_at?: string
@@ -2871,6 +3002,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           category?: Database["public"]["Enums"]["safety_category"]
           content?: string | null
           created_at?: string
@@ -2887,6 +3019,7 @@ export type Database = {
       }
       safety_followups: {
         Row: {
+          brigade: string
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -2897,6 +3030,7 @@ export type Database = {
           soldier_id: string
         }
         Insert: {
+          brigade?: string
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -2907,6 +3041,7 @@ export type Database = {
           soldier_id: string
         }
         Update: {
+          brigade?: string
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -2936,6 +3071,7 @@ export type Database = {
       sector_boundaries: {
         Row: {
           boundary_points: Json
+          brigade: string
           color: string | null
           created_at: string
           created_by: string | null
@@ -2947,6 +3083,7 @@ export type Database = {
         }
         Insert: {
           boundary_points?: Json
+          brigade?: string
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -2958,6 +3095,7 @@ export type Database = {
         }
         Update: {
           boundary_points?: Json
+          brigade?: string
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -2971,6 +3109,7 @@ export type Database = {
       }
       shift_reports: {
         Row: {
+          brigade: string
           commander_briefing_attendance: boolean | null
           created_at: string
           descent_drill_completed: boolean | null
@@ -3007,6 +3146,7 @@ export type Database = {
           work_card_completed: boolean | null
         }
         Insert: {
+          brigade?: string
           commander_briefing_attendance?: boolean | null
           created_at?: string
           descent_drill_completed?: boolean | null
@@ -3043,6 +3183,7 @@ export type Database = {
           work_card_completed?: boolean | null
         }
         Update: {
+          brigade?: string
           commander_briefing_attendance?: boolean | null
           created_at?: string
           descent_drill_completed?: boolean | null
@@ -3136,6 +3277,7 @@ export type Database = {
       }
       soldier_courses: {
         Row: {
+          brigade: string
           course_id: string
           created_at: string
           created_by: string | null
@@ -3148,6 +3290,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           course_id: string
           created_at?: string
           created_by?: string | null
@@ -3160,6 +3303,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           course_id?: string
           created_at?: string
           created_by?: string | null
@@ -3199,6 +3343,7 @@ export type Database = {
         Row: {
           action_taken: string | null
           attachment_path: string | null
+          brigade: string
           category: string
           created_at: string
           created_by: string | null
@@ -3215,6 +3360,7 @@ export type Database = {
         Insert: {
           action_taken?: string | null
           attachment_path?: string | null
+          brigade?: string
           category: string
           created_at?: string
           created_by?: string | null
@@ -3231,6 +3377,7 @@ export type Database = {
         Update: {
           action_taken?: string | null
           attachment_path?: string | null
+          brigade?: string
           category?: string
           created_at?: string
           created_by?: string | null
@@ -3248,6 +3395,7 @@ export type Database = {
       }
       soldiers: {
         Row: {
+          brigade: string
           civilian_license_expiry: string | null
           consecutive_low_months: number | null
           control_removed_at: string | null
@@ -3273,6 +3421,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brigade?: string
           civilian_license_expiry?: string | null
           consecutive_low_months?: number | null
           control_removed_at?: string | null
@@ -3298,6 +3447,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brigade?: string
           civilian_license_expiry?: string | null
           consecutive_low_months?: number | null
           control_removed_at?: string | null
@@ -3326,18 +3476,21 @@ export type Database = {
       }
       task_assignments: {
         Row: {
+          brigade: string
           created_at: string
           id: string
           soldier_id: string
           task_id: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           id?: string
           soldier_id: string
           task_id: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           id?: string
           soldier_id?: string
@@ -3355,6 +3508,7 @@ export type Database = {
       }
       task_completions: {
         Row: {
+          brigade: string
           completed_at: string
           completed_by: string | null
           created_at: string
@@ -3364,6 +3518,7 @@ export type Database = {
           task_id: string
         }
         Insert: {
+          brigade?: string
           completed_at?: string
           completed_by?: string | null
           created_at?: string
@@ -3373,6 +3528,7 @@ export type Database = {
           task_id: string
         }
         Update: {
+          brigade?: string
           completed_at?: string
           completed_by?: string | null
           created_at?: string
@@ -3393,6 +3549,7 @@ export type Database = {
       }
       training_videos: {
         Row: {
+          brigade: string
           created_at: string
           duration: string | null
           id: string
@@ -3402,6 +3559,7 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          brigade?: string
           created_at?: string
           duration?: string | null
           id?: string
@@ -3411,6 +3569,7 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          brigade?: string
           created_at?: string
           duration?: string | null
           id?: string
@@ -3423,6 +3582,7 @@ export type Database = {
       }
       trip_forms: {
         Row: {
+          brigade: string
           created_at: string
           exit_briefing_by_officer: boolean
           form_date: string
@@ -3440,6 +3600,7 @@ export type Database = {
           weapon_reset: boolean
         }
         Insert: {
+          brigade?: string
           created_at?: string
           exit_briefing_by_officer?: boolean
           form_date?: string
@@ -3457,6 +3618,7 @@ export type Database = {
           weapon_reset?: boolean
         }
         Update: {
+          brigade?: string
           created_at?: string
           exit_briefing_by_officer?: boolean
           form_date?: string
@@ -3495,6 +3657,7 @@ export type Database = {
       }
       warning_categories: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           id: string
@@ -3502,6 +3665,7 @@ export type Database = {
           sort_order: number
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3509,6 +3673,7 @@ export type Database = {
           sort_order?: number
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3519,6 +3684,7 @@ export type Database = {
       }
       weekend_weapon_holders: {
         Row: {
+          brigade: string
           created_at: string
           created_by: string | null
           id: string
@@ -3530,6 +3696,7 @@ export type Database = {
           weekend_date: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3541,6 +3708,7 @@ export type Database = {
           weekend_date: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3555,6 +3723,7 @@ export type Database = {
       }
       weekly_closings: {
         Row: {
+          brigade: string
           commander_notes: string | null
           created_at: string
           created_by: string | null
@@ -3567,6 +3736,7 @@ export type Database = {
           weekly_opening_id: string
         }
         Insert: {
+          brigade?: string
           commander_notes?: string | null
           created_at?: string
           created_by?: string | null
@@ -3579,6 +3749,7 @@ export type Database = {
           weekly_opening_id: string
         }
         Update: {
+          brigade?: string
           commander_notes?: string | null
           created_at?: string
           created_by?: string | null
@@ -3603,6 +3774,7 @@ export type Database = {
       weekly_commander_summary: {
         Row: {
           action_items: string | null
+          brigade: string
           created_at: string
           created_by: string | null
           id: string
@@ -3612,6 +3784,7 @@ export type Database = {
         }
         Insert: {
           action_items?: string | null
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3621,6 +3794,7 @@ export type Database = {
         }
         Update: {
           action_items?: string | null
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3640,6 +3814,7 @@ export type Database = {
       }
       weekly_fitness_issues: {
         Row: {
+          brigade: string
           created_at: string
           id: string
           issue_details: string | null
@@ -3649,6 +3824,7 @@ export type Database = {
           weekly_opening_id: string
         }
         Insert: {
+          brigade?: string
           created_at?: string
           id?: string
           issue_details?: string | null
@@ -3658,6 +3834,7 @@ export type Database = {
           weekly_opening_id: string
         }
         Update: {
+          brigade?: string
           created_at?: string
           id?: string
           issue_details?: string | null
@@ -3693,6 +3870,7 @@ export type Database = {
       weekly_manpower: {
         Row: {
           absence_reason: string | null
+          brigade: string
           created_at: string
           id: string
           notes: string | null
@@ -3702,6 +3880,7 @@ export type Database = {
         }
         Insert: {
           absence_reason?: string | null
+          brigade?: string
           created_at?: string
           id?: string
           notes?: string | null
@@ -3711,6 +3890,7 @@ export type Database = {
         }
         Update: {
           absence_reason?: string | null
+          brigade?: string
           created_at?: string
           id?: string
           notes?: string | null
@@ -3744,6 +3924,7 @@ export type Database = {
       }
       weekly_openings: {
         Row: {
+          brigade: string
           commander_help_description: string | null
           commander_id: string | null
           concerns: string | null
@@ -3755,6 +3936,7 @@ export type Database = {
           week_start_date: string
         }
         Insert: {
+          brigade?: string
           commander_help_description?: string | null
           commander_id?: string | null
           concerns?: string | null
@@ -3766,6 +3948,7 @@ export type Database = {
           week_start_date: string
         }
         Update: {
+          brigade?: string
           commander_help_description?: string | null
           commander_id?: string | null
           concerns?: string | null
@@ -3781,6 +3964,7 @@ export type Database = {
       weekly_safety_activities: {
         Row: {
           activity_type: string
+          brigade: string
           commander_help_type: string | null
           completed: boolean | null
           created_at: string
@@ -3794,6 +3978,7 @@ export type Database = {
         }
         Insert: {
           activity_type: string
+          brigade?: string
           commander_help_type?: string | null
           completed?: boolean | null
           created_at?: string
@@ -3807,6 +3992,7 @@ export type Database = {
         }
         Update: {
           activity_type?: string
+          brigade?: string
           commander_help_type?: string | null
           completed?: boolean | null
           created_at?: string
@@ -3844,6 +4030,7 @@ export type Database = {
       }
       weekly_schedule: {
         Row: {
+          brigade: string
           completed: boolean | null
           created_at: string
           description: string | null
@@ -3856,6 +4043,7 @@ export type Database = {
           weekly_opening_id: string
         }
         Insert: {
+          brigade?: string
           completed?: boolean | null
           created_at?: string
           description?: string | null
@@ -3868,6 +4056,7 @@ export type Database = {
           weekly_opening_id: string
         }
         Update: {
+          brigade?: string
           completed?: boolean | null
           created_at?: string
           description?: string | null
@@ -3892,6 +4081,7 @@ export type Database = {
       work_plan_events: {
         Row: {
           attendees: string[] | null
+          brigade: string
           category: string | null
           color: string | null
           content_cycle: string | null
@@ -3911,6 +4101,7 @@ export type Database = {
         }
         Insert: {
           attendees?: string[] | null
+          brigade?: string
           category?: string | null
           color?: string | null
           content_cycle?: string | null
@@ -3930,6 +4121,7 @@ export type Database = {
         }
         Update: {
           attendees?: string[] | null
+          brigade?: string
           category?: string | null
           color?: string | null
           content_cycle?: string | null
@@ -3952,6 +4144,7 @@ export type Database = {
       work_schedule: {
         Row: {
           afternoon_soldier_id: string | null
+          brigade: string
           created_at: string
           created_by: string | null
           day_of_week: number
@@ -3964,6 +4157,7 @@ export type Database = {
         }
         Insert: {
           afternoon_soldier_id?: string | null
+          brigade?: string
           created_at?: string
           created_by?: string | null
           day_of_week: number
@@ -3976,6 +4170,7 @@ export type Database = {
         }
         Update: {
           afternoon_soldier_id?: string | null
+          brigade?: string
           created_at?: string
           created_by?: string | null
           day_of_week?: number
@@ -4034,6 +4229,7 @@ export type Database = {
       yearly_summary_overrides: {
         Row: {
           action: string
+          brigade: string
           created_at: string
           created_by: string | null
           id: string
@@ -4044,6 +4240,7 @@ export type Database = {
         }
         Insert: {
           action: string
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -4054,6 +4251,7 @@ export type Database = {
         }
         Update: {
           action?: string
+          brigade?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -4092,6 +4290,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_user_brigade: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -4099,6 +4298,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_battalion_user: { Args: { _user_id: string }; Returns: boolean }
+      is_division_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -4109,6 +4310,7 @@ export type Database = {
         | "super_admin"
         | "hagmar_admin"
         | "ravshatz"
+        | "division_admin"
       drill_type: "descent" | "rollover" | "fire"
       safety_category: "vardim" | "vulnerability" | "parsa"
       safety_event_category:
@@ -4253,6 +4455,7 @@ export const Constants = {
         "super_admin",
         "hagmar_admin",
         "ravshatz",
+        "division_admin",
       ],
       drill_type: ["descent", "rollover", "fire"],
       safety_category: ["vardim", "vulnerability", "parsa"],

@@ -15,6 +15,7 @@ import { StorageImage } from "@/components/shared/StorageImage";
 import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.png";
 import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.png";
 import { REGIONS, OUTPOSTS } from "@/lib/constants";
+import { BRIGADES, BRIGADE_CODES, getBrigade } from "@/lib/brigades";
 
 type View = "categories" | "items" | "itemDetail";
 type ContentCategory = "flag_investigations" | "sector_events" | "neighbor_events" | "monthly_summaries";
@@ -168,7 +169,19 @@ const createEmptyFormData = (fields: FieldConfig[]): FormValues =>
     return acc;
   }, {});
 
-const getFields = (category: ContentCategory, soldiers: { id: string; full_name: string; personal_number: string }[] = []): FieldConfig[] => {
+const getFields = (
+  category: ContentCategory,
+  soldiers: { id: string; full_name: string; personal_number: string }[] = [],
+  showBrigadeSelector = false,
+): FieldConfig[] => {
+  const brigadeField: FieldConfig = {
+    name: "brigade",
+    label: "חטיבה (החטיבה שבה התרחש האירוע)",
+    type: "select",
+    options: BRIGADE_CODES.map((c) => ({ value: c, label: BRIGADES[c].name })),
+    placeholder: "בחר חטיבה",
+    required: true,
+  };
   const baseFields: FieldConfig[] = [
     { name: "title", label: "כותרת", type: "text", required: true, placeholder: "הזן כותרת..." },
     { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך" },
@@ -187,6 +200,7 @@ const getFields = (category: ContentCategory, soldiers: { id: string; full_name:
     // For sector events, add event type and driver type selection
     const sectorFields: FieldConfig[] = [
       { name: "title", label: "כותרת", type: "text", required: true, placeholder: "הזן כותרת..." },
+      ...(showBrigadeSelector ? [brigadeField] : []),
       { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך" },
       { 
         name: "region", 
@@ -264,7 +278,9 @@ const getFields = (category: ContentCategory, soldiers: { id: string; full_name:
 };
 
 export default function SafetyEvents() {
-  const { canEditSafetyEvents: canEdit, canDelete } = useAuth();
+  const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin } = useAuth();
+  const isBattalionUser = userType === 'battalion';
+  const myBrigade = userBrigade || 'binyamin';
   const [view, setView] = useState<View>("categories");
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
   const [selectedItem, setSelectedItem] = useState<SafetyContent | null>(null);
@@ -297,11 +313,28 @@ export default function SafetyEvents() {
 
   const fetchItems = async (category: ContentCategory) => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("safety_content")
-      .select("*")
-      .eq("category", category)
-      .order("event_date", { ascending: false });
+    // Brigade-aware filtering for divisional safety events:
+    // - sector_events  -> only items from MY brigade
+    // - neighbor_events -> items from OTHER brigades that were tagged as sector_events
+    //                      (so they appear here as "אירועים בגזרות שכנות")
+    // - other categories (flag_investigations / monthly_summaries) -> unchanged (cross-brigade content)
+    // Division admins see everything.
+    let query = supabase.from("safety_content").select("*");
+
+    if (category === "neighbor_events") {
+      // Pull sector events from other brigades
+      query = query.eq("category", "sector_events");
+      if (!isDivisionAdmin) {
+        query = query.neq("brigade", myBrigade);
+      }
+    } else {
+      query = query.eq("category", category);
+      if (category === "sector_events" && !isDivisionAdmin) {
+        query = query.eq("brigade", myBrigade);
+      }
+    }
+
+    const { data, error } = await query.order("event_date", { ascending: false });
 
     if (error) {
       toast.error("שגיאה בטעינת התוכן");
@@ -336,7 +369,7 @@ export default function SafetyEvents() {
   const openAddDialog = () => {
     if (!selectedCategory) return;
 
-    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers));
+    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers, isBattalionUser));
     writeSafetyEventDraft({ mode: "add", category: selectedCategory, formData: initialFormData, selectedItem: null });
     setAddDraftData(initialFormData);
     setAddDialogOpen(true);
@@ -355,6 +388,19 @@ export default function SafetyEvents() {
   const handleAdd = async (data: FormValues) => {
     if (!selectedCategory) return;
     setIsSubmitting(true);
+
+    // Determine which brigade this event belongs to.
+    // - Battalion (ta'am) users move between brigades, so they pick brigade per-event from the form.
+    // - Everyone else stamps with their own brigade.
+    // - Editing in "neighbor_events" is not allowed (it's a derived view of other brigades' events).
+    if (selectedCategory === "neighbor_events") {
+      toast.error("אירועים בגזרות שכנות מוזנים ע\"י החטיבה שאליה האירוע שייך");
+      setIsSubmitting(false);
+      return;
+    }
+    const targetBrigade = isBattalionUser
+      ? (toNullableText(data.brigade) || myBrigade)
+      : myBrigade;
 
     // Parse and validate coordinates - must be in valid range for Israel
     let latitude = toText(data.latitude) ? parseFloat(toText(data.latitude)) : null;
@@ -379,8 +425,7 @@ export default function SafetyEvents() {
 
     // Validation: if it's a sector/neighbor event with security driver, require soldier selection
     // so the event can be synced to the soldier's profile (טבלת שליטה)
-    if ((selectedCategory === "sector_events" || selectedCategory === "neighbor_events") &&
-        driverType === "security" && !selectedSoldierId) {
+    if (selectedCategory === "sector_events" && driverType === "security" && !selectedSoldierId) {
       toast.error("יש לבחור חייל מהרשימה כדי לסנכרן את האירוע לטבלת השליטה");
       setIsSubmitting(false);
       return;
@@ -404,6 +449,7 @@ export default function SafetyEvents() {
       driver_name: driverType === "combat" ? toNullableText(data.driver_name) : null,
       vehicle_number: toNullableText(data.vehicle_number),
       severity: toText(data.severity) || 'minor',
+      brigade: targetBrigade,
     };
 
     const { error } = await supabase.from("safety_content").insert([insertData]);
@@ -418,7 +464,7 @@ export default function SafetyEvents() {
       
       // Sync to safety_events table for map display in "Know The Area"
       // For sector_events and neighbor_events - sync if it has location
-      if ((selectedCategory === "sector_events" || selectedCategory === "neighbor_events") && latitude && longitude) {
+      if (selectedCategory === "sector_events" && latitude && longitude) {
         // Map event types to valid safety_events categories
         // Valid categories: 'accident' | 'fire' | 'vehicle' | 'weapon' | 'other'
         const eventCategory = eventType === "accident" ? "accident" : "other";
@@ -430,11 +476,12 @@ export default function SafetyEvents() {
           latitude,
           longitude,
           region: toNullableText(data.region),
+          brigade: targetBrigade,
         }]);
       }
 
       // Sync to accidents table (טבלת שליטה) for any sector/neighbor event
-      if (selectedCategory === "sector_events" || selectedCategory === "neighbor_events") {
+      if (selectedCategory === "sector_events") {
         const accidentPayload = {
           accident_date: eventDate || new Date().toISOString().slice(0, 10),
           driver_type: driverType === "combat" ? "combat" : "security",
@@ -446,6 +493,7 @@ export default function SafetyEvents() {
           location: toNullableText(data.outpost) || toNullableText(data.region),
           description: description || title,
           status: 'open',
+          brigade: targetBrigade,
         };
         const { error: accErr } = await supabase.from("accidents").insert([accidentPayload]);
         if (accErr) {
@@ -1084,7 +1132,7 @@ export default function SafetyEvents() {
     return null;
   };
 
-  const fields = selectedCategory ? getFields(selectedCategory, soldiers) : [];
+  const fields = selectedCategory ? getFields(selectedCategory, soldiers, isBattalionUser) : [];
 
   return (
     <AppLayout>

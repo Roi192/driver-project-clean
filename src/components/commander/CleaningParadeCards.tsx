@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { OUTPOSTS } from "@/lib/constants";
+import { useAuth } from "@/hooks/useAuth";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 import { 
   CheckCircle, XCircle, Sparkles, ImageIcon, History, Clock, User, Calendar, 
   Download, ChevronLeft, ChevronRight, Trash2, Eye
@@ -49,6 +50,8 @@ interface ParadeDayOption {
 }
 
 export function CleaningParadeCards() {
+  const { brigade, isDivisionAdmin } = useAuth();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts();
   const [completedParades, setCompletedParades] = useState<CompletedParade[]>([]);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [showAllParades, setShowAllParades] = useState(false);
@@ -71,13 +74,16 @@ export function CleaningParadeCards() {
 
   useEffect(() => {
     fetchActiveDays();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   useEffect(() => {
     if (activeDays.length > 0) {
       fetchCompletedParades();
     }
-  }, [historyDays, activeDays]);
+  }, [historyDays, activeDays, brigade, isDivisionAdmin]);
+
+  const outpostNames = brigadeOutposts.map((outpost) => outpost.name);
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq("brigade", brigade) : query);
 
   useEffect(() => {
     // Trigger cleanup on mount
@@ -86,15 +92,15 @@ export function CleaningParadeCards() {
 
   const fetchActiveDays = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await scopeQuery(supabase
         .from("cleaning_parade_config")
         .select("day_of_week, outpost")
-        .eq("is_active", true);
+        .eq("is_active", true));
 
       if (error) throw error;
 
       // Get unique days that have active parades
-      const uniqueDays = [...new Set((data || []).map(d => d.day_of_week))].sort();
+      const uniqueDays: number[] = Array.from(new Set<number>((data || []).map((d: any) => Number(d.day_of_week)))).sort((a, b) => a - b);
       
       const dayOptions: ParadeDayOption[] = uniqueDays.map(day => ({
         value: day,
@@ -124,7 +130,7 @@ export function CleaningParadeCards() {
         : format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
       // Fetch completed submissions with soldier info
-      const { data, error } = await supabase
+      const { data, error } = await scopeQuery(supabase
         .from("cleaning_parade_submissions")
         .select(`
           id,
@@ -136,7 +142,7 @@ export function CleaningParadeCards() {
         `)
         .eq("is_completed", true)
         .gte("parade_date", startDate)
-        .order("completed_at", { ascending: false });
+        .order("completed_at", { ascending: false }));
 
       if (error) {
         console.error("Error fetching submissions:", error);
@@ -148,10 +154,10 @@ export function CleaningParadeCards() {
       let completionCounts: Record<string, number> = {};
       
       if (submissionIds.length > 0) {
-        const { data: completions } = await supabase
+        const { data: completions } = await scopeQuery(supabase
           .from("cleaning_checklist_completions")
           .select("submission_id")
-          .in("submission_id", submissionIds);
+          .in("submission_id", submissionIds));
         
         (completions || []).forEach(c => {
           completionCounts[c.submission_id] = (completionCounts[c.submission_id] || 0) + 1;
@@ -179,7 +185,7 @@ export function CleaningParadeCards() {
   const fetchParadePhotos = async (paradeId: string) => {
     setLoadingPhotos(true);
     try {
-      const { data: completions, error } = await supabase
+      const { data: completions, error } = await scopeQuery(supabase
         .from("cleaning_checklist_completions")
         .select(`
           id,
@@ -187,7 +193,7 @@ export function CleaningParadeCards() {
           checklist_item_id,
           cleaning_checklist_items(item_name)
         `)
-        .eq("submission_id", paradeId);
+        .eq("submission_id", paradeId));
 
       if (error) {
         console.error("Error fetching photos:", error);
@@ -253,7 +259,7 @@ export function CleaningParadeCards() {
     const uniqueOutposts = [...new Set(dayParades.map(p => p.outpost))];
     return {
       completed: uniqueOutposts.length,
-      total: OUTPOSTS.length,
+      total: outpostNames.length,
       parades: dayParades.length,
     };
   };
@@ -390,7 +396,7 @@ export function CleaningParadeCards() {
           
           <ScrollArea className="max-h-[70vh]">
             <div className="p-4 space-y-3">
-              {OUTPOSTS.map(outpost => {
+              {outpostNames.map(outpost => {
                 const outpostParades = selectedDay ? getParadesForOutpost(outpost, selectedDay) : [];
                 const isCompleted = outpostParades.length > 0;
                 

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Home, Users, CheckCircle2, Clock, ChevronLeft, Eye, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -25,6 +26,7 @@ interface TripForm {
 }
 
 export function TripFormsCard() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [periodForms, setPeriodForms] = useState<TripForm[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<TripForm | null>(null);
@@ -50,7 +52,7 @@ export function TripFormsCard() {
 
   useEffect(() => {
     fetchPeriodForms();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchPeriodForms = async () => {
     try {
@@ -58,11 +60,15 @@ export function TripFormsCard() {
       const periodStart = getMostRecentThursday(now);
       const periodStartStr = format(periodStart, 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('trip_forms')
         .select('*')
         .gte('form_date', periodStartStr)
         .order('created_at', { ascending: false });
+
+      if (!isDivisionAdmin && brigade) query = query.eq('brigade', brigade);
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setPeriodForms((data as TripForm[]) || []);

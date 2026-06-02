@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,9 +34,9 @@ import {
   Calendar,
   Truck
 } from "lucide-react";
-import { OUTPOSTS, REGIONS } from "@/lib/constants";
 import unitLogo from "@/assets/unit-logo.png";
 import { StorageImage } from "@/components/shared/StorageImage";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 
 interface Soldier {
   id: string;
@@ -219,7 +219,8 @@ const INTERVIEW_GUIDELINES = [
 ];
 
 export default function DriverInterviews() {
-  const { userType, loading: authLoading, user, canAccessDriverInterviews } = useAuth();
+  const { userType, loading: authLoading, user, canAccessDriverInterviews, brigade, isDivisionAdmin } = useAuth();
+  const { outposts: brigadeOutposts, loading: outpostsLoading } = useBrigadeOutposts();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
@@ -257,6 +258,18 @@ export default function DriverInterviews() {
     qualified_date: "",
   });
 
+  const regionOptions = useMemo(
+    () => Array.from(new Set(brigadeOutposts.map((outpost) => outpost.region).filter(Boolean) as string[])).sort(),
+    [brigadeOutposts]
+  );
+
+  const outpostOptions = useMemo(() => {
+    const relevantOutposts = formData.region
+      ? brigadeOutposts.filter((outpost) => outpost.region === formData.region)
+      : brigadeOutposts;
+    return relevantOutposts.map((outpost) => outpost.name).sort();
+  }, [brigadeOutposts, formData.region]);
+
   useEffect(() => {
     // Allow users with driver interview access and battalion users
     if (!authLoading && userType !== 'battalion' && !canAccessDriverInterviews) {
@@ -268,7 +281,7 @@ export default function DriverInterviews() {
     if (userType === 'battalion' || canAccessDriverInterviews) {
       fetchData();
     }
-  }, [userType, canAccessDriverInterviews]);
+  }, [userType, canAccessDriverInterviews, brigade, isDivisionAdmin]);
 
   // Handle edit mode from URL params
   useEffect(() => {
@@ -280,11 +293,12 @@ export default function DriverInterviews() {
 
   const loadInterviewForEdit = async (interviewId: string) => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('driver_interviews')
         .select('*')
-        .eq('id', interviewId)
-        .single();
+        .eq('id', interviewId);
+      if (!isDivisionAdmin && brigade) query = query.eq('brigade', brigade);
+      const { data, error } = await query.single();
 
       if (error) throw error;
       if (!data) {
@@ -329,6 +343,7 @@ export default function DriverInterviews() {
           .from("monthly_safety_scores")
           .select("*")
           .eq("soldier_id", data.soldier_id)
+          .eq("brigade", brigade || "binyamin")
           .gte("score_month", threeMonthsAgo)
           .order("score_month", { ascending: false });
         
@@ -344,24 +359,34 @@ export default function DriverInterviews() {
   const fetchData = async () => {
     setLoading(true);
     
+    let soldiersQuery = supabase
+      .from("soldiers")
+      .select("id, personal_number, full_name, outpost, civilian_license_expiry, military_license_expiry, defensive_driving_passed, license_type, permits, qualified_date")
+      .eq("is_active", true)
+      .order("full_name");
+    let interviewsQuery = supabase
+      .from("driver_interviews")
+      .select("id, interview_date, region, battalion, outpost, driver_name, interviewer_name, created_at")
+      .eq("user_id", user?.id)
+      .order("interview_date", { ascending: false })
+      .limit(20);
+    let incidentsQuery = supabase
+      .from("safety_content")
+      .select("id, soldier_id, driver_name, event_date, title, description, severity, event_type, vehicle_number, driver_type, outpost, region, image_url")
+      .eq("category", "sector_events")
+      .in("event_type", ["accident", "stuck"])
+      .order("event_date", { ascending: false });
+
+    if (!isDivisionAdmin && brigade) {
+      soldiersQuery = soldiersQuery.eq("brigade", brigade);
+      interviewsQuery = interviewsQuery.eq("brigade", brigade);
+      incidentsQuery = incidentsQuery.eq("brigade", brigade);
+    }
+
     const [soldiersRes, interviewsRes, incidentsRes] = await Promise.all([
-      supabase
-        .from("soldiers")
-        .select("id, personal_number, full_name, outpost, civilian_license_expiry, military_license_expiry, defensive_driving_passed, license_type, permits, qualified_date")
-        .eq("is_active", true)
-        .order("full_name"),
-      supabase
-        .from("driver_interviews")
-        .select("id, interview_date, region, battalion, outpost, driver_name, interviewer_name, created_at")
-        .eq("user_id", user?.id)
-        .order("interview_date", { ascending: false })
-        .limit(20),
-      supabase
-        .from("safety_content")
-        .select("id, soldier_id, driver_name, event_date, title, description, severity, event_type, vehicle_number, driver_type, outpost, region, image_url")
-        .eq("category", "sector_events")
-        .in("event_type", ["accident", "stuck"])
-        .order("event_date", { ascending: false })
+      soldiersQuery,
+      interviewsQuery,
+      incidentsQuery,
     ]);
 
     if (soldiersRes.data) setSoldiers(soldiersRes.data);
@@ -409,6 +434,7 @@ export default function DriverInterviews() {
         .from("monthly_safety_scores")
         .select("*")
         .eq("soldier_id", soldierId)
+        .eq("brigade", brigade || "binyamin")
         .gte("score_month", threeMonthsAgo)
         .order("score_month", { ascending: false });
       
@@ -504,6 +530,7 @@ export default function DriverInterviews() {
       additional_notes: formData.additional_notes || null,
       interviewer_summary: formData.interviewer_summary || null,
       interviewer_name: formData.interviewer_name,
+      brigade: brigade || "binyamin",
     };
 
     let error;
@@ -580,7 +607,7 @@ export default function DriverInterviews() {
   const canProceedToStep3 = true; // Guidelines step, just read
   const canProceedToStep4 = true; // Interview step, optional fields
 
-  if (authLoading || loading) {
+  if (authLoading || loading || outpostsLoading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-screen">
@@ -612,12 +639,12 @@ export default function DriverInterviews() {
 
             <div>
               <Label>גזרה *</Label>
-              <Select value={formData.region} onValueChange={(value) => setFormData({ ...formData, region: value })}>
+              <Select value={formData.region} onValueChange={(value) => setFormData({ ...formData, region: value, outpost: "", soldier_id: "", driver_name: "" })}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="בחר גזרה" />
                 </SelectTrigger>
                 <SelectContent>
-                  {REGIONS.map(region => (
+                  {regionOptions.map(region => (
                     <SelectItem key={region} value={region}>{region}</SelectItem>
                   ))}
                 </SelectContent>
@@ -641,7 +668,7 @@ export default function DriverInterviews() {
                   <SelectValue placeholder="בחר מוצב" />
                 </SelectTrigger>
                 <SelectContent>
-                  {OUTPOSTS.map(outpost => (
+                  {outpostOptions.map(outpost => (
                     <SelectItem key={outpost} value={outpost}>{outpost}</SelectItem>
                   ))}
                 </SelectContent>

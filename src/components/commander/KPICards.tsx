@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   Users, 
   CalendarCheck, 
@@ -45,6 +46,7 @@ interface MonthlyTrendData {
 }
 
 export function KPICards() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedKPI, setSelectedKPI] = useState<string | null>(null);
@@ -66,7 +68,9 @@ export function KPICards() {
 
   useEffect(() => {
     fetchKPIs();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
+
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq('brigade', brigade) : query);
 
   const fetchKPIs = async () => {
     setIsLoading(true);
@@ -79,10 +83,10 @@ export function KPICards() {
 
     try {
       // 1. Driver readiness percentage - based on valid licenses only
-      const { data: soldiers } = await supabase
+      const { data: soldiers } = await scopeQuery(supabase
         .from('soldiers')
         .select('id, full_name, military_license_expiry, civilian_license_expiry, is_active')
-        .eq('is_active', true);
+        .eq('is_active', true));
 
       let readyDriversList: Soldier[] = [];
       let notReadyDriversList: Soldier[] = [];
@@ -109,11 +113,11 @@ export function KPICards() {
         : 0;
 
       // 2. Monthly attendance percentage
-      const { data: attendance } = await supabase
+      const { data: attendance } = await scopeQuery(supabase
         .from('event_attendance')
         .select('soldier_id, status')
         .gte('created_at', firstDayOfMonth.toISOString())
-        .neq('status', 'not_in_rotation');
+        .neq('status', 'not_in_rotation'));
 
       let attendedCount = 0;
       let totalAttendance = attendance?.length || 0;
@@ -146,10 +150,10 @@ export function KPICards() {
       }).sort((a, b) => (a.attended / a.total) - (b.attended / b.total));
 
       // 3. Average inspection score this month
-      const { data: inspections } = await supabase
+      const { data: inspections } = await scopeQuery(supabase
         .from('inspections')
         .select('id, total_score, soldier_id, inspection_date')
-        .order('inspection_date', { ascending: false });
+        .order('inspection_date', { ascending: false }));
 
       let avgScore = 0;
       let monthlyInspections = 0;
@@ -184,10 +188,10 @@ export function KPICards() {
       });
 
       // 4. Accidents trend
-      const { data: accidents } = await supabase
+      const { data: accidents } = await scopeQuery(supabase
         .from('accidents')
         .select('id, accident_date')
-        .order('accident_date', { ascending: false });
+        .order('accident_date', { ascending: false }));
 
       const monthlyAccidents = (accidents || []).filter(a => 
         parseISO(a.accident_date) >= firstDayOfMonth
@@ -212,10 +216,10 @@ export function KPICards() {
       const accidentTrendDir = lastMonthAccidents < prevMonthAccidents ? 'up' : lastMonthAccidents > prevMonthAccidents ? 'down' : 'neutral';
 
       // 5. Punishments trend
-      const { data: punishments } = await supabase
+      const { data: punishments } = await scopeQuery(supabase
         .from('punishments')
         .select('id, punishment_date')
-        .order('punishment_date', { ascending: false });
+        .order('punishment_date', { ascending: false }));
 
       const monthlyPunishments = (punishments || []).filter(p => 
         parseISO(p.punishment_date) >= firstDayOfMonth

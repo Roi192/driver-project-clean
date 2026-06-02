@@ -258,6 +258,8 @@ export default function AnnualWorkPlan() {
     isPlatoonCommander,
     canAccessAnnualWorkPlan,
     loading: authLoading,
+    brigade,
+    isDivisionAdmin,
   } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState<WorkPlanEvent[]>([]);
@@ -333,7 +335,7 @@ export default function AnnualWorkPlan() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchAllAttendance = async () => {
     const allData: any[] = [];
@@ -342,10 +344,16 @@ export default function AnnualWorkPlan() {
     let hasMore = true;
 
     while (hasMore) {
-      const { data, error } = await supabase
+      let query = supabase
         .from("event_attendance")
         .select("*")
         .range(offset, offset + batchSize - 1);
+
+      if (!isDivisionAdmin && brigade) {
+        query = query.eq("brigade", brigade);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching attendance batch:", error);
@@ -369,18 +377,31 @@ export default function AnnualWorkPlan() {
 
     const [eventsRes, holidaysRes, soldiersRes, overridesRes, allAttendance] =
       await Promise.all([
-        supabase
-          .from("work_plan_events")
-          .select("*")
-          .order("event_date", { ascending: true }),
-        supabase.from("calendar_holidays").select("*"),
-        supabase
-          .from("soldiers")
-          .select(
-            "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active",
-          )
-          .order("full_name"),
-        supabase.from("content_cycle_overrides").select("*"),
+        (() => {
+          let query = supabase.from("work_plan_events").select("*").order("event_date", { ascending: true });
+          if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+          return query;
+        })(),
+        (() => {
+          let query = supabase.from("calendar_holidays").select("*");
+          if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+          return query;
+        })(),
+        (() => {
+          let query = supabase
+            .from("soldiers")
+            .select(
+              "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active",
+            )
+            .order("full_name");
+          if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+          return query;
+        })(),
+        (() => {
+          let query = supabase.from("content_cycle_overrides").select("*");
+          if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+          return query;
+        })(),
         fetchAllAttendance(),
       ]);
 
@@ -494,6 +515,7 @@ export default function AnnualWorkPlan() {
       expected_soldiers:
         editingEvent?.expected_soldiers || copiedExpectedSoldiers,
       content_cycle: formData.content_cycle || null,
+      brigade: brigade || "binyamin",
     };
 
     if (editingEvent) {
@@ -790,6 +812,7 @@ export default function AnnualWorkPlan() {
           absence_reason: data.status === "absent" ? data.reason : null,
           status: data.status,
           completed: data.status === "absent" && data.completed,
+          brigade: brigade || "binyamin",
         });
       });
 

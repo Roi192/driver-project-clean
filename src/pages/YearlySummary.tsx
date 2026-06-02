@@ -113,7 +113,7 @@ const RELEASE_REASONS = [
 ];
 
 export default function YearlySummary() {
-  const { isAdmin, isSuperAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, isSuperAdmin, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [year, setYear] = useState<number>(currentYear);
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -127,29 +127,30 @@ export default function YearlySummary() {
   const end = `${year}-12-31`;
   const startTs = `${start}T00:00:00.000Z`;
   const endTs = `${end}T23:59:59.999Z`;
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq("brigade", brigade) : query);
 
   const { data: stats, isLoading, error, refetch } = useQuery<YearStats>({
-    queryKey: ["yearly-summary", year],
+    queryKey: ["yearly-summary", year, brigade, isDivisionAdmin],
     queryFn: async () => {
       const [
         soldierCourses, courses, soldiers, sectorEvents, inspections,
         punishments, workEvents, cleaning, interviews, reports,
         monthlyScores, signatures, deletedArchive, overrides
       ] = await Promise.all([
-        fetchAll(supabase.from("soldier_courses").select("id, soldier_id, course_id, status, start_date, end_date").gte("start_date", start).lte("start_date", end)),
-        fetchAll(supabase.from("courses").select("id, name, category")),
-        fetchAll(supabase.from("soldiers").select("id, full_name, personal_number, release_date, release_reason, outpost, created_at, is_active, current_safety_score, control_removed_at, qualified_date")),
-        fetchAll(supabase.from("safety_content").select("id, category, title, description, soldier_id, driver_type, driver_name, vehicle_number, event_date, event_type, severity, region, outpost").eq("category", "sector_events")),
-        fetchAll(supabase.from("inspections").select("id, soldier_id, total_score, inspection_date, vehicle_score, procedures_score, safety_score, routes_familiarity_score, simulations_score").gte("inspection_date", start).lte("inspection_date", end)),
-        fetchAll(supabase.from("punishments").select("id, soldier_id, punishment_date, offense, punishment, judge").gte("punishment_date", start).lte("punishment_date", end)),
-        fetchAll(supabase.from("work_plan_events").select("id, category, title, event_date, status, content_cycle").gte("event_date", start).lte("event_date", end)),
-        safeFetchAll(supabase.from("cleaning_parades" as any).select("id, parade_date, outpost, responsible_driver, created_at").gte("parade_date", start).lte("parade_date", end)),
-        safeFetchAll(supabase.from("driver_interviews" as any).select("id, interview_date, created_at, soldier_id, driver_name").gte("interview_date", start).lte("interview_date", end)),
-        safeFetchAll(supabase.from("shift_reports" as any).select("id, report_date, created_at, outpost, driver_name, shift_type").gte("report_date", start).lte("report_date", end)),
-        safeFetchAll(supabase.from("monthly_safety_scores" as any).select("id, soldier_id, safety_score, score_month, kilometers, speed_violations, harsh_braking, harsh_turns, harsh_accelerations, illegal_overtakes").gte("score_month", start).lte("score_month", end)),
-        safeFetchAll(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, full_name, created_at").gte("created_at", startTs).lte("created_at", endTs)),
-        safeFetchAll(supabase.from("deleted_soldiers_archive" as any).select("id, original_soldier_id, full_name, personal_number, outpost, release_reason, release_date, control_removed_at, soldier_created_at, deleted_at")),
-        safeFetchAll(supabase.from("yearly_summary_overrides" as any).select("id, year, kind, action, original_id, payload").eq("year", year)),
+        fetchAll(scopeQuery(supabase.from("soldier_courses").select("id, soldier_id, course_id, status, start_date, end_date").gte("start_date", start).lte("start_date", end))),
+        fetchAll(scopeQuery(supabase.from("courses").select("id, name, category"))),
+        fetchAll(scopeQuery(supabase.from("soldiers").select("id, full_name, personal_number, release_date, release_reason, outpost, created_at, is_active, current_safety_score, control_removed_at, qualified_date"))),
+        fetchAll(scopeQuery(supabase.from("safety_content").select("id, category, title, description, soldier_id, driver_type, driver_name, vehicle_number, event_date, event_type, severity, region, outpost").eq("category", "sector_events"))),
+        fetchAll(scopeQuery(supabase.from("inspections").select("id, soldier_id, total_score, inspection_date, vehicle_score, procedures_score, safety_score, routes_familiarity_score, simulations_score").gte("inspection_date", start).lte("inspection_date", end))),
+        fetchAll(scopeQuery(supabase.from("punishments").select("id, soldier_id, punishment_date, offense, punishment, judge").gte("punishment_date", start).lte("punishment_date", end))),
+        fetchAll(scopeQuery(supabase.from("work_plan_events").select("id, category, title, event_date, status, content_cycle").gte("event_date", start).lte("event_date", end))),
+        safeFetchAll(scopeQuery(supabase.from("cleaning_parades" as any).select("id, parade_date, outpost, responsible_driver, created_at").gte("parade_date", start).lte("parade_date", end))),
+        safeFetchAll(scopeQuery(supabase.from("driver_interviews" as any).select("id, interview_date, created_at, soldier_id, driver_name").gte("interview_date", start).lte("interview_date", end))),
+        safeFetchAll(scopeQuery(supabase.from("shift_reports" as any).select("id, report_date, created_at, outpost, driver_name, shift_type").gte("report_date", start).lte("report_date", end))),
+        safeFetchAll(scopeQuery(supabase.from("monthly_safety_scores" as any).select("id, soldier_id, safety_score, score_month, kilometers, speed_violations, harsh_braking, harsh_turns, harsh_accelerations, illegal_overtakes").gte("score_month", start).lte("score_month", end))),
+        safeFetchAll(scopeQuery(supabase.from("procedure_signatures" as any).select("user_id, procedure_type, full_name, created_at").gte("created_at", startTs).lte("created_at", endTs))),
+        safeFetchAll(scopeQuery(supabase.from("deleted_soldiers_archive" as any).select("id, original_soldier_id, full_name, personal_number, outpost, release_reason, release_date, control_removed_at, soldier_created_at, deleted_at"))),
+        safeFetchAll(scopeQuery(supabase.from("yearly_summary_overrides" as any).select("id, year, kind, action, original_id, payload").eq("year", year))),
       ]);
 
       const hiddenByKind = new Map<string, Set<string>>();
@@ -454,7 +455,7 @@ export default function YearlySummary() {
           kind = detailKey === "accidentsBts" ? "accidentsBts" : detailKey === "accidentsGdud" ? "accidentsGdud" : "accidentsBts";
         }
         const { error } = await supabase.from("yearly_summary_overrides" as any).insert({
-          year, kind, action: "hide", original_id: confirmDelete.id,
+          year, kind, action: "hide", original_id: confirmDelete.id, brigade: brigade || "binyamin",
         });
         if (error) throw error;
       }
@@ -681,6 +682,7 @@ export default function YearlySummary() {
           <ManualAddDialog
             kind={addOpen}
             year={year}
+            brigade={brigade || "binyamin"}
             onClose={() => setAddOpen(null)}
             onSaved={async () => { setAddOpen(null); await refetch(); }}
           />
@@ -844,7 +846,7 @@ function EditReleasedDialog({ soldier, onClose, onSaved }: { soldier: any; onClo
   );
 }
 
-function ManualAddDialog({ kind, year, onClose, onSaved }: { kind: "released" | "intake" | "accidentsBts" | "accidentsGdud"; year: number; onClose: () => void; onSaved: () => void; }) {
+function ManualAddDialog({ kind, year, brigade, onClose, onSaved }: { kind: "released" | "intake" | "accidentsBts" | "accidentsGdud"; year: number; brigade: string; onClose: () => void; onSaved: () => void; }) {
   const isReleased = kind === "released";
   const isIntake = kind === "intake";
   const isAccident = kind === "accidentsBts" || kind === "accidentsGdud";
@@ -902,7 +904,7 @@ function ManualAddDialog({ kind, year, onClose, onSaved }: { kind: "released" | 
         };
       }
       const { error } = await supabase.from("yearly_summary_overrides" as any).insert({
-        year, kind, action: "manual", payload,
+        year, kind, action: "manual", payload, brigade,
       });
       if (error) throw error;
       toast.success("נוסף בהצלחה");

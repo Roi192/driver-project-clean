@@ -77,34 +77,7 @@ export default function HagmarAuth() {
       });
       return;
     }
-    // Verify department matches (hagmar users only)
-    const { data: { user: loggedInUser } } = await supabase.auth.getUser();
-    if (loggedInUser) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('department')
-        .eq('user_id', loggedInUser.id)
-        .maybeSingle();
-      
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', loggedInUser.id)
-        .maybeSingle();
-      
-      if (roleData?.role !== 'super_admin') {
-        if (profile?.department !== 'hagmar') {
-          await signOut();
-          setIsLoading(false);
-          toast({
-            title: "שגיאה בהתחברות",
-            description: 'משתמש זה לא רשום במחלקת הגמ"ר. יש להשתמש בלינק ההתחברות המתאים למחלקה שלך.',
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-    }
+    // Successful login - routing handled centrally
     setIsLoading(false);
   };
 
@@ -284,6 +257,25 @@ export default function HagmarAuth() {
               <span className="text-amber-700 font-black">מחלקת הגמ"ר</span>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => navigate('/auth/gdud')}
+            className="mt-4 w-full group relative overflow-hidden rounded-2xl border-2 border-purple-500/40 hover:border-purple-500 bg-gradient-to-l from-purple-500/10 via-purple-500/5 to-transparent p-4 transition-all hover:shadow-lg hover:scale-[1.01]"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div className="text-right">
+                  <div className="font-black text-slate-800 text-sm">אתה מגדוד תע"ם?</div>
+                  <div className="text-xs text-purple-700 font-semibold">להרשמה ייעודית כגדוד תע"ם</div>
+                </div>
+              </div>
+              <span className="text-purple-700 font-bold text-sm">כניסה ←</span>
+            </div>
+          </button>
         </CardContent>
       </Card>
     </div>

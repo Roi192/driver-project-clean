@@ -53,7 +53,7 @@ interface TripFormStatus {
 }
 
 export function DriverHomeContent() {
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [soldierId, setSoldierId] = useState<string | null>(null);
@@ -297,6 +297,7 @@ export function DriverHomeContent() {
       )}
 
       {/* Section 3: Shift Form - טופס לפני משמרת */}
+      {(brigade || 'binyamin') === 'binyamin' && (
       <Card className={cn(
         "border-2 overflow-hidden transition-all",
         !shiftFormStatus.hasTodayReport 
@@ -350,6 +351,7 @@ export function DriverHomeContent() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

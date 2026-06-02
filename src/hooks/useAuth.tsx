@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 // Updated roles: super_admin (מנהל ראשי), admin (מ"פ), platoon_commander (מ"מ), battalion_admin (גדוד), hagmar_admin (מנהל הגמ"ר), driver (נהג)
-export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'hagmar_admin' | 'ravshatz';
+export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'hagmar_admin' | 'ravshatz' | 'division_admin';
 
 interface SignUpData {
   email: string;
@@ -19,6 +19,7 @@ interface SignUpData {
   settlement?: string;
   idNumber?: string;
   battalionName?: string;
+  brigade?: string; // brigade code, e.g. 'binyamin', 'etzion'
 }
 
 interface AuthContextType {
@@ -26,6 +27,7 @@ interface AuthContextType {
   session: Session | null;
   role: AppRole | null;
   userType: string | null;
+  brigade: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (data: SignUpData) => Promise<{ error: Error | null }>;
@@ -36,6 +38,11 @@ interface AuthContextType {
   isPlatoonCommander: boolean;
   isBattalionAdmin: boolean;
   isHagmarAdmin: boolean;
+  isDivisionAdmin: boolean;
+  realIsDivisionAdmin: boolean;
+  isBattalion: boolean;
+  activeBrigade: string | null;
+  setActiveBrigade: (code: string | null) => Promise<void>;
   canDelete: boolean;
   canEdit: boolean;
   canEditDrillLocations: boolean;
@@ -69,6 +76,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const ROLE_PRIORITY: AppRole[] = [
   'super_admin',
+  'division_admin',
   'admin',
   'hagmar_admin',
   'battalion_admin',
@@ -86,6 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [userType, setUserType] = useState<string | null>(null);
+  const [profileBrigade, setProfileBrigade] = useState<string | null>(null);
+  const [brigadeOverride, setBrigadeOverride] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem('brigadeContext');
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -95,24 +108,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchRoleAndType = async (userId: string) => {
       const [roleResult, typeResult] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId),
-        supabase.from('profiles').select('user_type').eq('user_id', userId).maybeSingle(),
+        supabase.from('profiles').select('user_type, brigade').eq('user_id', userId).maybeSingle(),
       ]);
 
       if (!mounted) return;
+
+      let fetchedRole: AppRole | null = null;
 
       if (roleResult.error) {
         console.error('Failed to fetch user roles:', roleResult.error);
         setRole(null);
       } else {
         const roles = (roleResult.data ?? []).map((row) => row.role as AppRole);
-        setRole(getHighestPriorityRole(roles));
+        fetchedRole = getHighestPriorityRole(roles);
+        setRole(fetchedRole);
       }
 
       if (typeResult.error) {
         console.error('Failed to fetch user type:', typeResult.error);
         setUserType(null);
+        setProfileBrigade(null);
       } else {
-        setUserType(typeResult.data?.user_type ?? null);
+        const nextUserType = typeResult.data?.user_type ?? null;
+        let nextProfileBrigade = (typeResult.data as any)?.brigade ?? null;
+        const selectedBrigade = typeof window !== 'undefined' ? sessionStorage.getItem('brigadeContext') : null;
+
+        const isBattalionProfile = nextUserType === 'battalion' || fetchedRole === 'battalion_admin';
+
+        if (isBattalionProfile && selectedBrigade && nextProfileBrigade !== selectedBrigade) {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ brigade: selectedBrigade })
+            .eq('user_id', userId);
+          if (error) {
+            console.error('Failed to sync battalion brigade context:', error);
+          } else {
+            nextProfileBrigade = selectedBrigade;
+          }
+        }
+
+        setUserType(nextUserType);
+        setProfileBrigade(nextProfileBrigade);
       }
     };
 
@@ -136,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setRole(null);
           setUserType(null);
+          setProfileBrigade(null);
         }
       }
     );
@@ -189,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           settlement: data.settlement || null,
           id_number: data.idNumber || null,
           battalion_name: data.battalionName || null,
+          brigade: data.brigade || 'binyamin',
         },
       },
     });
@@ -213,6 +251,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setRole(null);
     setUserType(null);
+    setProfileBrigade(null);
+    setBrigadeOverride(null);
+    if (typeof window !== 'undefined') sessionStorage.removeItem('brigadeContext');
   };
 
   // Permission calculations - super_admin gets all admin permissions
@@ -221,6 +262,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isPlatoonCommander = role === 'platoon_commander';
   const isBattalionAdmin = role === 'battalion_admin';
   const isHagmarAdmin = role === 'hagmar_admin' || role === 'super_admin';
+  const realIsDivisionAdmin = role === 'division_admin' || role === 'super_admin';
+  const isBattalion = userType === 'battalion' || role === 'battalion_admin';
+  // Effective brigade: if a privileged admin selected a specific brigade context, use it.
+  // Otherwise, use their profile brigade (or null for "all brigades" view).
+  const brigade = realIsDivisionAdmin
+    ? (brigadeOverride || null)
+    : (isBattalion ? (brigadeOverride || null) : profileBrigade);
+  // isDivisionAdmin becomes false when a specific brigade is selected,
+  // so existing brigade-scoped filters automatically apply.
+  const isDivisionAdmin = realIsDivisionAdmin && !brigadeOverride;
+
+  useEffect(() => {
+    if (!isBattalion || !user?.id || !brigadeOverride || profileBrigade === brigadeOverride) return;
+    supabase
+      .from('profiles')
+      .update({ brigade: brigadeOverride })
+      .eq('user_id', user.id)
+      .then(({ error }) => {
+        if (error) {
+          console.error('Failed to sync battalion brigade context:', error);
+        } else {
+          setProfileBrigade(brigadeOverride);
+        }
+      });
+  }, [isBattalion, user?.id, brigadeOverride, profileBrigade]);
+
+  const setActiveBrigade = async (code: string | null) => {
+    if (isBattalion && user?.id && code) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ brigade: code })
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setProfileBrigade(code);
+    }
+    if (typeof window !== 'undefined') {
+      if (code) sessionStorage.setItem('brigadeContext', code);
+      else sessionStorage.removeItem('brigadeContext');
+    }
+    setBrigadeOverride(code);
+  };
   
   // Only admin/super_admin can delete
   const canDelete = role === 'admin' || role === 'super_admin';
@@ -234,7 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin';
   const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin';
   
-  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'hagmar_admin';
+  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'hagmar_admin' || role === 'division_admin';
   const canAccessBomReport = role === 'admin' || role === 'super_admin';
   const canAccessAnnualWorkPlan = role === 'admin' || role === 'platoon_commander' || role === 'super_admin';
   const canAccessSoldiersControl = role === 'admin' || role === 'platoon_commander' || role === 'super_admin';
@@ -260,6 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     role,
     userType,
+    brigade,
     loading,
     signIn,
     signUp,
@@ -270,6 +353,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isPlatoonCommander,
     isBattalionAdmin,
     isHagmarAdmin,
+    isDivisionAdmin,
+    realIsDivisionAdmin,
+    isBattalion,
+    activeBrigade: brigadeOverride,
+    setActiveBrigade,
     canDelete,
     canEdit,
     canEditDrillLocations,

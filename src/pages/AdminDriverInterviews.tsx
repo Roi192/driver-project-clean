@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,20 +49,11 @@ interface Interview {
   created_at: string;
 }
 
-// Region to Outposts mapping
-const REGIONS_OUTPOSTS: Record<string, string[]> = {
-  "ארץ בנימין": ["בית אל", "עפרה", "מבו\"ש", "עטרת"],
-  "גבעת בנימין": ["ענתות", "רמה", "כוכב יעקב"],
-  "טלמונים": ["חורש ירון", "נווה יאיר", "רנתיס"],
-  "מכבים": ["מכבים", "חשמונאים"]
-};
-
-const REGIONS = Object.keys(REGIONS_OUTPOSTS);
-
 type ViewLevel = "regions" | "battalions" | "outposts" | "interviews";
 
 export default function AdminDriverInterviews() {
-  const { canAccessDriverInterviews, user, loading: authLoading } = useAuth();
+  const { canAccessDriverInterviews, user, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts();
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,6 +70,13 @@ export default function AdminDriverInterviews() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [interviewToDelete, setInterviewToDelete] = useState<Interview | null>(null);
 
+  const regionOutpostsMap = brigadeOutposts.reduce<Record<string, string[]>>((acc, outpost) => {
+    const region = outpost.region || "ללא גזרה";
+    acc[region] = [...(acc[region] || []), outpost.name];
+    return acc;
+  }, {});
+  const regions = Object.keys(regionOutpostsMap).sort();
+
   useEffect(() => {
     if (!authLoading && !canAccessDriverInterviews) {
       navigate("/");
@@ -86,15 +85,19 @@ export default function AdminDriverInterviews() {
     if (canAccessDriverInterviews) {
       fetchData();
     }
-  }, [canAccessDriverInterviews, authLoading, navigate]);
+  }, [canAccessDriverInterviews, authLoading, navigate, brigade, isDivisionAdmin]);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('driver_interviews')
         .select('*')
         .order('interview_date', { ascending: false });
+
+      if (!isDivisionAdmin && brigade) query = query.eq('brigade', brigade);
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setInterviews(data || []);
@@ -108,7 +111,7 @@ export default function AdminDriverInterviews() {
 
   // Get interviews for a specific region (any outpost in that region)
   const getRegionInterviews = (region: string) => {
-    const regionOutposts = REGIONS_OUTPOSTS[region] || [];
+    const regionOutposts = regionOutpostsMap[region] || [];
     return interviews.filter(i => regionOutposts.includes(i.outpost));
   };
 
@@ -121,7 +124,7 @@ export default function AdminDriverInterviews() {
 
   // Get interviews for a specific battalion in a region
   const getBattalionInterviews = (region: string, battalion: string) => {
-    const regionOutposts = REGIONS_OUTPOSTS[region] || [];
+    const regionOutposts = regionOutpostsMap[region] || [];
     return interviews.filter(i => 
       regionOutposts.includes(i.outpost) && i.battalion === battalion
     );
@@ -270,10 +273,10 @@ export default function AdminDriverInterviews() {
 
   const renderRegionsView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {REGIONS.map(region => {
+      {regions.map(region => {
         const regionInterviews = getRegionInterviews(region);
         const battalions = getRegionBattalions(region);
-        const outposts = REGIONS_OUTPOSTS[region];
+        const outposts = regionOutpostsMap[region] || [];
         
         return (
           <Card 

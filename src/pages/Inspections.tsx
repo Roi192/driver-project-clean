@@ -114,7 +114,7 @@ const SIMULATION_QUESTIONS = [
 ];
 
 export default function Inspections() {
-  const { isAdmin, isPlatoonCommander, canAccessInspections, loading: authLoading } = useAuth();
+  const { isAdmin, isPlatoonCommander, canAccessInspections, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const [inspections, setInspections] = useState<InspectionFull[]>([]);
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
@@ -197,7 +197,7 @@ export default function Inspections() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   // Fetch vulnerability files when platoon changes
   useEffect(() => {
@@ -211,7 +211,8 @@ export default function Inspections() {
         .from("safety_files")
         .select("title, content")
         .eq("outpost", formData.platoon)
-        .eq("category", "vulnerability");
+        .eq("category", "vulnerability")
+        .eq("brigade", brigade || "binyamin");
       
       if (!error && data) {
         setVulnerabilityFiles(data);
@@ -224,17 +225,26 @@ export default function Inspections() {
   const fetchData = async () => {
     setLoading(true);
     
+    let inspectionsQuery = supabase
+      .from("inspections")
+      .select("*, soldiers(id, full_name, personal_number)")
+      .order("inspection_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    let soldiersQuery = supabase
+      .from("soldiers")
+      .select("id, full_name, personal_number")
+      .eq("is_active", true)
+      .order("full_name");
+
+    if (!isDivisionAdmin && brigade) {
+      inspectionsQuery = inspectionsQuery.eq("brigade", brigade);
+      soldiersQuery = soldiersQuery.eq("brigade", brigade);
+    }
+
     const [inspectionsRes, soldiersRes] = await Promise.all([
-      supabase
-        .from("inspections")
-        .select("*, soldiers(id, full_name, personal_number)")
-        .order("inspection_date", { ascending: false })
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("soldiers")
-        .select("id, full_name, personal_number")
-        .eq("is_active", true)
-        .order("full_name")
+      inspectionsQuery,
+      soldiersQuery,
     ]);
 
     if (!inspectionsRes.error) setInspections((inspectionsRes.data || []) as InspectionFull[]);
@@ -351,6 +361,7 @@ export default function Inspections() {
       simulations_score: scores.simulations,
       total_score: scores.total,
       general_notes: formData.general_notes,
+      brigade: brigade || "binyamin",
     };
 
     if (editingInspection) {

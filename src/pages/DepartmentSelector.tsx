@@ -18,7 +18,7 @@ const DepartmentSelector = () => {
       borderColor: "border-primary/40",
       hoverBorder: "hover:border-primary",
       glowColor: "from-primary/30",
-      route: "/planag",
+      route: "/brigade-context",
     },
     {
       id: "hagmar",
@@ -79,8 +79,11 @@ const DepartmentSelector = () => {
                 onClick={() => {
                   if (dept.id === 'battalion') {
                     sessionStorage.setItem('superAdminDeptContext', 'battalion');
+                  } else if (dept.id === 'planag') {
+                    sessionStorage.setItem('superAdminDeptContext', 'planag');
+                    sessionStorage.removeItem('superAdminBrigadePicked');
                   } else {
-                    sessionStorage.removeItem('superAdminDeptContext');
+                    sessionStorage.setItem('superAdminDeptContext', dept.id);
                   }
                   navigate(dept.id === 'battalion' ? '/planag' : dept.route);
                 }}

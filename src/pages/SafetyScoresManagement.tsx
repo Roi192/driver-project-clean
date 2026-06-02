@@ -125,7 +125,7 @@ interface ExcellenceCandidate {
 }
 
 export default function SafetyScoresManagement() {
-  const { role, canAccessSafetyScores, loading: authLoading, user } = useAuth();
+  const { role, canAccessSafetyScores, loading: authLoading, user, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
   const [safetyScores, setSafetyScores] = useState<SafetyScore[]>([]);
@@ -267,7 +267,7 @@ export default function SafetyScoresManagement() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedYear, selectedMonth, isRangeMode, startYear, startMonth, endYear, endMonth, selectedSoldierId, viewMode]);
+  }, [selectedYear, selectedMonth, isRangeMode, startYear, startMonth, endYear, endMonth, selectedSoldierId, viewMode, brigade, isDivisionAdmin]);
 
   const getSelectedMonthStr = () => {
     const monthStr = String(selectedMonth).padStart(2, '0');
@@ -290,35 +290,45 @@ export default function SafetyScoresManagement() {
     
     // Fetch ALL soldiers (active + released) so historical month views still
     // resolve names of soldiers that have since been released.
-    const { data: soldiersData } = await supabase
+    let soldiersQuery = supabase
       .from("soldiers")
       .select("id, personal_number, full_name, outpost, is_active, release_date, control_removed_at, qualified_date, created_at")
       .order("full_name");
+
+    if (!isDivisionAdmin && brigade) soldiersQuery = soldiersQuery.eq("brigade", brigade);
+
+    const { data: soldiersData } = await soldiersQuery;
     
     if (soldiersData) setSoldiers(soldiersData);
 
     // Fetch all scores for alert filtering (last 2 months)
     const { lastMonthStr, prevMonthStr } = getLastTwoMonths();
-    const { data: recentScoresData } = await supabase
+    let recentScoresQuery = supabase
       .from("monthly_safety_scores")
       .select("*")
       .in("score_month", [lastMonthStr, prevMonthStr]);
+    if (!isDivisionAdmin && brigade) recentScoresQuery = recentScoresQuery.eq("brigade", brigade);
+    const { data: recentScoresData } = await recentScoresQuery;
     
     if (recentScoresData) setAllScores(recentScoresData);
     
     // Fetch followups for last 2 months
-    const { data: followupsData } = await supabase
+    let followupsQuery = supabase
       .from("safety_followups")
       .select("*")
       .in("followup_month", [lastMonthStr, prevMonthStr]);
+    if (!isDivisionAdmin && brigade) followupsQuery = followupsQuery.eq("brigade", brigade);
+    const { data: followupsData } = await followupsQuery;
     
     if (followupsData) setFollowups(followupsData as SafetyFollowup[]);
     
     // Fetch excellence winners
-    const { data: excellenceData } = await supabase
+    let excellenceQuery = supabase
       .from("monthly_excellence")
       .select("*")
       .order("excellence_month", { ascending: false });
+    if (!isDivisionAdmin && brigade) excellenceQuery = excellenceQuery.eq("brigade", brigade);
+    const { data: excellenceData } = await excellenceQuery;
     
     if (excellenceData) setExcellenceWinners(excellenceData as MonthlyExcellence[]);
 
@@ -334,6 +344,9 @@ export default function SafetyScoresManagement() {
           .gte("score_month", startMonthStr)
           .lte("score_month", endMonthStr)
           .order("score_month", { ascending: true });
+        if (!isDivisionAdmin && brigade) {
+          query = query.eq("brigade", brigade);
+        }
         
         if (selectedSoldierId && selectedSoldierId !== "all") {
           query = query.eq("soldier_id", selectedSoldierId);
@@ -343,12 +356,15 @@ export default function SafetyScoresManagement() {
         if (scoresData) setSafetyScores(scoresData);
       } else {
         const monthStr = getSelectedMonthStr();
-        const { data: scoresData } = await supabase
+        let scoreQuery = supabase
           .from("monthly_safety_scores")
           .select("*")
           .eq("score_month", `${monthStr}-01`)
           .order("safety_score", { ascending: true });
-        
+        if (!isDivisionAdmin && brigade) {
+          scoreQuery = scoreQuery.eq("brigade", brigade);
+        }
+        const { data: scoresData } = await scoreQuery;
         if (scoresData) setSafetyScores(scoresData);
       }
     } else if (viewMode === "soldiers") {
@@ -446,6 +462,7 @@ export default function SafetyScoresManagement() {
       illegal_overtakes: formData.illegal_overtakes,
       notes: formData.notes || null,
       created_by: user?.id,
+      brigade: brigade || "binyamin",
     };
 
     if (editingScore) {
@@ -489,6 +506,7 @@ export default function SafetyScoresManagement() {
       .from("monthly_safety_scores")
       .select("safety_score, score_month")
       .eq("soldier_id", soldierId)
+      .eq("brigade", brigade || "binyamin")
       .order("score_month", { ascending: false })
       .limit(3);
 
@@ -608,6 +626,7 @@ export default function SafetyScoresManagement() {
         followup_month: lastMonthStr,
         notes: followupNotes || null,
         created_by: user?.id,
+        brigade: brigade || "binyamin",
       });
     
     if (error) {
@@ -638,10 +657,12 @@ export default function SafetyScoresManagement() {
     const dataMonthLabel = MONTHS_HEB.find(m => m.value === dataMonth.month)?.label + ' ' + dataMonth.year;
     
     // Get all safety scores for the DATA month (previous month)
-    const { data: monthScores } = await supabase
+    let monthScoresQuery = supabase
       .from("monthly_safety_scores")
       .select("*")
       .eq("score_month", dataMonthStr);
+    if (!isDivisionAdmin && brigade) monthScoresQuery = monthScoresQuery.eq("brigade", brigade);
+    const { data: monthScores } = await monthScoresQuery;
     
     if (!monthScores || monthScores.length === 0) {
       toast.error(`אין ציונים לחודש ${dataMonthLabel}`);
@@ -650,44 +671,56 @@ export default function SafetyScoresManagement() {
     }
     
     // Get all accidents for the data month
-    const { data: accidents } = await supabase
+    let accidentsQuery = supabase
       .from("accidents")
       .select("soldier_id")
       .gte("accident_date", dataMonthStr)
       .lt("accident_date", nextMonthStr);
+    if (!isDivisionAdmin && brigade) accidentsQuery = accidentsQuery.eq("brigade", brigade);
+    const { data: accidents } = await accidentsQuery;
     
     // Get all punishments for the data month
-    const { data: punishments } = await supabase
+    let punishmentsQuery = supabase
       .from("punishments")
       .select("soldier_id")
       .gte("punishment_date", dataMonthStr)
       .lt("punishment_date", nextMonthStr);
+    if (!isDivisionAdmin && brigade) punishmentsQuery = punishmentsQuery.eq("brigade", brigade);
+    const { data: punishments } = await punishmentsQuery;
     
     // Get cleaning parades for the data month
-    const { data: cleaningParades } = await supabase
+    let cleaningQuery = supabase
       .from("cleaning_parades")
       .select("user_id, parade_date")
       .gte("parade_date", dataMonthStr)
       .lt("parade_date", nextMonthStr);
+    if (!isDivisionAdmin && brigade) cleaningQuery = cleaningQuery.eq("brigade", brigade);
+    const { data: cleaningParades } = await cleaningQuery;
     
     // Get inspections for the data month
-    const { data: inspections } = await supabase
+    let inspectionsQuery = supabase
       .from("inspections")
       .select("soldier_id, total_score")
       .gte("inspection_date", dataMonthStr)
       .lt("inspection_date", nextMonthStr);
+    if (!isDivisionAdmin && brigade) inspectionsQuery = inspectionsQuery.eq("brigade", brigade);
+    const { data: inspections } = await inspectionsQuery;
     
     // Get event attendance for the data month
-    const { data: eventAttendance } = await supabase
+    let attendanceQuery = supabase
       .from("event_attendance")
       .select("soldier_id, attended, event_id, work_plan_events!inner(event_date)")
       .gte("work_plan_events.event_date", dataMonthStr)
       .lt("work_plan_events.event_date", nextMonthStr);
+    if (!isDivisionAdmin && brigade) attendanceQuery = attendanceQuery.eq("brigade", brigade);
+    const { data: eventAttendance } = await attendanceQuery;
     
     // Get previous winners to exclude
-    const { data: previousWinners } = await supabase
+    let winnersQuery = supabase
       .from("monthly_excellence")
       .select("soldier_id");
+    if (!isDivisionAdmin && brigade) winnersQuery = winnersQuery.eq("brigade", brigade);
+    const { data: previousWinners } = await winnersQuery;
     
     const previousWinnerIds = new Set(previousWinners?.map(w => w.soldier_id) || []);
     
@@ -809,6 +842,7 @@ export default function SafetyScoresManagement() {
           cleaning_parades_on_time: candidate.cleaningOnTime,
           avg_inspection_score: candidate.avgInspectionScore,
           selected_by: user?.id,
+          brigade: brigade || "binyamin",
         });
       
       if (error) {
@@ -856,6 +890,7 @@ export default function SafetyScoresManagement() {
           cleaning_parades_on_time: true,
           avg_inspection_score: null,
           selected_by: user?.id,
+          brigade: brigade || "binyamin",
         });
       
       if (error) {
@@ -942,6 +977,7 @@ export default function SafetyScoresManagement() {
           harsh_accelerations: row.harsh_accelerations,
           illegal_overtakes: row.illegal_overtakes,
           created_by: user?.id,
+          brigade: brigade || "binyamin",
         }, { onConflict: 'soldier_id,score_month' });
 
       if (error) {

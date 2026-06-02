@@ -14,6 +14,7 @@ import { he } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Event {
   id: string;
@@ -33,13 +34,16 @@ interface Task {
 }
 
 export function NextUpSection() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [nextEvent, setNextEvent] = useState<Event | null>(null);
   const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
+
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq('brigade', brigade) : query);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -47,25 +51,25 @@ export function NextUpSection() {
 
     try {
       // Fetch next upcoming event
-      const { data: events } = await supabase
+      const { data: events } = await scopeQuery(supabase
         .from('work_plan_events')
         .select('id, title, event_date, category, status, description')
         .gte('event_date', today.toISOString().split('T')[0])
         .eq('status', 'pending')
         .order('event_date', { ascending: true })
-        .limit(1);
+        .limit(1));
 
       if (events && events.length > 0) {
         setNextEvent(events[0]);
       }
 
       // Fetch pending tasks
-      const { data: tasks } = await supabase
+      const { data: tasks } = await scopeQuery(supabase
         .from('bom_tasks')
         .select('id, title, due_date, status, assigned_to')
         .eq('status', 'pending')
         .order('due_date', { ascending: true })
-        .limit(3);
+        .limit(3));
 
       if (tasks) {
         setPendingTasks(tasks);

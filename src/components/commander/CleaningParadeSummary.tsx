@@ -27,7 +27,7 @@ import {
   Image
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { OUTPOSTS } from "@/lib/constants";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SoldierAssignment {
   soldier_id: string;
@@ -71,6 +71,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export function CleaningParadeSummary() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [daysData, setDaysData] = useState<DayData[]>([]);
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
@@ -83,7 +84,9 @@ export function CleaningParadeSummary() {
 
   useEffect(() => {
     fetchData();
-  }, [weekOffset]);
+  }, [weekOffset, brigade, isDivisionAdmin]);
+
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq("brigade", brigade) : query);
 
   const getWeekDates = () => {
     const today = new Date();
@@ -102,33 +105,33 @@ export function CleaningParadeSummary() {
       const { start, startStr, endStr } = getWeekDates();
 
       // Fetch active parade days config
-      const { data: paradeConfig } = await supabase
+      const { data: paradeConfig } = await scopeQuery(supabase
         .from("cleaning_parade_config")
         .select("day_of_week, outpost")
-        .eq("is_active", true);
+        .eq("is_active", true));
 
       // Get unique parade days
-      const activeDays = [...new Set((paradeConfig || []).map(p => p.day_of_week))].sort();
+      const activeDays: number[] = Array.from(new Set<number>((paradeConfig || []).map((p: any) => Number(p.day_of_week)))).sort((a, b) => a - b);
 
       // Fetch all assignments
-      const { data: assignmentsData } = await supabase
+      const { data: assignmentsData } = await scopeQuery(supabase
         .from("cleaning_item_assignments")
-        .select("*, cleaning_checklist_items(item_name)");
+        .select("*, cleaning_checklist_items(item_name)"));
 
       // Fetch soldiers
-      const { data: soldiersData } = await supabase
+      const { data: soldiersData } = await scopeQuery(supabase
         .from("soldiers")
         .select("id, full_name")
-        .eq("is_active", true);
+        .eq("is_active", true));
 
       // Fetch work schedule for soldier resolution
-      const { data: workScheduleData } = await supabase
+      const { data: workScheduleData } = await scopeQuery(supabase
         .from("work_schedule")
         .select("*")
-        .eq("week_start_date", startStr);
+        .eq("week_start_date", startStr));
 
       // Fetch submissions
-      const { data: submissionsData } = await supabase
+      const { data: submissionsData } = await scopeQuery(supabase
         .from("cleaning_parade_submissions")
         .select(`
           id,
@@ -140,13 +143,13 @@ export function CleaningParadeSummary() {
           completed_at
         `)
         .gte("parade_date", startStr)
-        .lte("parade_date", endStr);
+        .lte("parade_date", endStr));
 
       // Fetch completions with photos
       const submissionIds = (submissionsData || []).map(s => s.id);
       let completionsData: any[] = [];
       if (submissionIds.length > 0) {
-        const { data } = await supabase
+        const { data } = await scopeQuery(supabase
           .from("cleaning_checklist_completions")
           .select(`
             submission_id,
@@ -154,7 +157,7 @@ export function CleaningParadeSummary() {
             photo_url,
             cleaning_checklist_items(item_name)
           `)
-          .in("submission_id", submissionIds);
+          .in("submission_id", submissionIds));
         completionsData = data || [];
       }
 

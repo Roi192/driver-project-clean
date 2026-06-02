@@ -104,7 +104,7 @@ interface SoldierCourse {
 }
 
 export default function AttendanceTracking() {
-  const { isAdmin, isPlatoonCommander, canAccessAttendance, loading: authLoading } = useAuth();
+  const { isAdmin, isPlatoonCommander, canAccessAttendance, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const hasAccess = canAccessAttendance;
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
@@ -138,7 +138,7 @@ export default function AttendanceTracking() {
     if (!authLoading && !hasAccess) navigate("/");
   }, [hasAccess, authLoading, navigate]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [brigade, isDivisionAdmin]);
 
   const fetchAllAttendance = async () => {
     const allRows: EventAttendance[] = [];
@@ -147,10 +147,16 @@ export default function AttendanceTracking() {
     let hasMore = true;
 
     while (hasMore) {
-      const { data, error } = await supabase
+      let query = supabase
         .from("event_attendance")
         .select("*")
         .range(offset, offset + batchSize - 1);
+
+      if (!isDivisionAdmin && brigade) {
+        query = query.eq("brigade", brigade);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Failed to fetch attendance batch:", error);
@@ -171,11 +177,27 @@ export default function AttendanceTracking() {
     const [soldiersRes, eventsRes, attendanceRows, overridesRes, coursesRes] = await Promise.all([
       // Fetch ALL soldiers (including released/inactive) so we can preserve historical
       // attendance records for soldiers who have since been removed from active service.
-      supabase.from("soldiers").select("*").order("full_name"),
-      supabase.from("work_plan_events").select("*").neq("category", "holiday").order("event_date", { ascending: false }),
+      (() => {
+        let query = supabase.from("soldiers").select("*").order("full_name");
+        if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+        return query;
+      })(),
+      (() => {
+        let query = supabase.from("work_plan_events").select("*").neq("category", "holiday").order("event_date", { ascending: false });
+        if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+        return query;
+      })(),
       fetchAllAttendance(),
-      supabase.from("content_cycle_overrides").select("*"),
-      supabase.from("soldier_courses").select("id, soldier_id, start_date, end_date, status, courses(name)").eq("status", "in_progress"),
+      (() => {
+        let query = supabase.from("content_cycle_overrides").select("*");
+        if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+        return query;
+      })(),
+      (() => {
+        let query = supabase.from("soldier_courses").select("id, soldier_id, start_date, end_date, status, courses(name)").eq("status", "in_progress");
+        if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+        return query;
+      })(),
     ]);
 
     if (!soldiersRes.error) setSoldiers(soldiersRes.data || []);
@@ -501,6 +523,7 @@ export default function AttendanceTracking() {
         absence_reason: isAbsent ? editReason : null,
         status: editStatus,
         completed: isAbsent && editCompleted,
+        brigade: brigade || "binyamin",
       });
       if (error) { toast.error("שגיאה בעדכון"); return; }
     }

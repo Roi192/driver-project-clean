@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DeckCard } from "@/components/shared/DeckCard";
-import { OUTPOSTS } from "@/lib/constants";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 import { FolderOpen, ArrowRight, MapPin, AlertTriangle, Shield, Navigation, Plus, Pencil, Trash2, Loader2, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,8 @@ const getFields = (): FieldConfig[] => [
 ];
 
 export default function SafetyFiles() {
-  const { canEditSafetyFiles: canEdit, canDelete } = useAuth();
+  const { canEditSafetyFiles: canEdit, canDelete, brigade, isDivisionAdmin } = useAuth();
+  const { outposts: brigadeOutposts, loading: outpostsLoading } = useBrigadeOutposts();
   const navigate = useNavigate();
   const [view, setView] = useState<View>("outposts");
   const [selectedOutpost, setSelectedOutpost] = useState<string | null>(null);
@@ -60,11 +61,15 @@ export default function SafetyFiles() {
 
   const fetchSafetyFiles = async (outpost: string, category: SafetyCategory) => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("safety_files")
       .select("*")
       .eq("outpost", outpost)
       .eq("category", category);
+
+    if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+
+    const { data, error } = await query;
 
     if (error) {
       toast.error("שגיאה בטעינת הנתונים");
@@ -90,6 +95,7 @@ export default function SafetyFiles() {
       category: selectedCategory,
       latitude,
       longitude,
+      brigade: brigade || "binyamin",
     };
 
     const { error } = await supabase.from("safety_files").insert([insertData]);
@@ -282,17 +288,33 @@ export default function SafetyFiles() {
     if (view === "outposts") {
       return (
         <div className="grid gap-4">
-          {OUTPOSTS.map((outpost, index) => (
+          {outpostsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : brigadeOutposts.length === 0 ? (
+            <div className="text-center py-12 px-4">
+              <FolderOpen className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+              <p className="text-slate-700 font-bold mb-1">לא הוגדרו מוצבים בחטיבה זו</p>
+              <p className="text-sm text-slate-500 mb-4">{canEdit ? 'יש להוסיף מוצבים דרך "ניהול מוצבי החטיבה"' : "פנה למפקד הפלוגה להוספת מוצבים"}</p>
+              {canEdit && (
+                <Button onClick={() => navigate("/brigade-outposts")} className="gap-2">
+                  ניהול מוצבי החטיבה
+                </Button>
+              )}
+            </div>
+          ) : (
+          brigadeOutposts.map((op, index) => (
             <DeckCard
-              key={outpost}
+              key={op.id}
               icon={FolderOpen}
-              title={outpost}
+              title={op.name}
               description="לחץ לצפייה בתיק הבטיחות"
-              onClick={() => handleOutpostSelect(outpost)}
+              onClick={() => handleOutpostSelect(op.name)}
               className="animate-slide-up"
               style={{ animationDelay: `${index * 50}ms` } as React.CSSProperties}
             />
-          ))}
+          )))}
         </div>
       );
     }

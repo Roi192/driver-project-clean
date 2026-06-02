@@ -51,7 +51,7 @@ interface Punishment {
 type PunishmentType = "משפט" | "שלילת ימי חופשה";
 
 export default function PunishmentsTracking() {
-  const { isAdmin, isPlatoonCommander, canAccessPunishments, loading: authLoading } = useAuth();
+  const { isAdmin, isPlatoonCommander, canAccessPunishments, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const hasAccess = canAccessPunishments;
   const [punishments, setPunishments] = useState<Punishment[]>([]);
@@ -85,21 +85,30 @@ export default function PunishmentsTracking() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchData = async () => {
     setLoading(true);
     
+    let punishmentsQuery = supabase
+      .from("punishments")
+      .select("*, soldiers(id, full_name, personal_number)")
+      .order("punishment_date", { ascending: false });
+
+    let soldiersQuery = supabase
+      .from("soldiers")
+      .select("id, full_name, personal_number")
+      .eq("is_active", true)
+      .order("full_name");
+
+    if (!isDivisionAdmin && brigade) {
+      punishmentsQuery = punishmentsQuery.eq("brigade", brigade);
+      soldiersQuery = soldiersQuery.eq("brigade", brigade);
+    }
+
     const [punishmentsRes, soldiersRes] = await Promise.all([
-      supabase
-        .from("punishments")
-        .select("*, soldiers(id, full_name, personal_number)")
-        .order("punishment_date", { ascending: false }),
-      supabase
-        .from("soldiers")
-        .select("id, full_name, personal_number")
-        .eq("is_active", true)
-        .order("full_name")
+      punishmentsQuery,
+      soldiersQuery,
     ]);
 
     if (punishmentsRes.error) {
@@ -175,6 +184,7 @@ export default function PunishmentsTracking() {
       punishment: fullPunishment,
       judge: formData.judge,
       notes: formData.notes || null,
+      brigade: brigade || "binyamin",
     };
 
     if (editingPunishment) {

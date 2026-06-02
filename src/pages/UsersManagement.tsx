@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, AppRole } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { BRIGADES, BRIGADE_CODES, getBrigade, type BrigadeCode } from "@/lib/brigades";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,7 @@ interface UserProfile {
   platoon: string | null;
   personal_number: string | null;
   created_at: string;
+  brigade?: string | null;
 }
 
 interface UserRole {
@@ -78,6 +80,7 @@ interface Soldier {
 // Role display names in Hebrew
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "מנהל ראשי",
+  division_admin: "מפאו\"ג איו\"ש",
   admin: "מנהל מ\"פ נהגים",
   platoon_commander: "מנהל מ\"מ נהגים",
   battalion_admin: "מנהל גדוד תע\"ם",
@@ -88,8 +91,10 @@ const ROLE_LABELS: Record<AppRole, string> = {
 
 const UsersManagement = () => {
   const navigate = useNavigate();
-  const { user, canDelete, isSuperAdmin } = useAuth();
+  const { user, canDelete, isSuperAdmin, isDivisionAdmin, brigade: myBrigade } = useAuth();
   const { isAdmin, canAccessUsersManagement, isLoading: roleLoading } = useUserRole();
+  // canSeeAllBrigades is true only when viewing the whole division (no specific brigade context)
+  const canSeeAllBrigades = isDivisionAdmin;
   
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
@@ -110,6 +115,7 @@ const UsersManagement = () => {
     role: "driver" as AppRole,
     department: "planag",
     battalion_name: "",
+    brigade: "binyamin",
   });
   const [saving, setSaving] = useState(false);
   
@@ -137,12 +143,17 @@ const UsersManagement = () => {
       setLoading(true);
       
       const [profilesRes, rolesRes, soldiersRes] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .or("department.eq.planag,department.is.null")
-          .neq("user_type", "battalion")
-          .order("created_at", { ascending: false }),
+        (() => {
+          let q = supabase
+            .from("profiles")
+            .select("*")
+            .or("department.eq.planag,department.is.null")
+            .neq("user_type", "battalion");
+          if (!canSeeAllBrigades && myBrigade) {
+            q = q.eq("brigade", myBrigade);
+          }
+          return q.order("created_at", { ascending: false });
+        })(),
         supabase.from("user_roles").select("user_id, role"),
         supabase.from("soldiers").select("id, personal_number"),
       ]);
@@ -172,6 +183,11 @@ const UsersManagement = () => {
               const utype = u.user_metadata?.user_type;
               if (utype === "battalion") return false;
               if (dept === "hagmar" || dept === "battalion") return false;
+              // Brigade scoping for orphan auth users
+              if (!canSeeAllBrigades && myBrigade) {
+                const userBrigade = u.user_metadata?.brigade || 'binyamin';
+                if (userBrigade !== myBrigade) return false;
+              }
               return true;
             })
             .map((u: any) => ({
@@ -219,6 +235,7 @@ const UsersManagement = () => {
       role: getUserRole(profile.user_id),
       department: (profile as any).department || "planag",
       battalion_name: (profile as any).battalion_name || "",
+      brigade: (profile as any).brigade || myBrigade || "binyamin",
     });
   };
 
@@ -244,6 +261,7 @@ const UsersManagement = () => {
             personal_number: editFormData.personal_number || null,
             department: editFormData.department || "planag",
             battalion_name: editFormData.department === "battalion" ? (editFormData.battalion_name || null) : null,
+            brigade: canSeeAllBrigades ? (editFormData.brigade || "binyamin") : (myBrigade || "binyamin"),
           },
         },
       });
@@ -488,6 +506,11 @@ const UsersManagement = () => {
                         <Badge className={getRoleBadgeStyle(role)}>
                           {ROLE_LABELS[role]}
                         </Badge>
+                        {canSeeAllBrigades && (profile as any).brigade && (
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                            {getBrigade((profile as any).brigade).shortLabel}
+                          </Badge>
+                        )}
                         {inSoldiersTable && (
                           <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs">
                             בטבלת שליטה
@@ -631,18 +654,44 @@ const UsersManagement = () => {
                   </SelectTrigger>
                     <SelectContent className="bg-popover border-border z-[10000]">
                     {isSuperAdmin && <SelectItem value="super_admin">מנהל ראשי (מח"ט)</SelectItem>}
+                    {isSuperAdmin && <SelectItem value="division_admin">מפאו"ג איו"ש (אוגדתי)</SelectItem>}
                     <SelectItem value="admin">מנהל מ"פ נהגים (גישה מלאה)</SelectItem>
                     <SelectItem value="platoon_commander">מנהל מ"מ נהגים</SelectItem>
-                    <SelectItem value="driver">נהג (משתמש רגיל)</SelectItem>
+                    {!isDivisionAdmin || isSuperAdmin ? (
+                      <SelectItem value="driver">נהג (משתמש רגיל)</SelectItem>
+                    ) : null}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {editFormData.role === 'super_admin' && '✓ מנהל ראשי - גישה מלאה לכל המחלקות'}
+                  {editFormData.role === 'super_admin' && '✓ מנהל ראשי - גישה מלאה לכל המחלקות וכל החטיבות'}
+                  {editFormData.role === 'division_admin' && '✓ מפאו"ג - רואה את כל החטיבות, מנהל מ"פ ומ"מ בכל החטיבות'}
                   {editFormData.role === 'admin' && '✓ גישה מלאה לכל הפיצ\'רים כולל מחיקה וניהול משתמשים'}
                   {editFormData.role === 'platoon_commander' && '✓ ללא דו"ח בו"מ, ניהול משתמשים ומחיקות'}
                   {editFormData.role === 'driver' && '✓ צפייה בלבד + מילוי טפסים'}
                 </p>
               </div>
+
+              {canSeeAllBrigades && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground">
+                    <Building2 className="w-4 h-4 text-primary" />
+                    חטיבה
+                  </Label>
+                  <Select
+                    value={editFormData.brigade}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, brigade: value }))}
+                  >
+                    <SelectTrigger className="h-12 rounded-xl bg-background text-foreground border-border">
+                      <SelectValue placeholder="בחר חטיבה" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border z-[10000]">
+                      {BRIGADE_CODES.map(code => (
+                        <SelectItem key={code} value={code}>{BRIGADES[code].name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label className="text-foreground">מוצב</Label>

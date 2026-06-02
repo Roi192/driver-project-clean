@@ -14,6 +14,8 @@ import { toast } from "@/hooks/use-toast";
 import { useShiftReport } from "@/hooks/useShiftReport";
 import { useAuth } from "@/hooks/useAuth";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
+import { Navigate } from "react-router-dom";
+import { getBrigade } from "@/lib/brigades";
 
 const STEP_LABELS = ["פרטים", "תדריכים", "ציוד", "תרגולות", "תמונות"];
 
@@ -95,7 +97,12 @@ const parseStoredStep = (value: string | null): number => {
 };
 
 export default function ShiftForm() {
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
+  // Pre-shift form is currently Binyamin-only (per division expansion spec).
+  // Other brigades will get their own variant later.
+  if (user && brigade && brigade !== 'binyamin') {
+    return <Navigate to="/" replace />;
+  }
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const navigate = useNavigate();
@@ -250,7 +257,38 @@ export default function ShiftForm() {
   };
 
   const validateAllSteps = () => {
-    const formData = methods.getValues();
+    let formData = methods.getValues();
+
+    // Recovery: if basic details are missing in form state but exist in sessionStorage
+    // (can happen due to remount/race conditions), restore them silently.
+    const basicMissing =
+      !formData.outpost || !formData.driverName || !formData.vehicleNumber || !formData.shiftType;
+    if (basicMissing && user?.id) {
+      const saved = loadFormFromStorage(user.id);
+      if (saved) {
+        const merged = {
+          ...saved,
+          // Keep newer photos / fields from current form if present
+          photos: { ...(saved.photos || {}), ...(formData.photos || {}) },
+          vehicleNotes: formData.vehicleNotes || saved.vehicleNotes,
+          combatEquipment: formData.combatEquipment?.length ? formData.combatEquipment : saved.combatEquipment,
+          preMovementChecks: formData.preMovementChecks?.length ? formData.preMovementChecks : saved.preMovementChecks,
+          driverTools: formData.driverTools?.length ? formData.driverTools : saved.driverTools,
+          drillsCompleted: formData.drillsCompleted?.length ? formData.drillsCompleted : saved.drillsCompleted,
+          safetyVulnerabilities: formData.safetyVulnerabilities || saved.safetyVulnerabilities,
+          vardimProcedure: formData.vardimProcedure || saved.vardimProcedure,
+          emergencyProcedure: formData.emergencyProcedure ?? saved.emergencyProcedure,
+          commanderBriefing: formData.commanderBriefing ?? saved.commanderBriefing,
+          workCardFilled: formData.workCardFilled ?? saved.workCardFilled,
+          outpost: formData.outpost || saved.outpost,
+          driverName: formData.driverName || saved.driverName,
+          vehicleNumber: formData.vehicleNumber || saved.vehicleNumber,
+          shiftType: formData.shiftType || saved.shiftType,
+        };
+        methods.reset(merged);
+        formData = methods.getValues();
+      }
+    }
 
     // Step 1: General Details
     if (!formData.outpost || !formData.driverName || !formData.vehicleNumber || !formData.shiftType) {

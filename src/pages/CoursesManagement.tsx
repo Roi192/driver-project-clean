@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { format, parseISO, isWithinInterval } from "date-fns";
 import { he } from "date-fns/locale";
@@ -65,6 +66,7 @@ interface SoldierCourse {
 const MAIN_COURSES = ["משא כבד", "משא", "דוד", "סוואנה", "טיגריס", "פנתר"];
 
 const CoursesManagement = () => {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
   const [soldierCourses, setSoldierCourses] = useState<SoldierCourse[]>([]);
@@ -97,19 +99,29 @@ const CoursesManagement = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [coursesRes, soldiersRes, enrollmentsRes] = await Promise.all([
-        supabase.from("courses").select("*").order("name"),
-        supabase.from("soldiers").select("id, full_name, personal_number, outpost").eq("is_active", true),
-        supabase.from("soldier_courses").select(`
+      let coursesQuery = supabase.from("courses").select("*").order("name");
+      let soldiersQuery = supabase.from("soldiers").select("id, full_name, personal_number, outpost").eq("is_active", true);
+      let enrollmentsQuery = supabase.from("soldier_courses").select(`
           *,
           soldiers(id, full_name, personal_number, outpost),
           courses(id, name, category)
-        `).order("start_date", { ascending: false }),
+        `).order("start_date", { ascending: false });
+
+      if (!isDivisionAdmin && brigade) {
+        coursesQuery = coursesQuery.eq("brigade", brigade);
+        soldiersQuery = soldiersQuery.eq("brigade", brigade);
+        enrollmentsQuery = enrollmentsQuery.eq("brigade", brigade);
+      }
+
+      const [coursesRes, soldiersRes, enrollmentsRes] = await Promise.all([
+        coursesQuery,
+        soldiersQuery,
+        enrollmentsQuery,
       ]);
 
       if (coursesRes.data) setCourses(coursesRes.data);
@@ -149,6 +161,7 @@ const CoursesManagement = () => {
           description: courseForm.description || null,
           duration_days: courseForm.duration_days,
           category: courseForm.category,
+          brigade: brigade || "binyamin",
         });
 
         if (error) throw error;
@@ -198,6 +211,7 @@ const CoursesManagement = () => {
         end_date: format(enrollForm.end_date, "yyyy-MM-dd"),
         status: "in_progress",
         notes: enrollForm.notes || null,
+        brigade: brigade || "binyamin",
       });
 
       if (error) throw error;

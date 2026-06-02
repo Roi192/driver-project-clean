@@ -190,6 +190,8 @@ export default function SoldiersControl() {
     isPlatoonCommander,
     canAccessSoldiersControl,
     loading: authLoading,
+    brigade,
+    isDivisionAdmin,
   } = useAuth();
   const navigate = useNavigate();
   const hasAccess = canAccessSoldiersControl;
@@ -250,7 +252,7 @@ export default function SoldiersControl() {
   useEffect(() => {
     fetchSoldiers();
     fetchExcellenceData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchExcellenceData = async () => {
     const { data, error } = await supabase
@@ -269,11 +271,14 @@ export default function SoldiersControl() {
 
   const fetchSoldiers = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let q = supabase
       .from("soldiers")
       .select("*")
-      .eq("is_active", true)
-      .order("full_name", { ascending: true });
+      .eq("is_active", true);
+    if (!isDivisionAdmin && brigade) {
+      q = q.eq("brigade", brigade);
+    }
+    const { data, error } = await q.order("full_name", { ascending: true });
 
     if (error) {
       console.error("Error fetching soldiers:", error);
@@ -351,7 +356,9 @@ export default function SoldiersControl() {
         fetchSoldiers();
       }
     } else {
-      const { error } = await supabase.from("soldiers").insert(soldierData);
+      const { error } = await supabase
+        .from("soldiers")
+        .insert({ ...soldierData, brigade: brigade || 'binyamin' } as any);
 
       if (error) {
         if (error.code === "23505") {

@@ -52,7 +52,7 @@ const ACTIONS = ["שיחת אזהרה", "שיחת בירור", "רישום בל�
 
 
 export default function Warnings() {
-  const { isAdmin, isPlatoonCommander, loading: authLoading, user } = useAuth();
+  const { isAdmin, isPlatoonCommander, loading: authLoading, user, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const hasAccess = isAdmin || isPlatoonCommander;
 
@@ -82,15 +82,25 @@ export default function Warnings() {
 
   useEffect(() => {
     if (hasAccess) loadData();
-  }, [hasAccess]);
+  }, [hasAccess, brigade, isDivisionAdmin]);
 
   const loadData = async () => {
     setLoading(true);
     try {
+      let warningsQuery = supabase.from("soldier_warnings").select("*").order("event_date", { ascending: false });
+      let soldiersQuery = supabase.from("soldiers").select("id, full_name, personal_number").eq("is_active", true).order("full_name");
+      let categoriesQuery = supabase.from("warning_categories" as any).select("*").order("sort_order").order("name");
+
+      if (!isDivisionAdmin && brigade) {
+        warningsQuery = warningsQuery.eq("brigade", brigade);
+        soldiersQuery = soldiersQuery.eq("brigade", brigade);
+        categoriesQuery = categoriesQuery.eq("brigade", brigade);
+      }
+
       const [{ data: w, error: we }, { data: s, error: se }, { data: c, error: ce }] = await Promise.all([
-        supabase.from("soldier_warnings").select("*").order("event_date", { ascending: false }),
-        supabase.from("soldiers").select("id, full_name, personal_number").eq("is_active", true).order("full_name"),
-        supabase.from("warning_categories" as any).select("*").order("sort_order").order("name"),
+        warningsQuery,
+        soldiersQuery,
+        categoriesQuery,
       ]);
       if (we) throw we;
       if (se) throw se;
@@ -117,7 +127,7 @@ export default function Warnings() {
     const name = newCatName.trim();
     if (!name) return;
     const maxOrder = categories.reduce((m, c) => Math.max(m, c.sort_order), 0);
-    const { error } = await supabase.from("warning_categories" as any).insert({ name, sort_order: maxOrder + 1, created_by: user?.id });
+    const { error } = await supabase.from("warning_categories" as any).insert({ name, sort_order: maxOrder + 1, created_by: user?.id, brigade: brigade || "binyamin" });
     if (error) { toast.error(`שגיאה בהוספה: ${error.message}`); return; }
     setNewCatName("");
     toast.success("נושא נוסף");
@@ -232,6 +242,7 @@ export default function Warnings() {
           action_taken: form.action_taken,
           description: form.description || null,
           created_by: user?.id,
+          brigade: brigade || "binyamin",
         });
         if (error) throw error;
         toast.success("האזהרה נוספה");

@@ -318,6 +318,25 @@ export default function Auth() {
               </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => navigate('/auth/gdud')}
+            className="mt-4 w-full group relative overflow-hidden rounded-2xl border-2 border-purple-500/40 hover:border-purple-500 bg-gradient-to-l from-purple-500/10 via-purple-500/5 to-transparent p-4 transition-all hover:shadow-lg hover:scale-[1.01]"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div className="text-right">
+                  <div className="font-black text-slate-800 text-sm">אתה מגדוד תע"ם?</div>
+                  <div className="text-xs text-purple-700 font-semibold">להרשמה ייעודית כגדוד תע"ם</div>
+                </div>
+              </div>
+              <span className="text-purple-700 font-bold text-sm">כניסה ←</span>
+            </div>
+          </button>
         </CardContent>
       </Card>
 

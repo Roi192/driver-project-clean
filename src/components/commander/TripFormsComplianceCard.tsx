@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Home, Users, CheckCircle2, XCircle, ChevronLeft, Loader2, Calendar, MapPin, RefreshCw } from "lucide-react";
 import { format, startOfWeek, endOfWeek, getDay, addDays } from "date-fns";
 import { he } from "date-fns/locale";
@@ -49,6 +50,7 @@ function getActiveRotationGroups(): string[] {
 }
 
 export function TripFormsComplianceCard() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [soldiers, setSoldiers] = useState<SoldierComplianceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,7 +58,7 @@ export function TripFormsComplianceCard() {
 
   useEffect(() => {
     fetchComplianceData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchComplianceData = async () => {
     setLoading(true);
@@ -64,11 +66,13 @@ export function TripFormsComplianceCard() {
       const activeGroups = getActiveRotationGroups();
       
       // Fetch all active soldiers in the active rotation groups
-      const { data: soldiersData, error: soldiersError } = await supabase
+      let soldiersQuery = supabase
         .from("soldiers")
         .select("id, full_name, outpost, rotation_group")
         .eq("is_active", true)
         .in("rotation_group", activeGroups);
+      if (!isDivisionAdmin && brigade) soldiersQuery = soldiersQuery.eq("brigade", brigade);
+      const { data: soldiersData, error: soldiersError } = await soldiersQuery;
 
       if (soldiersError) {
         console.error("Error fetching soldiers:", soldiersError);
@@ -86,11 +90,13 @@ export function TripFormsComplianceCard() {
       const weekStart = startOfWeek(today, { weekStartsOn: 0 }); // Sunday
       const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
 
-      const { data: tripFormsData } = await supabase
+      let formsQuery = supabase
         .from("trip_forms")
         .select("soldier_name, form_date")
         .gte("form_date", format(weekStart, "yyyy-MM-dd"))
         .lte("form_date", format(weekEnd, "yyyy-MM-dd"));
+      if (!isDivisionAdmin && brigade) formsQuery = formsQuery.eq("brigade", brigade);
+      const { data: tripFormsData } = await formsQuery;
 
       // Create a set of soldier names who submitted forms (normalized)
       const submittedNames = new Set(

@@ -52,7 +52,7 @@ const RECURRENCE = [
 ];
 
 export default function TasksTracking() {
-  const { isAdmin, isPlatoonCommander, loading: authLoading, user } = useAuth();
+  const { isAdmin, isPlatoonCommander, loading: authLoading, user, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const hasAccess = isAdmin || isPlatoonCommander;
 
@@ -78,15 +78,25 @@ export default function TasksTracking() {
     if (!authLoading && !hasAccess) navigate("/");
   }, [authLoading, hasAccess, navigate]);
 
-  useEffect(() => { if (hasAccess) loadData(); }, [hasAccess]);
+  useEffect(() => { if (hasAccess) loadData(); }, [hasAccess, brigade, isDivisionAdmin]);
 
   const loadData = async () => {
     setLoading(true);
     try {
+      let tasksQuery = supabase.from("company_tasks").select("*").order("created_at", { ascending: false });
+      let completionsQuery = supabase.from("task_completions").select("*");
+      let soldiersQuery = supabase.from("soldiers").select("id, full_name, personal_number").eq("is_active", true).order("full_name");
+
+      if (!isDivisionAdmin && brigade) {
+        tasksQuery = tasksQuery.eq("brigade", brigade);
+        completionsQuery = completionsQuery.eq("brigade", brigade);
+        soldiersQuery = soldiersQuery.eq("brigade", brigade);
+      }
+
       const [{ data: t, error: te }, { data: c, error: ce }, { data: s, error: se }] = await Promise.all([
-        supabase.from("company_tasks").select("*").order("created_at", { ascending: false }),
-        supabase.from("task_completions").select("*"),
-        supabase.from("soldiers").select("id, full_name, personal_number").eq("is_active", true).order("full_name"),
+        tasksQuery,
+        completionsQuery,
+        soldiersQuery,
       ]);
       if (te) throw te;
       if (ce) throw ce;
@@ -132,6 +142,7 @@ export default function TasksTracking() {
         due_date: format(nextDue, "yyyy-MM-dd"),
         parent_task_id: latest.parent_task_id || latest.id,
         created_by: user?.id,
+        brigade: brigade || "binyamin",
       });
     }
     if (toCreate.length) {
@@ -202,6 +213,7 @@ export default function TasksTracking() {
         recurrence: form.task_type === "recurring" ? form.recurrence : null,
         target_audience: "all",
         due_date: form.due_date || null,
+        brigade: brigade || "binyamin",
       };
       if (editing) {
         const { error } = await supabase.from("company_tasks").update(payload).eq("id", editing.id);
@@ -240,11 +252,13 @@ export default function TasksTracking() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from("task_completions").insert({
-          task_id: taskId, soldier_id: soldierId, completed_by: user?.id,
+          task_id: taskId, soldier_id: soldierId, completed_by: user?.id, brigade: brigade || "binyamin",
         });
         if (error) throw error;
       }
-      const { data: c } = await supabase.from("task_completions").select("*");
+      let completionsQuery = supabase.from("task_completions").select("*");
+      if (!isDivisionAdmin && brigade) completionsQuery = completionsQuery.eq("brigade", brigade);
+      const { data: c } = await completionsQuery;
       setCompletions((c || []) as Completion[]);
     } catch (e: any) {
       toast.error(`שגיאה: ${e.message}`);
@@ -257,11 +271,13 @@ export default function TasksTracking() {
     if (!missing.length) return;
     try {
       const { error } = await supabase.from("task_completions").insert(
-        missing.map((s) => ({ task_id: taskId, soldier_id: s.id, completed_by: user?.id }))
+        missing.map((s) => ({ task_id: taskId, soldier_id: s.id, completed_by: user?.id, brigade: brigade || "binyamin" }))
       );
       if (error) throw error;
       toast.success(`סומנו ${missing.length} חיילים`);
-      const { data: c } = await supabase.from("task_completions").select("*");
+      let completionsQuery = supabase.from("task_completions").select("*");
+      if (!isDivisionAdmin && brigade) completionsQuery = completionsQuery.eq("brigade", brigade);
+      const { data: c } = await completionsQuery;
       setCompletions((c || []) as Completion[]);
     } catch (e: any) {
       toast.error(`שגיאה: ${e.message}`);

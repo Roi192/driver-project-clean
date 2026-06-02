@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { deleteStorageFiles } from "@/lib/storage-cleanup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DeckCard } from "@/components/shared/DeckCard";
-import { OUTPOSTS, DRILLS } from "@/lib/constants";
+import { DRILLS } from "@/lib/constants";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 import { MapPin, ArrowRight, Target, Car, Flame, Navigation, Info, Plus, Pencil, Trash2, Loader2, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -79,7 +81,9 @@ const getAddFields = (): FieldConfig[] => [
 ];
 
 export default function DrillLocations() {
-  const { canEditDrillLocations: canEdit, canDelete } = useAuth();
+  const { canEditDrillLocations: canEdit, canDelete, brigade, isDivisionAdmin } = useAuth();
+  const navigate = useNavigate();
+  const { outposts: brigadeOutposts, loading: outpostsLoading } = useBrigadeOutposts();
   const [view, setView] = useState<View>("outposts");
   const [selectedOutpost, setSelectedOutpost] = useState<string | null>(null);
   const [selectedDrillType, setSelectedDrillType] = useState<DrillType | null>(null);
@@ -96,11 +100,15 @@ export default function DrillLocations() {
 
   const fetchDrillLocations = async (outpost: string, drillType: DrillType) => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("drill_locations")
       .select("*")
       .eq("outpost", outpost)
       .eq("drill_type", drillType);
+
+    if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+
+    const { data, error } = await query;
 
     if (error) {
       toast.error("שגיאה בטעינת נקודות התרגולות");
@@ -124,9 +132,10 @@ export default function DrillLocations() {
       latitude: data.latitude ? parseFloat(data.latitude) : null,
       longitude: data.longitude ? parseFloat(data.longitude) : null,
       instructions: data.instructions || null,
+      brigade: brigade || "binyamin",
     };
 
-    const { error } = await supabase.from("drill_locations").insert([insertData]);
+    const { error } = await supabase.from("drill_locations").insert([insertData as any]);
 
     if (error) {
       toast.error("שגיאה בהוספת נקודת תרגולת");
@@ -321,16 +330,33 @@ export default function DrillLocations() {
     if (view === "outposts") {
       return (
         <div className="grid gap-4">
-          {OUTPOSTS.map((outpost, index) => (
+          {outpostsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : brigadeOutposts.length === 0 ? (
+            <div className="text-center py-12 px-4">
+              <MapPin className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+              <p className="text-slate-700 font-bold mb-1">לא הוגדרו מוצבים בחטיבה זו</p>
+              <p className="text-sm text-slate-500 mb-4">{canEdit ? 'יש להוסיף מוצבים דרך "ניהול מוצבי החטיבה"' : "פנה למפקד הפלוגה להוספת מוצבים"}</p>
+              {canEdit && (
+                <Button onClick={() => navigate("/brigade-outposts")} className="gap-2">
+                  <Settings className="w-4 h-4" />
+                  ניהול מוצבי החטיבה
+                </Button>
+              )}
+            </div>
+          ) : (
+          brigadeOutposts.map((op, index) => (
             <DeckCard
-              key={outpost}
+              key={op.id}
               icon={MapPin}
-              title={outpost}
+              title={op.name}
               description="לחץ לצפייה בנקודות התרגולות"
-              onClick={() => handleOutpostSelect(outpost)}
+              onClick={() => handleOutpostSelect(op.name)}
               className={`animate-slide-up stagger-${(index % 5) + 1}`}
             />
-          ))}
+          )))}
         </div>
       );
     }

@@ -17,9 +17,10 @@ const safetyQuotes = [
 ];
 
 export function HeroSection() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, brigade } = useAuth();
   const { isAdmin } = useUserRole();
   const randomQuote = safetyQuotes[Math.floor(Math.random() * safetyQuotes.length)];
+  const isBinyamin = (brigade || 'binyamin') === 'binyamin';
   
   return (
     <section className="relative min-h-screen overflow-hidden">
@@ -264,6 +265,7 @@ export function HeroSection() {
         </div>
 
         {/* CTA Button - Ultimate Premium Light */}
+        {isBinyamin && (
         <div className="w-full max-w-md mx-auto animate-slide-up mb-14" style={{ animationDelay: '0.5s' }}>
           <Link to="/shift-form" className="block">
             <button className="group relative w-full overflow-hidden px-10 py-6 rounded-3xl bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_auto] text-primary-foreground font-black text-xl shadow-[0_10px_50px_rgba(0,0,0,0.15),0_0_80px_rgba(var(--primary),0.15)] hover:shadow-[0_15px_60px_rgba(0,0,0,0.2),0_0_100px_rgba(var(--primary),0.25)] transition-all duration-500 hover:scale-[1.03] animate-shimmer">
@@ -286,6 +288,7 @@ export function HeroSection() {
             </button>
           </Link>
         </div>
+        )}
 
         {/* Stats Grid - Premium Light Cards */}
         <div className="grid grid-cols-3 gap-4 md:gap-8 w-full max-w-xl animate-slide-up" style={{ animationDelay: '0.6s' }}>

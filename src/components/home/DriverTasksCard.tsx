@@ -47,7 +47,7 @@ const DAY_LABELS: Record<number, string> = {
 };
 
 export function DriverTasksCard() {
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
   const [initialLoading, setInitialLoading] = useState(true);
   const [soldierId, setSoldierId] = useState<string | null>(null);
   const [soldierOutpost, setSoldierOutpost] = useState<string | null>(null);
@@ -139,7 +139,8 @@ export function DriverTasksCard() {
   const pendingTasks = cleaningTasks.filter(t => !t.isPast && !t.isCompleted);
   const todayTasks = cleaningTasks.filter(t => t.isToday && !t.isCompleted);
   const groupedTasks = groupTasksByArea(cleaningTasks);
-  const needsAttention = todayTasks.length > 0 || !shiftFormStatus.hasTodayReport;
+  const isBinyamin = (brigade || 'binyamin') === 'binyamin';
+  const needsAttention = todayTasks.length > 0 || (isBinyamin && !shiftFormStatus.hasTodayReport);
 
   return (
     <Card className="border-2 border-primary/20 shadow-xl mb-6 bg-gradient-to-br from-white via-white to-primary/5 overflow-hidden">
@@ -157,7 +158,7 @@ export function DriverTasksCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 space-y-4">
-        <ShiftFormStatusCard status={shiftFormStatus} />
+        {isBinyamin && <ShiftFormStatusCard status={shiftFormStatus} />}
 
         {groupedTasks.length > 0 && (
           <div className="space-y-3">

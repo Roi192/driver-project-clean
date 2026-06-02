@@ -3,6 +3,8 @@ import { deleteStorageFiles } from '@/lib/storage-cleanup';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useAuth } from '@/hooks/useAuth';
+import { useBrigadeOutposts } from '@/hooks/useBrigadeOutposts';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { OUTPOSTS } from '@/lib/constants';
 import { ReportDetailDialog } from '@/components/admin/ReportDetailDialog';
 import { WeeklyReportsChart } from '@/components/admin/WeeklyReportsChart';
 import { VehicleReportsCard } from '@/components/admin/VehicleReportsCard';
@@ -93,6 +94,8 @@ const shiftTypeMap: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { isAdmin, isPlatoonCommander, isBattalionAdmin, isLoading: roleLoading } = useUserRole();
+  const { brigade, isDivisionAdmin } = useAuth();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts();
   const navigate = useNavigate();
   const [reports, setReports] = useState<ShiftReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -121,6 +124,10 @@ export default function AdminDashboard() {
         .from('shift_reports')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (!isDivisionAdmin && brigade) {
+        query = query.eq('brigade', brigade);
+      }
 
       if (filterOutpost && filterOutpost !== 'all') {
         query = query.eq('outpost', filterOutpost);
@@ -163,7 +170,7 @@ export default function AdminDashboard() {
     if (hasAccess) {
       fetchReports();
     }
-  }, [hasAccess, filterOutpost, filterDate]);
+  }, [hasAccess, filterOutpost, filterDate, brigade, isDivisionAdmin]);
 
   const clearFilters = () => {
     setFilterOutpost('all');
@@ -408,7 +415,7 @@ export default function AdminDashboard() {
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl">
                       <SelectItem value="all">כל המוצבים</SelectItem>
-                      {OUTPOSTS.map((outpost) => (
+                      {brigadeOutposts.map(({ name: outpost }) => (
                         <SelectItem key={outpost} value={outpost}>
                           {outpost}
                         </SelectItem>

@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { CommanderDashboard } from "@/components/commander/CommanderDashboard";
+import { DivisionDashboard } from "@/components/division/DivisionDashboard";
 import { HeroSection } from "@/components/home/HeroSection";
 import { QuickActions } from "@/components/home/QuickActions";
 import { DriverHomeContent } from "@/components/home/DriverHomeContent";
@@ -9,7 +10,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
-  const { user, isAdmin, isPlatoonCommander, isBattalionAdmin, isSuperAdmin, loading, role } = useAuth();
+  const { user, isAdmin, isPlatoonCommander, isBattalionAdmin, isSuperAdmin, loading, role, isBattalion, activeBrigade, realIsDivisionAdmin } = useAuth() as any;
   const navigate = useNavigate();
   const location = useLocation();
   const [departmentChecked, setDepartmentChecked] = useState(false);
@@ -48,13 +49,30 @@ const Index = () => {
       if (role === null) return;
       
       if (isSuperAdmin) {
-        setIsRedirecting(true);
-        navigate('/department-selector', { replace: true });
-        return;
+        const deptCtx = sessionStorage.getItem('superAdminDeptContext');
+        if (!deptCtx) {
+          setIsRedirecting(true);
+          navigate('/department-selector', { replace: true });
+          return;
+        }
+        const picked = sessionStorage.getItem('superAdminBrigadePicked') === '1';
+        if (deptCtx === 'planag' && !activeBrigade && !picked) {
+          setIsRedirecting(true);
+          navigate('/brigade-context', { replace: true });
+          return;
+        }
+        // otherwise fall through and render the dashboard
       }
       if (role === 'hagmar_admin' || role === 'ravshatz') {
         setIsRedirecting(true);
         navigate('/hagmar', { replace: true });
+        return;
+      }
+
+      // Battalion users must pick a brigade context before seeing the dashboard
+      if (isBattalion && !activeBrigade) {
+        setIsRedirecting(true);
+        navigate('/brigade-context', { replace: true });
         return;
       }
       
@@ -75,9 +93,10 @@ const Index = () => {
     
     if (!loading && user) checkDepartment();
     else if (!loading) setDepartmentChecked(true);
-  }, [user, isSuperAdmin, role, loading, navigate, isRootPath]);
+  }, [user, isSuperAdmin, role, loading, navigate, isRootPath, activeBrigade, isBattalion]);
 
   const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin;
+  const inDivisionView = realIsDivisionAdmin && !activeBrigade;
 
   if (loading || !departmentChecked || isRedirecting) {
     return (
@@ -88,6 +107,14 @@ const Index = () => {
             <div className="relative w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         </div>
+      </AppLayout>
+    );
+  }
+
+  if (user && inDivisionView) {
+    return (
+      <AppLayout>
+        <DivisionDashboard />
       </AppLayout>
     );
   }

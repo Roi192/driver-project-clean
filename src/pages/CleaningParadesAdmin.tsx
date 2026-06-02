@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { OUTPOSTS } from "@/lib/constants";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, addWeeks, addDays } from "date-fns";
 import { he } from "date-fns/locale";
@@ -89,7 +89,8 @@ const DAY_OPTIONS = [
 ];
 
 export default function CleaningParadesAdmin() {
-  const { canAccessCleaningManagement, loading: roleLoading } = useAuth();
+  const { canAccessCleaningManagement, loading: roleLoading, brigade, isDivisionAdmin } = useAuth();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts();
   const navigate = useNavigate();
   
   // Data state
@@ -101,7 +102,7 @@ export default function CleaningParadesAdmin() {
   const [loading, setLoading] = useState(true);
   
   // Selection state
-  const [selectedOutpost, setSelectedOutpost] = useState<string>(OUTPOSTS[0]);
+  const [selectedOutpost, setSelectedOutpost] = useState<string>("");
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [activeTab, setActiveTab] = useState("photos");
   
@@ -131,10 +132,20 @@ export default function CleaningParadesAdmin() {
   }, [canAccessCleaningManagement, roleLoading, navigate]);
 
   useEffect(() => {
-    if (canAccessCleaningManagement) {
+    if (canAccessCleaningManagement && selectedOutpost) {
       fetchAllData();
     }
-  }, [canAccessCleaningManagement, selectedOutpost]);
+  }, [canAccessCleaningManagement, selectedOutpost, brigade, isDivisionAdmin]);
+
+  useEffect(() => {
+    if (!brigadeOutposts.length) {
+      setSelectedOutpost("");
+      return;
+    }
+    if (!selectedOutpost || !brigadeOutposts.some((o) => o.name === selectedOutpost)) {
+      setSelectedOutpost(brigadeOutposts[0].name);
+    }
+  }, [brigadeOutposts, selectedOutpost]);
 
   useEffect(() => {
     if (canAccessCleaningManagement && selectedOutpost) {
@@ -149,47 +160,57 @@ export default function CleaningParadesAdmin() {
   };
 
   const fetchChecklistItems = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from("cleaning_checklist_items")
       .select("*")
       .eq("outpost", selectedOutpost)
       .order("item_order");
+    if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+    const { data } = await query;
     setChecklistItems(data || []);
   };
 
   const fetchReferencePhotos = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from("cleaning_reference_photos")
       .select("*")
       .eq("outpost", selectedOutpost)
       .order("display_order");
+    if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+    const { data } = await query;
     setReferencePhotos(data || []);
   };
 
   const fetchSoldiers = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from("soldiers")
       .select("id, full_name, personal_number, outpost")
       .eq("is_active", true)
       .order("full_name");
+    if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+    const { data } = await query;
     setSoldiers(data || []);
   };
 
   const fetchAssignmentData = async () => {
     const weekStartDate = format(currentWeekStart, 'yyyy-MM-dd');
     
-    const { data: manualData } = await supabase
+    let manualQuery = supabase
       .from('cleaning_manual_assignments')
       .select('*')
       .eq('outpost', selectedOutpost)
       .eq('week_start_date', weekStartDate);
+    if (!isDivisionAdmin && brigade) manualQuery = manualQuery.eq('brigade', brigade);
+    const { data: manualData } = await manualQuery;
     setManualAssignments(manualData || []);
     
-    const { data: scheduleData } = await supabase
+    let scheduleQuery = supabase
       .from('work_schedule')
       .select('outpost, day_of_week, afternoon_soldier_id, morning_soldier_id')
       .eq('outpost', selectedOutpost)
       .eq('week_start_date', weekStartDate);
+    if (!isDivisionAdmin && brigade) scheduleQuery = scheduleQuery.eq('brigade', brigade);
+    const { data: scheduleData } = await scheduleQuery;
     setWorkSchedule(scheduleData || []);
   };
 
@@ -232,6 +253,7 @@ export default function CleaningParadesAdmin() {
           outpost: selectedOutpost,
           item_name: itemForm.item_name,
           item_order: checklistItems.length,
+          brigade: brigade || "binyamin",
         });
         toast.success("הפריט נוסף בהצלחה");
       }
@@ -302,6 +324,7 @@ export default function CleaningParadesAdmin() {
         description: photoForm.description || null,
         image_url: signedUrlData.signedUrl,
         display_order: itemPhotos.length,
+        brigade: brigade || "binyamin",
       });
 
       if (insertError) {
@@ -358,6 +381,7 @@ export default function CleaningParadesAdmin() {
         soldier_id: selectedSoldierId,
         week_start_date: weekStartDate,
         day_of_week: selectedDayForAssignment,
+        brigade: brigade || "binyamin",
       });
 
       toast.success("החייל שובץ בהצלחה");
@@ -423,7 +447,7 @@ export default function CleaningParadesAdmin() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {OUTPOSTS.map(outpost => (
+                    {brigadeOutposts.map(({ name: outpost }) => (
                       <SelectItem key={outpost} value={outpost}>{outpost}</SelectItem>
                     ))}
                   </SelectContent>

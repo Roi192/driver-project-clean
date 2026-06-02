@@ -67,7 +67,7 @@ const STATUS_META: Record<string, { label: string; color: string; icon: any }> =
 };
 
 export default function ExitRequests() {
-  const { isAdmin, isPlatoonCommander, loading: authLoading } = useAuth();
+  const { isAdmin, isPlatoonCommander, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const hasAccess = isAdmin || isPlatoonCommander;
 
@@ -99,20 +99,29 @@ export default function ExitRequests() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchData = async () => {
     setLoading(true);
+    let requestsQuery = supabase
+      .from("exit_requests")
+      .select("*, soldiers(id, full_name, personal_number)")
+      .order("exit_date", { ascending: false });
+
+    let soldiersQuery = supabase
+      .from("soldiers")
+      .select("id, full_name, personal_number")
+      .eq("is_active", true)
+      .order("full_name");
+
+    if (!isDivisionAdmin && brigade) {
+      requestsQuery = requestsQuery.eq("brigade", brigade);
+      soldiersQuery = soldiersQuery.eq("brigade", brigade);
+    }
+
     const [reqRes, soldiersRes] = await Promise.all([
-      supabase
-        .from("exit_requests")
-        .select("*, soldiers(id, full_name, personal_number)")
-        .order("exit_date", { ascending: false }),
-      supabase
-        .from("soldiers")
-        .select("id, full_name, personal_number")
-        .eq("is_active", true)
-        .order("full_name"),
+      requestsQuery,
+      soldiersQuery,
     ]);
 
     if (reqRes.error) {
@@ -191,6 +200,7 @@ export default function ExitRequests() {
       reason: formData.reason || null,
       status: formData.status,
       decision_notes: formData.decision_notes || null,
+      brigade: brigade || "binyamin",
     };
 
     if (formData.status !== "pending") {

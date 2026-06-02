@@ -50,9 +50,10 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import unitLogo from "@/assets/unit-logo.png";
+import { BRIGADES } from "@/lib/brigades";
 
 // Base nav items - shift-form will be filtered based on user type
-const getNavItems = (userType: string | null, isBattalionAdmin: boolean) => {
+const getNavItems = (userType: string | null, isBattalionAdmin: boolean, brigade: string | null) => {
   const items = [
     { to: "/", icon: Home, label: "דף הבית" },
     { to: "/shift-form", icon: FileText, label: "טופס לפני משמרת", featured: true },
@@ -72,7 +73,13 @@ const getNavItems = (userType: string | null, isBattalionAdmin: boolean) => {
     const allowedBattalionPaths = ['/', '/drill-locations', '/safety-files', '/safety-events', '/training-videos'];
     return items.filter(item => allowedBattalionPaths.includes(item.to));
   }
-  
+
+  // Hide pre-shift form for all brigades except Binyamin
+  const effectiveBrigade = brigade || 'binyamin';
+  if (effectiveBrigade !== 'binyamin') {
+    return items.filter(item => item.to !== '/shift-form');
+  }
+
   return items;
 };
 
@@ -91,6 +98,7 @@ export function MobileNav() {
     isHagmarAdmin,
     user, 
     userType,
+    brigade,
     role,
     canAccessUsersManagement,
     canAccessBomReport,
@@ -111,8 +119,9 @@ export function MobileNav() {
     canAccessEquipmentTracking,
   } = useAuth();
   const navigate = useNavigate();
+  const { realIsDivisionAdmin, activeBrigade, isBattalion } = useAuth() as any;
   
-  const navItems = getNavItems(userType, isBattalionAdmin);
+  const navItems = getNavItems(userType, isBattalionAdmin, brigade);
 
   // Battalion context detection
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
@@ -342,6 +351,91 @@ export function MobileNav() {
               <span className="font-bold text-base relative z-10 flex-1">החלפת מחלקה</span>
               <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-amber-400 group-hover:-translate-x-1 transition-all duration-300" />
             </NavLink>
+          )}
+
+          {/* Switch Brigade Button - for super_admin / division_admin / battalion (planag context) */}
+          {(realIsDivisionAdmin || isBattalion) && !isInHagmar && !isOnDepartmentSelector && (
+            <NavLink
+              to="/brigade-context"
+              onClick={() => setIsOpen(false)}
+              className={cn(
+                "flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border-2 border-primary/40",
+                "hover:bg-gradient-to-l hover:from-primary/20 hover:to-transparent hover:border-primary/60"
+              )}
+              activeClassName="bg-gradient-to-l from-primary/30 to-transparent text-primary border-primary/60"
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <Building className="w-6 h-6" />
+              </div>
+              <div className="flex-1 relative z-10">
+                <span className="font-bold text-base block">החלפת חטיבה</span>
+                <span className="text-xs text-slate-400">
+                  {activeBrigade ? `כעת: ${(BRIGADES as any)[activeBrigade]?.name || activeBrigade}` : 'כעת: כל החטיבות'}
+                </span>
+              </div>
+              <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-primary group-hover:-translate-x-1 transition-all duration-300" />
+            </NavLink>
+          )}
+
+          {/* Division-wide menu - shown only in division view (no specific brigade picked) */}
+          {realIsDivisionAdmin && !activeBrigade && !isInHagmar && !isOnDepartmentSelector && (
+            <>
+              <div className="px-2 pt-2 pb-1 text-xs font-black text-amber-500 uppercase tracking-wider">תצוגה אוגדתית</div>
+              <NavLink to="/" onClick={() => setIsOpen(false)}
+                className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
+                activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <LayoutDashboard className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-base relative z-10 flex-1">דשבורד אוגדתי</span>
+                <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-amber-400 group-hover:-translate-x-1 transition-all duration-300" />
+              </NavLink>
+
+              <NavLink to="/division/map" onClick={() => setIsOpen(false)}
+                className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
+                activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Map className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-base relative z-10 flex-1">מפת איו"ש</span>
+                <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 group-hover:-translate-x-1 transition-all duration-300" />
+              </NavLink>
+
+              <NavLink to="/division/report" onClick={() => setIsOpen(false)}
+                className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
+                activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-base relative z-10 flex-1">דוח אוגדתי מרוכז</span>
+                <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-blue-400 group-hover:-translate-x-1 transition-all duration-300" />
+              </NavLink>
+
+              <NavLink to="/division/fitness" onClick={() => setIsOpen(false)}
+                className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
+                activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Gauge className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-base relative z-10 flex-1">כשירות נהגים אוגדתית</span>
+                <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-rose-400 group-hover:-translate-x-1 transition-all duration-300" />
+              </NavLink>
+
+              <NavLink to="/users-management" onClick={() => setIsOpen(false)}
+                className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
+                activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <UserCog className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-base relative z-10 flex-1">ניהול משתמשים אוגדתי</span>
+                <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-purple-400 group-hover:-translate-x-1 transition-all duration-300" />
+              </NavLink>
+            </>
           )}
 
           {/* Battalion Menu - shown for battalion_admin or super_admin in battalion context */}
@@ -1074,6 +1168,26 @@ export function MobileNav() {
                   </div>
                   <span className="font-bold text-base relative z-10 flex-1">ניהול משתמשים</span>
                   <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-pink-400 group-hover:-translate-x-1 transition-all duration-300" />
+                </NavLink>
+              )}
+
+              {/* Brigade Outposts Management - admin / platoon_commander / division_admin / super_admin */}
+              {(isAdmin || isPlatoonCommander || isSuperAdmin || realIsDivisionAdmin) && (
+                <NavLink
+                  to="/brigade-outposts"
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-gold/30",
+                    "hover:bg-gradient-to-l hover:from-gold/20 hover:to-transparent hover:border-gold/60"
+                  )}
+                  activeClassName="bg-gradient-to-l from-gold/30 to-transparent text-gold border-gold/60 shadow-lg shadow-gold/20"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-gold/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <Building className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-base relative z-10 flex-1">ניהול מוצבי החטיבה</span>
+                  <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 group-hover:-translate-x-1 transition-all duration-300" />
                 </NavLink>
               )}
 

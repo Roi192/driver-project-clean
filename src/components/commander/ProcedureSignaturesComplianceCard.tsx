@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { FileSignature, Users, CheckCircle2, XCircle, ChevronLeft, Search, Loader2, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,7 @@ const procedureColors: Record<string, { bg: string; text: string; border: string
 };
 
 export function ProcedureSignaturesComplianceCard() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
   const [signatures, setSignatures] = useState<SignatureRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,26 +61,28 @@ export function ProcedureSignaturesComplianceCard() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [brigade, isDivisionAdmin]);
+
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq("brigade", brigade) : query);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       // Fetch all soldiers from the control table
-      const { data: soldiersData } = await supabase
+      const { data: soldiersData } = await scopeQuery(supabase
         .from("soldiers")
         .select("id, full_name, outpost")
-        .order("full_name");
+        .order("full_name"));
 
       // Fetch procedure signatures for current year
       const currentYear = new Date().getFullYear();
       const startOfYear = new Date(currentYear, 0, 1).toISOString();
       
-      const { data: signaturesData } = await supabase
+      const { data: signaturesData } = await scopeQuery(supabase
         .from("procedure_signatures")
         .select("user_id, procedure_type, full_name, created_at")
         .gte("created_at", startOfYear)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }));
 
       setSoldiers(soldiersData || []);
       setSignatures(signaturesData || []);

@@ -18,6 +18,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { PushNotificationSetup } from "@/components/push/PushNotificationSetup";
+import { getBrigade } from "@/lib/brigades";
 
 interface ActionItem {
   to: string;
@@ -27,6 +28,7 @@ interface ActionItem {
   iconGradient: string;
   featured?: boolean;
   hideForBattalion?: boolean;
+  binyaminOnly?: boolean; // pre-shift form is Binyamin-only for now
 }
 
 const actions: ActionItem[] = [
@@ -38,6 +40,7 @@ const actions: ActionItem[] = [
     iconGradient: "from-primary to-primary/70",
     featured: true,
     hideForBattalion: true,
+    binyaminOnly: true,
   },
   {
     to: "/drill-locations",
@@ -93,13 +96,17 @@ const actions: ActionItem[] = [
 ];
 
 export function QuickActions() {
-  const { userType } = useAuth();
+  const { userType, brigade } = useAuth();
   const isBattalionUser = userType === 'battalion';
+  const brigadeInfo = getBrigade(brigade);
+  const isBinyamin = brigadeInfo.code === 'binyamin';
 
   // Filter actions based on user type
-  const filteredActions = actions.filter(action => 
-    !action.hideForBattalion || !isBattalionUser
-  );
+  const filteredActions = actions.filter(action => {
+    if (action.hideForBattalion && isBattalionUser) return false;
+    if (action.binyaminOnly && !isBinyamin) return false;
+    return true;
+  });
 
   return (
     <section className="relative px-4 py-20 overflow-hidden">
@@ -265,7 +272,7 @@ export function QuickActions() {
         
         {/* Brand signature */}
         <div className="text-center mt-8 animate-slide-up" style={{ animationDelay: '1s' }}>
-          <span className="text-sm font-bold text-slate-400">פלנ"ג בנימין • מערכת נהגי בט"ש</span>
+          <span className="text-sm font-bold text-slate-400">{brigadeInfo.shortLabel} • מערכת נהגי בט"ש</span>
         </div>
       </div>
       

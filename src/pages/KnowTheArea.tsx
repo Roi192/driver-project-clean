@@ -6,6 +6,7 @@ import "leaflet.heat";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import { REGIONS, REGION_OUTPOSTS, OUTPOSTS, getRegionFromOutpost } from "@/lib/constants";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -459,8 +459,9 @@ const parseRoutePoints = (points: any): Array<{ lat: number; lng: number }> => {
 
 const KnowTheArea = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, brigade, isDivisionAdmin } = useAuth();
   const { isAdmin, canEdit, canDelete, isBattalionAdmin } = useUserRole();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts();
   const mapRef = useRef<L.Map | null>(null);
   
   // Data states
@@ -542,6 +543,12 @@ const KnowTheArea = () => {
   const [soldiers, setSoldiers] = useState<{ id: string; full_name: string; personal_number: string }[]>([]);
   const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
 
+  const regionOptions = useMemo(
+    () => Array.from(new Set(brigadeOutposts.map((o) => o.region).filter(Boolean) as string[])).sort(),
+    [brigadeOutposts]
+  );
+  const outpostOptions = useMemo(() => brigadeOutposts.map((o) => o.name), [brigadeOutposts]);
+
   // Event types for the form
   const EVENT_TYPES = [
     { value: "accident", label: "תאונה" },
@@ -569,14 +576,14 @@ const KnowTheArea = () => {
         name: "region", 
         label: "גזרה", 
         type: "select",
-        options: REGIONS.map(r => ({ value: r, label: r })),
+        options: regionOptions.map(r => ({ value: r, label: r })),
         placeholder: "בחר גזרה"
       },
       { 
         name: "outpost", 
         label: "מוצב", 
         type: "select",
-        options: OUTPOSTS.map(o => ({ value: o, label: o })),
+        options: outpostOptions.map(o => ({ value: o, label: o })),
         placeholder: "בחר מוצב"
       },
       { 
@@ -641,14 +648,18 @@ const KnowTheArea = () => {
   useEffect(() => {
     fetchData();
     fetchSoldiers();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchSoldiers = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from("soldiers")
       .select("id, full_name, personal_number")
       .eq("is_active", true)
       .order("full_name");
+
+    if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+
+    const { data } = await query;
     if (data) setSoldiers(data);
   };
 
@@ -656,17 +667,31 @@ const KnowTheArea = () => {
     try {
       setLoading(true);
       
+      let pointsQuery = supabase.from("map_points_of_interest").select("*").eq("is_active", true);
+      let eventsQuery = supabase.from("safety_content")
+        .select("*")
+        .in("category", ["sector_events", "neighbor_events"])
+        .not("latitude", "is", null)
+        .order("event_date", { ascending: false })
+        .limit(100);
+      let routesQuery = supabase.from("dangerous_routes").select("*").eq("is_active", true);
+      let boundariesQuery = supabase.from("sector_boundaries").select("*").eq("is_active", true);
+      let safetyFilesQuery = supabase.from("safety_files").select("*").not("latitude", "is", null);
+
+      if (!isDivisionAdmin && brigade) {
+        pointsQuery = pointsQuery.eq("brigade", brigade);
+        eventsQuery = eventsQuery.eq("brigade", brigade);
+        routesQuery = routesQuery.eq("brigade", brigade);
+        boundariesQuery = boundariesQuery.eq("brigade", brigade);
+        safetyFilesQuery = safetyFilesQuery.eq("brigade", brigade);
+      }
+
       const [pointsRes, eventsRes, routesRes, boundariesRes, safetyFilesRes] = await Promise.all([
-        supabase.from("map_points_of_interest").select("*").eq("is_active", true),
-        supabase.from("safety_content")
-          .select("*")
-          .in("category", ["sector_events", "neighbor_events"])
-          .not("latitude", "is", null)
-          .order("event_date", { ascending: false })
-          .limit(100),
-        supabase.from("dangerous_routes").select("*").eq("is_active", true),
-        supabase.from("sector_boundaries").select("*").eq("is_active", true),
-        supabase.from("safety_files").select("*").not("latitude", "is", null),
+        pointsQuery,
+        eventsQuery,
+        routesQuery,
+        boundariesQuery,
+        safetyFilesQuery,
       ]);
       
       if (pointsRes.data) setMapPoints(pointsRes.data);
@@ -697,14 +722,14 @@ const KnowTheArea = () => {
   // Get outposts available for the selected region
   const availableOutposts = useMemo(() => {
     if (selectedRegion === "all") return [];
-    return REGION_OUTPOSTS[selectedRegion] || [];
-  }, [selectedRegion]);
+    return brigadeOutposts.filter((o) => o.region === selectedRegion).map((o) => o.name);
+  }, [selectedRegion, brigadeOutposts]);
 
   // Helper to check if an outpost belongs to the selected region
   const matchesRegionFilter = (outpostName: string | null | undefined): boolean => {
     if (selectedRegion === "all") return true;
     if (!outpostName) return false;
-    const regionOutposts = REGION_OUTPOSTS[selectedRegion] || [];
+    const regionOutposts = availableOutposts;
     if (selectedOutpostFilter !== "all") {
       return outpostName === selectedOutpostFilter;
     }
@@ -717,7 +742,7 @@ const KnowTheArea = () => {
       .filter(p => p.point_type === "outpost" || p.point_type === "checkpoint")
       .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
       .filter(p => matchesRegionFilter(p.name));
-  }, [mapPoints, searchQuery, selectedRegion, selectedOutpostFilter]);
+  }, [mapPoints, searchQuery, selectedRegion, selectedOutpostFilter, availableOutposts]);
 
   // Helper to check if an event matches the region filter
   const matchesEventRegionFilter = (eventRegion: string | null | undefined): boolean => {
@@ -861,6 +886,7 @@ const KnowTheArea = () => {
         danger_type: routeFormData.danger_type,
         is_active: true,
         created_by: user?.id,
+        brigade: brigade || "binyamin",
       }]);
 
       if (error) throw error;
@@ -1012,6 +1038,7 @@ const KnowTheArea = () => {
         severity: formData.point_type === "danger_zone" ? formData.severity : null,
         is_active: true,
         created_by: user?.id,
+        brigade: brigade || "binyamin",
       });
 
       if (error) throw error;
@@ -1072,6 +1099,7 @@ const KnowTheArea = () => {
         color: boundaryFormData.color,
         is_active: true,
         created_by: user?.id,
+        brigade: brigade || "binyamin",
       }]);
 
       if (error) throw error;
@@ -1139,6 +1167,7 @@ const KnowTheArea = () => {
         driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
         severity: data.severity || 'minor',
+        brigade: brigade || "binyamin",
       }]);
 
       if (error) throw error;
@@ -1641,7 +1670,7 @@ const KnowTheArea = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">כל הגזרות</SelectItem>
-                    {REGIONS.map(region => (
+                    {regionOptions.map(region => (
                       <SelectItem key={region} value={region}>{region}</SelectItem>
                     ))}
                   </SelectContent>

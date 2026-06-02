@@ -103,7 +103,7 @@ const incidentTypeColors: Record<string, string> = {
 };
 
 const AccidentsTracking = () => {
-  const { isAdmin, canDelete } = useAuth();
+  const { isAdmin, canDelete, brigade, isDivisionAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<SectorEvent | null>(null);
@@ -140,13 +140,14 @@ const AccidentsTracking = () => {
 
   // Fetch soldiers
   const { data: soldiers = [] } = useQuery({
-    queryKey: ['soldiers'],
+    queryKey: ['soldiers', brigade, isDivisionAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('soldiers')
         .select('id, full_name, personal_number')
-        .eq('is_active', true)
-        .order('full_name');
+        .eq('is_active', true);
+      if (!isDivisionAdmin && brigade) q = q.eq('brigade', brigade);
+      const { data, error } = await q.order('full_name');
       if (error) throw error;
       return data as Soldier[];
     }
@@ -154,13 +155,14 @@ const AccidentsTracking = () => {
 
   // Fetch sector events from safety_content
   const { data: sectorEvents = [], isLoading } = useQuery({
-    queryKey: ['sector-events-for-accidents'],
+    queryKey: ['sector-events-for-accidents', brigade, isDivisionAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('safety_content')
         .select('*, soldiers(id, full_name, personal_number)')
-        .eq('category', 'sector_events')
-        .order('event_date', { ascending: false });
+        .eq('category', 'sector_events');
+      if (!isDivisionAdmin && brigade) q = q.eq('brigade', brigade);
+      const { data, error } = await q.order('event_date', { ascending: false });
       if (error) throw error;
       return (data || []) as SectorEvent[];
     }
@@ -188,7 +190,9 @@ const AccidentsTracking = () => {
         latitude: data.latitude ? parseFloat(data.latitude) : null,
         longitude: data.longitude ? parseFloat(data.longitude) : null,
       };
-      const { error } = await supabase.from('safety_content').insert(insertData);
+      const { error } = await supabase
+        .from('safety_content')
+        .insert({ ...insertData, brigade: brigade || 'binyamin' } as any);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   AlertTriangle, 
   CreditCard, 
@@ -71,12 +72,15 @@ interface ShiftReport {
 }
 
 export function SmartAlerts() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchAlerts();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
+
+  const scopeQuery = (query: any) => (!isDivisionAdmin && brigade ? query.eq('brigade', brigade) : query);
 
   const fetchAlerts = async () => {
     setIsLoading(true);
@@ -85,10 +89,10 @@ export function SmartAlerts() {
 
     try {
       // 1. Check license expiry
-      const { data: soldiers } = await supabase
+      const { data: soldiers } = await scopeQuery(supabase
         .from('soldiers')
         .select('id, full_name, military_license_expiry, civilian_license_expiry, is_active, defensive_driving_passed, correct_driving_in_service_date')
-        .eq('is_active', true);
+        .eq('is_active', true));
 
       if (soldiers) {
         const expiredLicenses: string[] = [];
@@ -200,10 +204,10 @@ export function SmartAlerts() {
 
       // 2. Check attendance issues - soldiers with high absences this month
       const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const { data: attendance } = await supabase
+      const { data: attendance } = await scopeQuery(supabase
         .from('event_attendance')
         .select('soldier_id, status')
-        .gte('created_at', firstDayOfMonth.toISOString());
+        .gte('created_at', firstDayOfMonth.toISOString()));
 
       if (attendance) {
         const absenceCountByDriver: Record<string, number> = {};
@@ -228,11 +232,11 @@ export function SmartAlerts() {
       }
 
       // 3. Check low inspection scores
-      const { data: inspections } = await supabase
+      const { data: inspections } = await scopeQuery(supabase
         .from('inspections')
         .select('id, total_score, soldier_id')
         .lt('total_score', 70)
-        .gte('inspection_date', firstDayOfMonth.toISOString().split('T')[0]);
+        .gte('inspection_date', firstDayOfMonth.toISOString().split('T')[0]));
 
       if (inspections && inspections.length > 0) {
         alertsList.push({
@@ -252,9 +256,9 @@ export function SmartAlerts() {
       const lastMonthStart = startOfMonth(subMonths(today, 1));
       const lastMonthEnd = endOfMonth(subMonths(today, 1));
 
-      const { data: accidents } = await supabase
+      const { data: accidents } = await scopeQuery(supabase
         .from('accidents')
-        .select('id, driver_name, severity, accident_date');
+        .select('id, driver_name, severity, accident_date'));
 
       if (accidents && accidents.length > 0) {
         const thisMonthAccidents = accidents.filter((a: Accident) => {
@@ -299,12 +303,12 @@ export function SmartAlerts() {
       // 5. Check upcoming events this week
       const weekStart = startOfWeek(today, { weekStartsOn: 0 });
       const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
-      const { data: upcomingEvents } = await supabase
+      const { data: upcomingEvents } = await scopeQuery(supabase
         .from('work_plan_events')
         .select('id, title, event_date, status')
         .gte('event_date', today.toISOString().split('T')[0])
         .lte('event_date', weekEnd.toISOString().split('T')[0])
-        .eq('status', 'pending');
+        .eq('status', 'pending'));
 
       if (upcomingEvents && upcomingEvents.length > 0) {
         alertsList.push({
@@ -320,11 +324,11 @@ export function SmartAlerts() {
 
       // 6. Check incomplete shift reports from yesterday
       const yesterday = addDays(today, -1).toISOString().split('T')[0];
-      const { data: incompleteReports } = await supabase
+      const { data: incompleteReports } = await scopeQuery(supabase
         .from('shift_reports')
         .select('id, is_complete, report_date')
         .eq('report_date', yesterday)
-        .eq('is_complete', false);
+        .eq('is_complete', false));
 
       if (incompleteReports && incompleteReports.length > 0) {
         alertsList.push({
@@ -339,11 +343,11 @@ export function SmartAlerts() {
       }
 
       // 7. Check for low safety scores
-      const { data: lowSafetyScoreSoldiers } = await supabase
+      const { data: lowSafetyScoreSoldiers } = await scopeQuery(supabase
         .from('soldiers')
         .select('id, full_name, current_safety_score, consecutive_low_months, safety_status')
         .eq('is_active', true)
-        .lt('current_safety_score', 75);
+        .lt('current_safety_score', 75));
 
       if (lowSafetyScoreSoldiers && lowSafetyScoreSoldiers.length > 0) {
         const suspendedDrivers = lowSafetyScoreSoldiers.filter(s => 

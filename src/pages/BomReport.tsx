@@ -63,7 +63,7 @@ const statusIcons = {
 };
 
 export default function BomReport() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<BomTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,14 +97,20 @@ export default function BomReport() {
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchTasks = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("bom_tasks")
       .select("*")
       .order("due_date", { ascending: true });
+
+    if (!isDivisionAdmin && brigade) {
+      query = query.eq("brigade", brigade);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching tasks:", error);
@@ -128,6 +134,7 @@ export default function BomReport() {
       due_date: formData.due_date,
       status: formData.status,
       notes: formData.notes || null,
+      brigade: brigade || "binyamin",
     };
 
     if (editingTask) {

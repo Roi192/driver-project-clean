@@ -38,7 +38,7 @@ interface SoldierFitness extends Soldier {
 }
 
 export default function FitnessReport() {
-  const { isAdmin, canAccessFitnessReport, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessFitnessReport, loading: authLoading, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
   const hasAccess = canAccessFitnessReport;
   const [soldiers, setSoldiers] = useState<SoldierFitness[]>([]);
@@ -58,7 +58,7 @@ export default function FitnessReport() {
     if (hasAccess) {
       fetchSoldiers();
     }
-  }, [hasAccess]);
+  }, [hasAccess, brigade, isDivisionAdmin]);
 
   const getDateStatus = (dateStr: string | null, daysWarning: number = 30): FitnessStatus => {
     if (!dateStr) return "unfit";
@@ -100,11 +100,15 @@ export default function FitnessReport() {
   const fetchSoldiers = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("soldiers")
         .select("*")
         .eq("is_active", true)
         .order("full_name");
+
+      if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
+
+      const { data, error } = await query;
 
       if (error) throw error;
 

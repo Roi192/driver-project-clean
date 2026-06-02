@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       .eq('user_id', callerUser.id)
       .single()
 
-    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin', 'ravshatz']
+    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin', 'ravshatz', 'division_admin']
     if (!roleData || !allowedRoles.includes(roleData.role)) {
       throw new Error('Only admins can update users')
     }
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       const meta: Record<string, any> = {}
       if (displayName !== undefined) meta.full_name = displayName
       if (profileUpdates && typeof profileUpdates === 'object') {
-        for (const k of ['outpost','region','military_role','platoon','personal_number','battalion_name','department','user_type','settlement','id_number']) {
+        for (const k of ['outpost','region','military_role','platoon','personal_number','battalion_name','department','user_type','settlement','id_number','brigade']) {
           if (k in profileUpdates) meta[k] = (profileUpdates as any)[k]
         }
       }
