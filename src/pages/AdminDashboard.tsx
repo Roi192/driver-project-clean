@@ -24,6 +24,7 @@ import { DeleteConfirmDialog } from '@/components/admin/DeleteConfirmDialog';
 import { CleaningParadeCards } from '@/components/commander/CleaningParadeCards';
 import { TripFormsCard } from '@/components/commander/TripFormsCard';
 import { CleaningParadeSummary } from '@/components/commander/CleaningParadeSummary';
+import { getBrigade } from '@/lib/brigades';
 
 import unitLogo from '@/assets/unit-logo.png';
 import { toast } from 'sonner';
@@ -95,6 +96,7 @@ const shiftTypeMap: Record<string, string> = {
 export default function AdminDashboard() {
   const { isAdmin, isPlatoonCommander, isBattalionAdmin, isLoading: roleLoading } = useUserRole();
   const { brigade, isDivisionAdmin } = useAuth();
+  const brigadeLabel = isDivisionAdmin ? 'כל החטיבות' : getBrigade(brigade).shortLabel;
   const { outposts: brigadeOutposts } = useBrigadeOutposts();
   const navigate = useNavigate();
   const [reports, setReports] = useState<ShiftReport[]>([]);
@@ -305,7 +307,7 @@ export default function AdminDashboard() {
                   {/* Badge */}
                   <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 shadow-lg backdrop-blur-sm animate-glow">
                     <Crown className="w-6 h-6 text-accent animate-bounce-soft" />
-                    <span className="text-primary font-black text-xl">דשבורד מנהל</span>
+                    <span className="text-primary font-black text-xl">דשבורד מנהל - {brigadeLabel}</span>
                     <Sparkles className="w-5 h-5 text-accent animate-pulse" />
                   </div>
                 </div>

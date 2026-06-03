@@ -14,6 +14,7 @@ import { Home, CheckCircle2, Shirt, Car, ClipboardList, MapPin } from "lucide-re
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { OUTPOSTS } from "@/lib/constants";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 
 interface FormData {
   weaponReset: boolean;
@@ -72,7 +73,13 @@ const checklistCategories = [
 ];
 
 export default function TripForm() {
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts(brigade ?? undefined);
+  const outpostOptions = brigadeOutposts.length > 0
+    ? brigadeOutposts.map((outpost) => outpost.name)
+    : brigade === "binyamin" || !brigade
+      ? OUTPOSTS
+      : [];
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -131,20 +138,21 @@ export default function TripForm() {
         const lastThursday = getLastThursday();
         const lastThursdayStr = lastThursday.toISOString().split('T')[0];
         
-        const { data: existingForm } = await supabase
+        let existingFormQuery = supabase
           .from('trip_forms')
           .select('id')
           .eq('user_id', user.id)
-          .gte('form_date', lastThursdayStr)
-          .maybeSingle();
+          .gte('form_date', lastThursdayStr);
+
+        if (brigade) existingFormQuery = existingFormQuery.eq('brigade', brigade);
+
+        const { data: existingForm } = await existingFormQuery.maybeSingle();
         
-        if (existingForm) {
-          setAlreadySubmitted(true);
-        }
+        setAlreadySubmitted(Boolean(existingForm));
       }
     };
     fetchUserAndCheck();
-  }, [user]);
+  }, [user, brigade]);
 
   // Canvas drawing functions
   useEffect(() => {
@@ -262,6 +270,7 @@ export default function TripForm() {
     try {
       const { error } = await supabase.from('trip_forms').insert({
         user_id: user?.id,
+        brigade: brigade || "binyamin",
         soldier_name: userName,
         outpost: formData.outpost,
         weapon_reset: true, // יש סעיף על איפסון נשק ברשימה
@@ -387,7 +396,7 @@ export default function TripForm() {
                     <SelectValue placeholder="בחר מוצב" />
                   </SelectTrigger>
                   <SelectContent>
-                    {OUTPOSTS.map((outpost) => (
+                    {outpostOptions.map((outpost) => (
                       <SelectItem key={outpost} value={outpost}>
                         {outpost}
                       </SelectItem>

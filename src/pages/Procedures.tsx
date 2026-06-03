@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import unitLogo from "@/assets/unit-logo.png";
 import { SignatureCanvas } from "@/components/shared/SignatureCanvas";
+import { getBrigade } from "@/lib/brigades";
 
 interface ProcedureItem {
   id: string;
@@ -93,7 +94,8 @@ const proceduresData = {
 type ProcedureType = keyof typeof proceduresData;
 
 export default function Procedures() {
-  const { user } = useAuth();
+  const { user, brigade, isDivisionAdmin } = useAuth();
+  const brigadeLabel = getBrigade(brigade).shortLabel;
   const [selectedProcedure, setSelectedProcedure] = useState<ProcedureType | null>(null);
   const [items, setItems] = useState<ProcedureItem[]>([]);
   const [fullName, setFullName] = useState("");
@@ -141,11 +143,17 @@ export default function Procedures() {
   const fetchMySignatures = async () => {
     if (!user) return;
     setLoadingSignatures(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("procedure_signatures")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+
+    if (!isDivisionAdmin && brigade) {
+      query = query.eq("brigade", brigade);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching signatures:", error);
@@ -178,6 +186,7 @@ export default function Procedures() {
 
     const { error } = await supabase.from("procedure_signatures").insert({
       user_id: user.id,
+      brigade: brigade || "binyamin",
       procedure_type: selectedProcedure,
       full_name: fullName.trim(),
       signature: signature.trim(),
@@ -241,7 +250,7 @@ export default function Procedures() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-500">פלנ"ג בנימין</p>
+                  <p className="text-sm font-medium text-slate-500">{brigadeLabel}</p>
                   <h1 className="text-2xl font-black text-slate-800">{procedure.title}</h1>
                   <p className="text-xs text-slate-400">מערכת נהגי בט"ש</p>
                 </div>

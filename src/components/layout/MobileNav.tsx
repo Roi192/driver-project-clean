@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import unitLogo from "@/assets/unit-logo.png";
-import { BRIGADES } from "@/lib/brigades";
+import { BRIGADES, getBrigade } from "@/lib/brigades";
 
 // Base nav items - shift-form will be filtered based on user type
 const getNavItems = (userType: string | null, isBattalionAdmin: boolean, brigade: string | null) => {
@@ -72,12 +72,6 @@ const getNavItems = (userType: string | null, isBattalionAdmin: boolean, brigade
   if (userType === 'battalion' || isBattalionAdmin) {
     const allowedBattalionPaths = ['/', '/drill-locations', '/safety-files', '/safety-events', '/training-videos'];
     return items.filter(item => allowedBattalionPaths.includes(item.to));
-  }
-
-  // Hide pre-shift form for all brigades except Binyamin
-  const effectiveBrigade = brigade || 'binyamin';
-  if (effectiveBrigade !== 'binyamin') {
-    return items.filter(item => item.to !== '/shift-form');
   }
 
   return items;
@@ -147,7 +141,7 @@ export function MobileNav() {
   const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector);
   
   // Department label for header
-  const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי' : (isInHagmar || isHagmarFighter) ? 'הגמ"ר' : isInBattalionContext ? 'גדוד תע"ם' : 'פלנ"ג בנימין';
+  const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי' : (isInHagmar || isHagmarFighter) ? 'הגמ"ר' : isInBattalionContext ? 'גדוד תע"ם' : getBrigade(brigade).shortLabel;
 
   useEffect(() => {
     const fetchUserName = async () => {

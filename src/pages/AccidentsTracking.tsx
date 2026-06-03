@@ -71,7 +71,7 @@ interface SectorEvent {
 
 type DriverType = 'security' | 'combat';
 type Severity = 'minor' | 'moderate' | 'severe';
-type IncidentType = 'accident' | 'stuck' | 'other';
+type IncidentType = 'accident' | 'rollover' | 'stuck' | 'other';
 
 const driverTypeLabels: Record<DriverType, string> = {
   security: 'נהג בט"ש',
@@ -91,13 +91,15 @@ const severityColors: Record<string, string> = {
 };
 
 const incidentTypeLabels: Record<IncidentType, string> = {
-  accident: 'תאונה',
+  accident: 'תאונת דרכים',
+  rollover: 'התהפכות',
   stuck: 'התחפרות',
   other: 'אחר'
 };
 
 const incidentTypeColors: Record<string, string> = {
   accident: 'bg-red-100 text-red-800',
+  rollover: 'bg-rose-200 text-rose-900',
   stuck: 'bg-amber-100 text-amber-800',
   other: 'bg-gray-100 text-gray-800'
 };
@@ -441,6 +443,7 @@ const AccidentsTracking = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="accident">תאונה</SelectItem>
+              <SelectItem value="rollover">התהפכות</SelectItem>
               <SelectItem value="stuck">התחפרות</SelectItem>
               <SelectItem value="other">אחר</SelectItem>
             </SelectContent>
@@ -607,6 +610,7 @@ const AccidentsTracking = () => {
                     <SelectContent className="bg-white border border-slate-200">
                       <SelectItem value="all" className="text-slate-700">הכל</SelectItem>
                       <SelectItem value="accident" className="text-slate-700">תאונות</SelectItem>
+                      <SelectItem value="rollover" className="text-slate-700">התהפכויות</SelectItem>
                       <SelectItem value="stuck" className="text-slate-700">התחפרויות</SelectItem>
                       <SelectItem value="other" className="text-slate-700">אחר</SelectItem>
                     </SelectContent>

@@ -28,9 +28,9 @@ type RequiredPhotoKey = "front" | "left" | "right" | "back" | "steering";
 
 const REQUIRED_PHOTO_KEYS: RequiredPhotoKey[] = ["front", "left", "right", "back", "steering"];
 
-const toStoredPhotoPath = (value: string | undefined, key: RequiredPhotoKey): string => {
+const toStoredPhotoPath = (value: string | undefined, key: RequiredPhotoKey): string | null => {
   if (!value || value.trim().length === 0) {
-    throw new Error(`Missing required photo: ${key}`);
+    return null;
   }
 
   const normalized = normalizeShiftPhotoPath(value);
@@ -54,7 +54,7 @@ const mapShiftType = (shiftType: string): "morning" | "afternoon" | "evening" =>
 };
 
 export function useShiftReport() {
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resolveAuthenticatedUserId = async (): Promise<string> => {
@@ -95,13 +95,8 @@ export function useShiftReport() {
     try {
       const authenticatedUserId = await resolveAuthenticatedUserId();
 
-      // Validate all photos are already uploaded (string paths)
-      for (const key of REQUIRED_PHOTO_KEYS) {
-        const photoValue = formData.photos[key];
-        if (!photoValue || photoValue.trim().length === 0) {
-          throw new Error(`Missing required photo: ${key}`);
-        }
-      }
+      // Photos are required only for brigades that include the photos step (Binyamin).
+      // For other brigades, photos are optional and stored as null.
 
       const reportDate = formData.dateTime.toISOString().split("T")[0];
       const reportTime = formData.dateTime.toTimeString().split(" ")[0];
@@ -114,6 +109,7 @@ export function useShiftReport() {
 
       const { error: insertError } = await supabase.from("shift_reports").insert({
         user_id: authenticatedUserId,
+        brigade: brigade || "binyamin",
         report_date: reportDate,
         report_time: reportTime,
         outpost: formData.outpost,

@@ -48,10 +48,15 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    const { targetUserId } = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      throw new Error('Invalid request body')
+    }
+    const { targetUserId } = body as { targetUserId?: unknown }
 
-    if (!targetUserId) {
-      throw new Error('Target user ID is required')
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (typeof targetUserId !== 'string' || !UUID_RE.test(targetUserId)) {
+      throw new Error('Target user ID must be a valid UUID')
     }
 
     // Prevent admin from deleting themselves

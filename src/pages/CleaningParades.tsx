@@ -7,11 +7,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Camera, CheckCircle, AlertCircle, Sparkles, ListChecks, Image, ArrowLeft, MapPin, Calendar, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { StorageImage } from "@/components/shared/StorageImage";
 import { format, startOfWeek, addDays } from "date-fns";
 import { he } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { useSearchParams } from "react-router-dom";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { extractFilePath } from "@/lib/storage-utils";
 import { cn } from "@/lib/utils";
 
 // Day labels for display
@@ -23,6 +25,12 @@ const DAY_LABELS: Record<number, string> = {
   4: "חמישי",
   5: "שישי",
   6: "שבת"
+};
+
+const CLEANING_PARADES_BUCKET = "cleaning-parades";
+
+const normalizeCompletionPhotoPath = (pathOrUrl: string) => {
+  return extractFilePath(pathOrUrl, CLEANING_PARADES_BUCKET) ?? pathOrUrl;
 };
 
 // Dynamic day config interface
@@ -63,7 +71,7 @@ interface WeeklyAssignment {
 }
 
 export default function CleaningParades() {
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [soldierId, setSoldierId] = useState<string | null>(null);
@@ -99,7 +107,7 @@ export default function CleaningParades() {
 
   useEffect(() => {
     initializeUser();
-  }, [user]);
+  }, [user, brigade]);
 
   useEffect(() => {
     // Handle URL params for direct navigation
@@ -135,15 +143,21 @@ export default function CleaningParades() {
         return;
       }
 
-      const { data: soldier } = await supabase
+      let soldierQuery = supabase
         .from('soldiers')
         .select('id')
-        .eq('personal_number', personalNumber)
-        .maybeSingle();
+        .eq('personal_number', personalNumber);
+
+      if (brigade) soldierQuery = soldierQuery.eq('brigade', brigade);
+
+      const { data: soldier } = await soldierQuery.maybeSingle();
 
       if (soldier) {
         setSoldierId(soldier.id);
         await loadWeeklyAssignments(soldier.id);
+      } else {
+        setSoldierId(null);
+        setWeeklyAssignments([]);
       }
     } catch (error) {
       console.error('Error initializing user:', error);
@@ -155,22 +169,34 @@ export default function CleaningParades() {
   const loadWeeklyAssignments = async (sid: string) => {
     try {
       // Get work schedule
-      const { data: workSchedule } = await supabase
+      let workScheduleQuery = supabase
         .from('work_schedule')
         .select('outpost, day_of_week, morning_soldier_id, afternoon_soldier_id, evening_soldier_id')
         .eq('week_start_date', weekStartStr);
 
+      if (brigade) workScheduleQuery = workScheduleQuery.eq('brigade', brigade);
+
+      const { data: workSchedule } = await workScheduleQuery;
+
       // Get item assignments - this tells us which parade days have items assigned to this soldier
-      const { data: itemAssignments } = await supabase
+      let itemAssignmentsQuery = supabase
         .from('cleaning_item_assignments')
         .select('parade_day, outpost, shift_type, manual_soldier_id');
 
+      if (brigade) itemAssignmentsQuery = itemAssignmentsQuery.eq('brigade', brigade);
+
+      const { data: itemAssignments } = await itemAssignmentsQuery;
+
       // Get submissions
-      const { data: submissions } = await supabase
+      let submissionsQuery = supabase
         .from('cleaning_parade_submissions')
         .select('day_of_week, outpost, is_completed')
         .eq('soldier_id', sid)
         .gte('parade_date', weekStartStr);
+
+      if (brigade) submissionsQuery = submissionsQuery.eq('brigade', brigade);
+
+      const { data: submissions } = await submissionsQuery;
 
       // Build a map of parade days where this soldier has assignments
       const assignmentMap = new Map<string, { paradeDay: number; outpost: string }>();
@@ -272,13 +298,16 @@ export default function CleaningParades() {
       const paradeDate = format(addDays(currentWeekStart, useParadeDay), 'yyyy-MM-dd');
       const dayValue = DAY_LABELS[useParadeDay]; // for storage
       
-      const { data: existingSubmission } = await supabase
+      let existingSubmissionQuery = supabase
         .from('cleaning_parade_submissions')
         .select('id, is_completed')
         .eq('soldier_id', soldierId)
         .eq('outpost', useOutpost)
-        .eq('parade_date', paradeDate)
-        .maybeSingle();
+        .eq('parade_date', paradeDate);
+
+      if (brigade) existingSubmissionQuery = existingSubmissionQuery.eq('brigade', brigade);
+
+      const { data: existingSubmission } = await existingSubmissionQuery.maybeSingle();
 
       if (existingSubmission?.is_completed) {
         const { data: existingCompletions } = await supabase
@@ -289,7 +318,7 @@ export default function CleaningParades() {
         const completionsMap = new Map<string, { id: string; url: string }[]>();
         existingCompletions?.forEach(c => {
           const existing = completionsMap.get(c.checklist_item_id) || [];
-          existing.push({ id: c.id, url: c.photo_url });
+          existing.push({ id: c.id, url: normalizeCompletionPhotoPath(c.photo_url) });
           completionsMap.set(c.checklist_item_id, existing);
         });
         setCompletions(completionsMap);
@@ -307,6 +336,7 @@ export default function CleaningParades() {
           .from('cleaning_parade_submissions')
           .insert({
             soldier_id: soldierId,
+            brigade: brigade || "binyamin",
             outpost: useOutpost,
             day_of_week: dayValue,
             parade_date: paradeDate,
@@ -329,7 +359,7 @@ export default function CleaningParades() {
       const completionsMap = new Map<string, { id: string; url: string }[]>();
       existingCompletions?.forEach(c => {
         const existing = completionsMap.get(c.checklist_item_id) || [];
-        existing.push({ id: c.id, url: c.photo_url });
+        existing.push({ id: c.id, url: normalizeCompletionPhotoPath(c.photo_url) });
         completionsMap.set(c.checklist_item_id, existing);
       });
       setCompletions(completionsMap);
@@ -346,24 +376,25 @@ export default function CleaningParades() {
 
   const fetchOutpostData = async (outpost: string, paradeDay?: number) => {
     // First, get all checklist items for the outpost
+    const scoped = (query: any) => (brigade ? query.eq('brigade', brigade) : query);
     const [itemsRes, photosRes, assignmentsRes] = await Promise.all([
-      supabase
+      scoped(supabase
         .from('cleaning_checklist_items')
         .select('id, item_name, item_order')
         .eq('outpost', outpost)
         .eq('is_active', true)
-        .order('item_order'),
-      supabase
+        .order('item_order')),
+      scoped(supabase
         .from('cleaning_reference_photos')
         .select('id, checklist_item_id, outpost, description, image_url')
         .eq('outpost', outpost)
-        .order('display_order'),
+        .order('display_order')),
       // Get assignments for this soldier on this parade day
-      paradeDay !== undefined ? (supabase as any)
+      paradeDay !== undefined ? scoped((supabase as any)
         .from('cleaning_item_assignments')
         .select('item_id, shift_type, manual_soldier_id')
         .eq('outpost', outpost)
-        .eq('parade_day', paradeDay) : Promise.resolve({ data: null })
+        .eq('parade_day', paradeDay)) : Promise.resolve({ data: null })
     ]);
 
     let filteredItems = itemsRes.data || [];
@@ -374,11 +405,15 @@ export default function CleaningParades() {
       const weekStartStr = format(weekStart, "yyyy-MM-dd");
       
       // Get current work schedule
-      const { data: schedule } = await supabase
+      let scheduleQuery = supabase
         .from("work_schedule")
         .select("outpost, day_of_week, morning_soldier_id, afternoon_soldier_id, evening_soldier_id")
         .eq("week_start_date", weekStartStr)
         .eq("outpost", outpost);
+
+      if (brigade) scheduleQuery = scheduleQuery.eq("brigade", brigade);
+
+      const { data: schedule } = await scheduleQuery;
 
       const myItemIds = new Set<string>();
       
@@ -454,25 +489,27 @@ export default function CleaningParades() {
       const fileExt = mimeToExt[file.type] || 'jpg';
       const fileName = `${user.id}/${currentDate}/${itemId}_${Date.now()}.${fileExt}`;
       
-      await supabase.storage.from('cleaning-parades').upload(fileName, file, { contentType: file.type || 'image/jpeg' });
+      const { error: uploadError } = await supabase.storage
+        .from(CLEANING_PARADES_BUCKET)
+        .upload(fileName, file, { contentType: file.type || 'image/jpeg' });
 
-      const { data: signedUrlData } = await supabase.storage
-        .from('cleaning-parades')
-        .createSignedUrl(fileName, 60 * 60 * 24 * 7);
+      if (uploadError) throw uploadError;
 
-      const photoUrl = signedUrlData?.signedUrl || '';
+      // Store permanent storage path (not signed URL)
+      const photoPath = fileName;
 
       // Insert new photo (not upsert - allow multiple)
       const { data: inserted } = await supabase.from('cleaning_checklist_completions').insert({
         submission_id: submissionId,
+        brigade: brigade || "binyamin",
         checklist_item_id: itemId,
-        photo_url: photoUrl,
+        photo_url: photoPath,
       }).select('id').single();
 
       setCompletions(prev => {
         const newMap = new Map(prev);
         const existing = newMap.get(itemId) || [];
-        existing.push({ id: inserted?.id || '', url: photoUrl });
+        existing.push({ id: inserted?.id || '', url: photoPath });
         newMap.set(itemId, existing);
         return newMap;
       });
@@ -848,10 +885,13 @@ export default function CleaningParades() {
                             {/* User uploaded photos */}
                             {userPhotos.map((photo, photoIndex) => (
                               <div key={photo.id} className="relative">
-                                <img 
+                                <StorageImage
                                   src={photo.url}
+                                  bucket={CLEANING_PARADES_BUCKET}
                                   alt={`תמונה ${photoIndex + 1}`}
                                   className="w-full aspect-square object-cover rounded-lg border-2 border-emerald-200"
+                                  showLoader={false}
+                                  fallback={<div className="w-full aspect-square rounded-lg border-2 border-emerald-200 bg-muted" />}
                                 />
                                 <button
                                   onClick={() => handleDeletePhoto(item.id, photo.id)}
@@ -1023,10 +1063,13 @@ export default function CleaningParades() {
                   <div className="absolute top-2 right-2 z-10">
                     <Badge className="bg-emerald-500 text-white">שלך ({compareItem.userPhotos.length})</Badge>
                   </div>
-                  <img 
+                  <StorageImage
                     src={compareItem.userPhotos[0]?.url || ''}
+                    bucket={CLEANING_PARADES_BUCKET}
                     alt="Your photo"
                     className="w-full h-full object-contain"
+                    showLoader={false}
+                    fallback={<div className="w-full h-full bg-muted" />}
                   />
                 </div>
               </div>

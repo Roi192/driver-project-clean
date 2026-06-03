@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   FileSignature, 
   Users, 
@@ -57,6 +58,7 @@ const procedureColors: Record<string, string> = {
 };
 
 const ProcedureSignaturesTracking = () => {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
   const [signatures, setSignatures] = useState<SignatureRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ const ProcedureSignaturesTracking = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -74,11 +76,14 @@ const ProcedureSignaturesTracking = () => {
     const currentYear = new Date().getFullYear();
     const startOfYear = new Date(currentYear, 0, 1).toISOString();
     
-    // Fetch soldiers and signatures in parallel
-    const [soldiersRes, signaturesRes] = await Promise.all([
-      supabase.from("soldiers").select("id, full_name, personal_number, outpost").order("full_name"),
-      supabase.from("procedure_signatures").select("*").gte("created_at", startOfYear).order("created_at", { ascending: false })
-    ]);
+    // Fetch soldiers and signatures in parallel - scoped to current brigade (unless division admin)
+    let soldiersQ = supabase.from("soldiers").select("id, full_name, personal_number, outpost").order("full_name");
+    let signaturesQ = supabase.from("procedure_signatures").select("*").gte("created_at", startOfYear).order("created_at", { ascending: false });
+    if (!isDivisionAdmin && brigade) {
+      soldiersQ = soldiersQ.eq("brigade", brigade);
+      signaturesQ = signaturesQ.eq("brigade", brigade);
+    }
+    const [soldiersRes, signaturesRes] = await Promise.all([soldiersQ, signaturesQ]);
 
     if (soldiersRes.error) {
       console.error("Error fetching soldiers:", soldiersRes.error);

@@ -48,10 +48,33 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    const { targetUserId, displayName, newRole, profileUpdates } = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      throw new Error('Invalid request body')
+    }
+    const { targetUserId, displayName, newRole, profileUpdates } = body as {
+      targetUserId?: unknown
+      displayName?: unknown
+      newRole?: unknown
+      profileUpdates?: unknown
+    }
 
-    if (!targetUserId) {
-      throw new Error('Target user ID is required')
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (typeof targetUserId !== 'string' || !UUID_RE.test(targetUserId)) {
+      throw new Error('Target user ID must be a valid UUID')
+    }
+    if (displayName !== undefined && (typeof displayName !== 'string' || displayName.length > 200)) {
+      throw new Error('displayName must be a string up to 200 characters')
+    }
+    const ALLOWED_ROLES = [
+      'driver','admin','super_admin','hagmar_admin','battalion_admin',
+      'platoon_commander','division_admin','ravshatz','company_commander'
+    ]
+    if (newRole !== undefined && (typeof newRole !== 'string' || !ALLOWED_ROLES.includes(newRole))) {
+      throw new Error('newRole is not a recognized role')
+    }
+    if (profileUpdates !== undefined && (profileUpdates === null || typeof profileUpdates !== 'object' || Array.isArray(profileUpdates))) {
+      throw new Error('profileUpdates must be an object')
     }
 
     const updates: any = {}

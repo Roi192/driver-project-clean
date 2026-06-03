@@ -8,8 +8,18 @@ import { Card } from "@/components/ui/card";
 import { Map as MapIcon } from "lucide-react";
 import { toast } from "sonner";
 
-const computeScore = (events: number, accidents: number) => {
-  let s = 100 - Math.min(40, events * 3) - Math.min(40, accidents * 6);
+const computeScore = (
+  events: number,
+  accidents: number,
+  rollovers: number,
+  fitPct: number, // 0..100
+) => {
+  let s = 100;
+  s -= Math.min(30, events * 3);
+  s -= Math.min(35, accidents * 6);
+  s -= Math.min(35, rollovers * 10);
+  // Fitness weighted 15% — if 100% fit no penalty, lower fit lowers score
+  s -= Math.round((100 - fitPct) * 0.15);
   return Math.max(0, Math.min(100, s));
 };
 
@@ -23,23 +33,38 @@ const DivisionMap = () => {
   const navigate = useNavigate();
   const { setActiveBrigade } = useAuth() as any;
   const [scores, setScores] = useState<Record<BrigadeCode, number>>({} as any);
+  const [trends, setTrends] = useState<Record<BrigadeCode, number>>({} as any);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const monthIso = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const monthIso = monthStart.toISOString();
+        const prevIso = prevMonthStart.toISOString();
         const result: Record<string, number> = {};
+        const trend: Record<string, number> = {};
         await Promise.all(
           BRIGADE_CODES.map(async (code) => {
-            const [se, ac] = await Promise.all([
+            const [se, ac, roll, prevAc, sol, unfitSol] = await Promise.all([
               supabase.from("safety_events").select("id", { count: "exact", head: true }).eq("brigade", code).gte("created_at", monthIso),
               supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).gte("accident_date", monthIso.slice(0, 10)),
+              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).eq("incident_type", "rollover").gte("accident_date", monthIso.slice(0, 10)),
+              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).gte("accident_date", prevIso.slice(0, 10)).lt("accident_date", monthIso.slice(0, 10)),
+              supabase.from("soldiers").select("id", { count: "exact", head: true }).eq("brigade", code).eq("is_active", true),
+              supabase.from("soldiers").select("id", { count: "exact", head: true }).eq("brigade", code).eq("is_active", true).lt("military_license_expiry", new Date().toISOString().slice(0, 10)),
             ]);
-            result[code] = computeScore(se.count || 0, ac.count || 0);
+            const total = sol.count || 0;
+            const unfit = unfitSol.count || 0;
+            const fitPct = total === 0 ? 100 : Math.round(((total - unfit) / total) * 100);
+            result[code] = computeScore(se.count || 0, ac.count || 0, roll.count || 0, fitPct);
+            trend[code] = (ac.count || 0) - (prevAc.count || 0);
           })
         );
         setScores(result as any);
+        setTrends(trend as any);
       } catch (e: any) {
         toast.error(`שגיאה: ${e?.message || e}`);
       } finally {
@@ -97,7 +122,16 @@ const DivisionMap = () => {
                       dir="rtl"
                     >
                       <div className="text-sm md:text-base text-center px-2">{BRIGADES[cell.code].name}</div>
-                      {!loading && <div className="text-xs mt-1 opacity-90">ציון {score}</div>}
+                      {!loading && (
+                        <>
+                          <div className="text-xs mt-1 opacity-90">ציון {score}</div>
+                          {trends[cell.code] !== undefined && trends[cell.code] !== 0 && (
+                            <div className="text-[10px] mt-0.5 opacity-90">
+                              {trends[cell.code] > 0 ? "▲" : "▼"} {Math.abs(trends[cell.code])} מהחודש הקודם
+                            </div>
+                          )}
+                        </>
+                      )}
                     </button>
                   );
                 })
@@ -115,9 +149,19 @@ const DivisionMap = () => {
                 <div className="w-4 h-4 rounded bg-red-500" /> סיכון גבוה
               </div>
             </div>
+
+            <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 leading-relaxed">
+              <div className="font-black mb-1">איך מחושב הציון?</div>
+              <ul className="list-disc pr-5 space-y-0.5">
+                <li>הציון מחושב <b>לחודש הנוכחי בלבד</b> (מ-1 לחודש עד היום).</li>
+                <li>מתחילים מ-100 וגורעים: כל אירוע בטיחות = <b>−3</b>, כל תאונה = <b>−6</b>, כל התהפכות = <b>−10</b>.</li>
+                <li>15% מהציון נקבע לפי <b>אחוז כשירות הנהגים</b> בחטיבה (רישיון צבאי תקף).</li>
+                <li>החץ ▲/▼ מציג את מגמת התאונות לעומת <b>החודש הקודם</b>.</li>
+              </ul>
+            </div>
           </Card>
 
-          <p className="text-xs text-slate-500 text-center">לחצו על חטיבה כדי להיכנס לתצוגה המלאה שלה</p>
+          <p className="text-xs text-slate-600 text-center font-medium">לחצו על חטיבה כדי להיכנס לתצוגה המלאה שלה</p>
         </div>
       </div>
     </AppLayout>

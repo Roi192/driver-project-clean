@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { FileSignature, Users, Calendar, Loader2, CheckCircle2, XCircle, ChevronLeft, Search, Download, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -60,6 +61,7 @@ const procedureIcons: Record<string, string> = {
 };
 
 export function ProcedureSignaturesCard() {
+  const { brigade, isDivisionAdmin } = useAuth();
   const [signatures, setSignatures] = useState<SignatureRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -79,7 +81,7 @@ export function ProcedureSignaturesCard() {
 
   useEffect(() => {
     fetchSignatures();
-  }, []);
+  }, [brigade, isDivisionAdmin]);
 
   const fetchSignatures = async () => {
     setLoading(true);
@@ -87,11 +89,15 @@ export function ProcedureSignaturesCard() {
     const currentYear = new Date().getFullYear();
     const startOfYear = new Date(currentYear, 0, 1).toISOString();
     
-    const { data, error } = await supabase
+    let query = supabase
       .from("procedure_signatures")
       .select("*")
       .gte("created_at", startOfYear)
       .order("created_at", { ascending: false });
+    if (!isDivisionAdmin && brigade) {
+      query = query.eq("brigade", brigade);
+    }
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching signatures:", error);

@@ -7,6 +7,7 @@ import { OUTPOSTS } from "@/lib/constants";
 import { Calendar, Clock, MapPin, User, Car, Sun, Moon, CloudSun, Sparkles, AlertTriangle, TrendingDown, Gauge, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 
 const SHIFT_TYPES_ENHANCED = [
   { value: "morning", label: "משמרת בוקר", timeLabel: "6:00-14:00", icon: Sun },
@@ -48,7 +49,15 @@ interface PreviousMonthScore {
 
 export function GeneralDetails() {
   const { register, setValue, watch } = useFormContext();
-  const { user } = useAuth();
+  const { user, brigade } = useAuth();
+  const { outposts: brigadeOutposts } = useBrigadeOutposts(brigade ?? undefined);
+  const outpostNames = useMemo(() => {
+    if (brigadeOutposts && brigadeOutposts.length > 0) {
+      return brigadeOutposts.map((o) => o.name);
+    }
+    // Fallback to the static binyamin list when brigade_outposts is empty
+    return brigade === 'binyamin' || !brigade ? [...OUTPOSTS] : [];
+  }, [brigadeOutposts, brigade]);
   const [previousScore, setPreviousScore] = useState<PreviousMonthScore | null>(null);
   const [loadingScore, setLoadingScore] = useState(true);
   const driverName = watch("driverName");
@@ -324,7 +333,7 @@ export function GeneralDetails() {
             <SelectValue placeholder="בחר מוצב" />
           </SelectTrigger>
           <SelectContent className="bg-white border-slate-200 rounded-xl shadow-xl">
-            {OUTPOSTS.map((outpost) => (
+            {outpostNames.map((outpost) => (
               <SelectItem key={outpost} value={outpost} className="text-base py-3 rounded-lg text-slate-800">
                 {outpost}
               </SelectItem>

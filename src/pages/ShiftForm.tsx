@@ -17,14 +17,21 @@ import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Navigate } from "react-router-dom";
 import { getBrigade } from "@/lib/brigades";
 
-const STEP_LABELS = ["פרטים", "תדריכים", "ציוד", "תרגולות", "תמונות"];
+const STEP_LABELS_WITH_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות", "תמונות"];
+const STEP_LABELS_NO_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות"];
 
-const steps = [
+const STEPS_WITH_PHOTOS = [
   GeneralDetails,
   BriefingsStep,
   EquipmentStep,
   DrillsStep,
   PhotosStep,
+];
+const STEPS_NO_PHOTOS = [
+  GeneralDetails,
+  BriefingsStep,
+  EquipmentStep,
+  DrillsStep,
 ];
 
 const SHIFT_FORM_STEP_STORAGE_KEY = "shiftFormStep";
@@ -86,10 +93,10 @@ const clearFormStorage = (userId: string) => {
   }
 };
 
-const parseStoredStep = (value: string | null): number => {
+const parseStoredStep = (value: string | null, totalSteps: number): number => {
   const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
 
-  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= steps.length) {
+  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= totalSteps) {
     return parsed;
   }
 
@@ -98,11 +105,11 @@ const parseStoredStep = (value: string | null): number => {
 
 export default function ShiftForm() {
   const { user, brigade } = useAuth();
-  // Pre-shift form is currently Binyamin-only (per division expansion spec).
-  // Other brigades will get their own variant later.
-  if (user && brigade && brigade !== 'binyamin') {
-    return <Navigate to="/" replace />;
-  }
+  // Photos step (vehicle photos) is Binyamin-only. Other brigades fill the same
+  // form without the photos step.
+  const includePhotos = !brigade || brigade === 'binyamin';
+  const steps = includePhotos ? STEPS_WITH_PHOTOS : STEPS_NO_PHOTOS;
+  const STEP_LABELS = includePhotos ? STEP_LABELS_WITH_PHOTOS : STEP_LABELS_NO_PHOTOS;
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const navigate = useNavigate();
@@ -150,7 +157,7 @@ export default function ShiftForm() {
       return;
     }
 
-    setCurrentStep(parseStoredStep(sessionStorage.getItem(stepStorageKey)));
+    setCurrentStep(parseStoredStep(sessionStorage.getItem(stepStorageKey), steps.length));
   }, [reset, stepStorageKey, user?.id]);
 
   // Persist form data to sessionStorage on every change
@@ -329,8 +336,8 @@ export default function ShiftForm() {
       return false;
     }
 
-    // Step 5: Photos
-    if (!hasAllRequiredPhotos(formData)) {
+    // Step 5: Photos (Binyamin only)
+    if (includePhotos && !hasAllRequiredPhotos(formData)) {
       toast({
         title: "שגיאה",
         description: "יש להעלות את כל התמונות הנדרשות",

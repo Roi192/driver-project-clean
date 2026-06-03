@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { BRIGADES, BRIGADE_CODES, BrigadeCode } from "@/lib/brigades";
@@ -92,12 +92,21 @@ const filterLabels: Record<DrillFilter["kind"], string> = {
 
 export default function DivisionFitness() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { realIsDivisionAdmin, loading: authLoading } = useAuth() as any;
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<SoldierRow[]>([]);
   const [drillBrigade, setDrillBrigade] = useState<BrigadeCode | null>(null);
   const [drillFilter, setDrillFilter] = useState<DrillFilter>({ kind: "all" });
   const [drillSearch, setDrillSearch] = useState("");
+  const [globalFilter, setGlobalFilter] = useState<DrillFilter["kind"] | null>(null);
+
+  // Apply ?filter=... from query string (drill-down from dashboard)
+  useEffect(() => {
+    const f = searchParams.get("filter") as DrillFilter["kind"] | null;
+    if (f && f in filterLabels) setGlobalFilter(f);
+    else setGlobalFilter(null);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && !realIsDivisionAdmin) navigate("/");
@@ -197,6 +206,21 @@ export default function DivisionFitness() {
     }
     return list;
   }, [drillBrigade, drillFilter, drillSearch, rows]);
+
+  // Global drill-down across all brigades (from dashboard KPI clicks)
+  const globalRows = useMemo(() => {
+    if (!globalFilter) return [];
+    let list = rows.slice();
+    switch (globalFilter) {
+      case "militaryExpired": list = list.filter((r) => r.military_status === "unfit"); break;
+      case "militarySoon": list = list.filter((r) => r.military_status === "warning"); break;
+      case "civilianExpired": list = list.filter((r) => r.civilian_status === "unfit"); break;
+      case "noDefensive": list = list.filter((r) => !r.defensive_driving_passed); break;
+      case "correctDrivingDue": list = list.filter((r) => r.correct_status !== "fit"); break;
+      case "unfit": list = list.filter((r) => r.overall === "unfit"); break;
+    }
+    return list;
+  }, [globalFilter, rows]);
 
   const fmt = (d: string | null) => (d ? format(parseISO(d), "dd/MM/yyyy", { locale: he }) : "—");
 
@@ -331,9 +355,9 @@ export default function DivisionFitness() {
 
       {/* Drill-down dialog */}
       <Dialog open={!!drillBrigade} onOpenChange={(o) => !o && setDrillBrigade(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" dir="rtl">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col bg-white" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="text-right text-slate-900">
+            <DialogTitle className="text-right text-slate-900 font-black">
               {drillBrigade ? BRIGADES[drillBrigade].name : ""} – {filterLabels[drillFilter.kind]}
             </DialogTitle>
           </DialogHeader>
@@ -345,37 +369,81 @@ export default function DivisionFitness() {
                 value={drillSearch}
                 onChange={(e) => setDrillSearch(e.target.value)}
                 placeholder="חיפוש לפי שם / מ.א"
-                className="pr-10 text-slate-900"
+                className="pr-10 text-slate-900 bg-white border-slate-300 placeholder:text-slate-400"
               />
             </div>
           </div>
-          <div className="overflow-auto flex-1 border border-slate-200 rounded-lg">
+          <div className="overflow-auto flex-1 border border-slate-200 rounded-lg bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-slate-100 sticky top-0">
-                <tr className="text-slate-800">
-                  <th className="text-right px-3 py-2 font-bold">שם</th>
-                  <th className="text-right px-3 py-2 font-bold">מ.א</th>
-                  <th className="text-right px-3 py-2 font-bold">מוצב</th>
-                  <th className="text-center px-3 py-2 font-bold">רש' צבאי</th>
-                  <th className="text-center px-3 py-2 font-bold">רש' אזרחי</th>
-                  <th className="text-center px-3 py-2 font-bold">נה"מ</th>
-                  <th className="text-center px-3 py-2 font-bold">נה"נ</th>
+              <thead className="bg-slate-200 sticky top-0">
+                <tr className="text-slate-900">
+                  <th className="text-right px-3 py-2 font-black">שם</th>
+                  <th className="text-right px-3 py-2 font-black">מ.א</th>
+                  <th className="text-right px-3 py-2 font-black">מוצב</th>
+                  <th className="text-center px-3 py-2 font-black">רש' צבאי</th>
+                  <th className="text-center px-3 py-2 font-black">רש' אזרחי</th>
+                  <th className="text-center px-3 py-2 font-black">נה"מ</th>
+                  <th className="text-center px-3 py-2 font-black">נה"נ</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white">
                 {drillRows.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center text-slate-500 py-6">אין נתונים</td></tr>
+                  <tr className="bg-white"><td colSpan={7} className="text-center text-slate-600 py-6">אין נתונים</td></tr>
                 ) : drillRows.map((r) => (
-                  <tr key={r.id} className="border-t border-slate-200">
-                    <td className="px-3 py-2 text-slate-900 font-semibold">{r.full_name}</td>
-                    <td className="px-3 py-2 text-slate-700">{r.personal_number}</td>
-                    <td className="px-3 py-2 text-slate-700">{r.outpost || "—"}</td>
-                    <td className="px-3 py-2 text-center text-slate-700">{fmt(r.military_license_expiry)}</td>
-                    <td className="px-3 py-2 text-center text-slate-700">{fmt(r.civilian_license_expiry)}</td>
+                  <tr key={r.id} className="border-t border-slate-200 bg-white even:bg-slate-50 hover:bg-slate-100">
+                    <td className="px-3 py-2 text-slate-900 font-bold">{r.full_name}</td>
+                    <td className="px-3 py-2 text-slate-800">{r.personal_number}</td>
+                    <td className="px-3 py-2 text-slate-800">{r.outpost || "—"}</td>
+                    <td className="px-3 py-2 text-center text-slate-800">{fmt(r.military_license_expiry)}</td>
+                    <td className="px-3 py-2 text-center text-slate-800">{fmt(r.civilian_license_expiry)}</td>
                     <td className="px-3 py-2 text-center">
                       {r.defensive_driving_passed ? <Badge className="bg-emerald-500 text-white">עבר</Badge> : <Badge className="bg-slate-400 text-white">לא עבר</Badge>}
                     </td>
-                    <td className="px-3 py-2 text-center text-slate-700">{fmt(r.correct_driving_in_service_date)}</td>
+                    <td className="px-3 py-2 text-center text-slate-800">{fmt(r.correct_driving_in_service_date)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Global drill-down dialog (from dashboard ?filter=...) */}
+      <Dialog open={!!globalFilter} onOpenChange={(o) => { if (!o) { setGlobalFilter(null); searchParams.delete("filter"); setSearchParams(searchParams, { replace: true }); } }}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col bg-white" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right text-slate-900 font-black">
+              איו"ש – {globalFilter ? filterLabels[globalFilter] : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="my-2">
+            <Badge variant="outline" className="text-slate-800 border-slate-400">סה"כ: {globalRows.length}</Badge>
+          </div>
+          <div className="overflow-auto flex-1 border border-slate-200 rounded-lg bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-200 sticky top-0">
+                <tr className="text-slate-900">
+                  <th className="text-right px-3 py-2 font-black">חטיבה</th>
+                  <th className="text-right px-3 py-2 font-black">שם</th>
+                  <th className="text-right px-3 py-2 font-black">מ.א</th>
+                  <th className="text-right px-3 py-2 font-black">מוצב</th>
+                  <th className="text-center px-3 py-2 font-black">רש' צבאי</th>
+                  <th className="text-center px-3 py-2 font-black">רש' אזרחי</th>
+                  <th className="text-center px-3 py-2 font-black">נה"נ</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {globalRows.length === 0 ? (
+                  <tr className="bg-white"><td colSpan={7} className="text-center text-slate-600 py-6">אין נתונים</td></tr>
+                ) : globalRows.map((r) => (
+                  <tr key={r.id} className="border-t border-slate-200 bg-white even:bg-slate-50 hover:bg-slate-100">
+                    <td className="px-3 py-2 text-slate-900 font-bold">{r.brigade ? BRIGADES[r.brigade as BrigadeCode]?.name : "—"}</td>
+                    <td className="px-3 py-2 text-slate-900 font-bold">{r.full_name}</td>
+                    <td className="px-3 py-2 text-slate-800">{r.personal_number}</td>
+                    <td className="px-3 py-2 text-slate-800">{r.outpost || "—"}</td>
+                    <td className="px-3 py-2 text-center text-slate-800">{fmt(r.military_license_expiry)}</td>
+                    <td className="px-3 py-2 text-center text-slate-800">{fmt(r.civilian_license_expiry)}</td>
+                    <td className="px-3 py-2 text-center text-slate-800">{fmt(r.correct_driving_in_service_date)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -40,7 +40,6 @@ const actions: ActionItem[] = [
     iconGradient: "from-primary to-primary/70",
     featured: true,
     hideForBattalion: true,
-    binyaminOnly: true,
   },
   {
     to: "/drill-locations",
