@@ -15,7 +15,7 @@ import { StorageImage } from "@/components/shared/StorageImage";
 import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.png";
 import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.png";
 import { REGIONS, OUTPOSTS } from "@/lib/constants";
-import { BRIGADES, BRIGADE_CODES, getBrigade } from "@/lib/brigades";
+import { BRIGADES, BRIGADE_CODES, getBrigade, DIVISION_BRIGADE_CODE, DIVISION_LABEL } from "@/lib/brigades";
 
 type View = "categories" | "items" | "itemDetail";
 type ContentCategory = "flag_investigations" | "sector_events" | "neighbor_events" | "monthly_summaries";
@@ -82,6 +82,7 @@ const categoryLabels: Record<ContentCategory, string> = {
 const EVENT_TYPES = [
   { value: "accident", label: "תאונה" },
   { value: "stuck", label: "התחפרות" },
+  { value: "rollover", label: "התהפכות" },
   { value: "other", label: "אחר" },
 ] as const;
 
@@ -173,12 +174,16 @@ const getFields = (
   category: ContentCategory,
   soldiers: { id: string; full_name: string; personal_number: string }[] = [],
   showBrigadeSelector = false,
+  includeDivisionOption = false,
 ): FieldConfig[] => {
   const brigadeField: FieldConfig = {
     name: "brigade",
     label: "חטיבה (החטיבה שבה התרחש האירוע)",
     type: "select",
-    options: BRIGADE_CODES.map((c) => ({ value: c, label: BRIGADES[c].name })),
+    options: [
+      ...(includeDivisionOption ? [{ value: DIVISION_BRIGADE_CODE, label: DIVISION_LABEL }] : []),
+      ...BRIGADE_CODES.map((c) => ({ value: c, label: BRIGADES[c].name })),
+    ],
     placeholder: "בחר חטיבה",
     required: true,
   };
@@ -201,13 +206,14 @@ const getFields = (
     const sectorFields: FieldConfig[] = [
       { name: "title", label: "כותרת", type: "text", required: true, placeholder: "הזן כותרת..." },
       ...(showBrigadeSelector ? [brigadeField] : []),
-      { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך" },
+      { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך", required: true },
       { 
         name: "region", 
         label: "גזרה", 
         type: "select",
         options: REGIONS.map(r => ({ value: r, label: r })),
-        placeholder: "בחר גזרה"
+        placeholder: "בחר גזרה",
+        required: true
       },
       { 
         name: "outpost", 
@@ -221,14 +227,16 @@ const getFields = (
         label: "סוג אירוע", 
         type: "select",
         options: EVENT_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר סוג אירוע"
+        placeholder: "בחר סוג אירוע",
+        required: true
       },
       { 
         name: "driver_type", 
         label: "סוג נהג", 
         type: "select",
         options: DRIVER_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר סוג נהג"
+        placeholder: "בחר סוג נהג",
+        required: true
       },
       { 
         name: "soldier_id", 
@@ -245,15 +253,16 @@ const getFields = (
         placeholder: "הזן שם נהג...",
         dependsOn: { field: "driver_type", value: "combat" }
       },
-      { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב..." },
+      { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב...", required: true },
       { 
         name: "severity", 
         label: "חומרת האירוע", 
         type: "select",
         options: SEVERITY_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר חומרה"
+        placeholder: "בחר חומרה",
+        required: true
       },
-      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט..." },
+      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט...", required: true },
       { name: "image_url", label: "תמונה", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
       { name: "video_url", label: "סרטון (קובץ / YouTube)", type: "media", mediaTypes: ["video", "youtube"] },
@@ -281,6 +290,9 @@ export default function SafetyEvents() {
   const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin } = useAuth();
   const isBattalionUser = userType === 'battalion';
   const myBrigade = userBrigade || 'binyamin';
+  // Division admins (מפאו"ג איו"ש) may file events on behalf of any brigade OR on the division itself.
+  const showBrigadeSelector = isBattalionUser || isDivisionAdmin;
+  const includeDivisionOption = isDivisionAdmin;
   const [view, setView] = useState<View>("categories");
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
   const [selectedItem, setSelectedItem] = useState<SafetyContent | null>(null);
@@ -294,6 +306,8 @@ export default function SafetyEvents() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addDraftData, setAddDraftData] = useState<FormValues | null>(null);
   const [editDraftData, setEditDraftData] = useState<FormValues | null>(null);
+  // Division-admin only: filter event list by specific brigade (or 'division' = מפאו"ג)
+  const [divisionBrigadeFilter, setDivisionBrigadeFilter] = useState<string>("all");
 
   // Fetch soldiers for the dropdown
   useEffect(() => {
@@ -369,7 +383,7 @@ export default function SafetyEvents() {
   const openAddDialog = () => {
     if (!selectedCategory) return;
 
-    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers, isBattalionUser));
+    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption));
     writeSafetyEventDraft({ mode: "add", category: selectedCategory, formData: initialFormData, selectedItem: null });
     setAddDraftData(initialFormData);
     setAddDialogOpen(true);
@@ -398,8 +412,8 @@ export default function SafetyEvents() {
       setIsSubmitting(false);
       return;
     }
-    const targetBrigade = isBattalionUser
-      ? (toNullableText(data.brigade) || myBrigade)
+    const targetBrigade = showBrigadeSelector
+      ? (toNullableText(data.brigade) || (isDivisionAdmin ? DIVISION_BRIGADE_CODE : myBrigade))
       : myBrigade;
 
     // Parse and validate coordinates - must be in valid range for Israel
@@ -422,6 +436,23 @@ export default function SafetyEvents() {
     const eventDate = toNullableText(data.event_date);
     const description = toNullableText(data.description);
     const selectedSoldierId = toNullableText(data.soldier_id);
+
+    // Required-field validation for sector events (Selects don't honor HTML5 required)
+    if (selectedCategory === "sector_events") {
+      const missing: string[] = [];
+      if (!eventDate) missing.push("תאריך");
+      if (!toNullableText(data.region)) missing.push("גזרה");
+      if (!eventType) missing.push("סוג אירוע");
+      if (!driverType) missing.push("סוג נהג");
+      if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
+      if (!toNullableText(data.severity)) missing.push("חומרת אירוע");
+      if (!description) missing.push("תיאור");
+      if (missing.length) {
+        toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     // Validation: if it's a sector/neighbor event with security driver, require soldier selection
     // so the event can be synced to the soldier's profile (טבלת שליטה)
@@ -812,8 +843,32 @@ export default function SafetyEvents() {
         );
       }
 
-      if (items.length === 0) {
+      const displayedItems = (isDivisionAdmin && divisionBrigadeFilter !== "all")
+        ? items.filter((it: any) => (it.brigade || "binyamin") === divisionBrigadeFilter)
+        : items;
+
+      const filterBar = isDivisionAdmin && (selectedCategory === "sector_events" || selectedCategory === "neighbor_events") ? (
+        <div className="mb-4 flex items-center gap-2 flex-wrap glass-card p-3">
+          <span className="text-sm font-semibold text-slate-800">סינון לפי חטיבה:</span>
+          <select
+            value={divisionBrigadeFilter}
+            onChange={(e) => setDivisionBrigadeFilter(e.target.value)}
+            className="h-9 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm"
+          >
+            <option value="all">כל החטיבות</option>
+            <option value={DIVISION_BRIGADE_CODE}>{DIVISION_LABEL}</option>
+            {BRIGADE_CODES.map((c) => (
+              <option key={c} value={c}>{BRIGADES[c].name}</option>
+            ))}
+          </select>
+          <span className="text-xs text-slate-600 mr-auto">{displayedItems.length} אירועים</span>
+        </div>
+      ) : null;
+
+      if (displayedItems.length === 0) {
         return (
+          <>
+            {filterBar}
           <div className="text-center py-12 animate-slide-up">
             <div className="relative inline-block mb-6">
               <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-xl" />
@@ -828,6 +883,7 @@ export default function SafetyEvents() {
               </p>
             )}
           </div>
+          </>
         );
       }
 
@@ -838,7 +894,8 @@ export default function SafetyEvents() {
       if (isVideoStyle) {
         return (
           <div className="grid gap-4">
-            {items.map((item, index) => (
+            {filterBar}
+            {displayedItems.map((item, index) => (
               <div
                 key={item.id}
                 className="group relative overflow-hidden rounded-2xl bg-card/80 backdrop-blur-sm border border-border/30 cursor-pointer hover:border-primary/40 hover:shadow-luxury transition-all duration-500 animate-slide-up"
@@ -927,7 +984,8 @@ export default function SafetyEvents() {
       // For sector_events and neighbor_events, use existing card style
       return (
         <div className="grid gap-4">
-          {items.map((item, index) => (
+          {filterBar}
+          {displayedItems.map((item, index) => (
             <div
               key={item.id}
               className="group relative overflow-hidden rounded-2xl bg-card/80 backdrop-blur-sm border border-border/30 cursor-pointer hover:border-primary/40 hover:shadow-lg transition-all duration-500 animate-slide-up p-4"
@@ -1132,7 +1190,7 @@ export default function SafetyEvents() {
     return null;
   };
 
-  const fields = selectedCategory ? getFields(selectedCategory, soldiers, isBattalionUser) : [];
+  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption) : [];
 
   return (
     <AppLayout>

@@ -50,9 +50,9 @@ const DivisionMap = () => {
           BRIGADE_CODES.map(async (code) => {
             const [se, ac, roll, prevAc, sol, unfitSol] = await Promise.all([
               supabase.from("safety_events").select("id", { count: "exact", head: true }).eq("brigade", code).gte("created_at", monthIso),
-              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).gte("accident_date", monthIso.slice(0, 10)),
-              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).eq("incident_type", "rollover").gte("accident_date", monthIso.slice(0, 10)),
-              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).gte("accident_date", prevIso.slice(0, 10)).lt("accident_date", monthIso.slice(0, 10)),
+              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).eq("driver_type", "security").gte("accident_date", monthIso.slice(0, 10)),
+              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).eq("driver_type", "security").eq("incident_type", "rollover").gte("accident_date", monthIso.slice(0, 10)),
+              supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code).eq("driver_type", "security").gte("accident_date", prevIso.slice(0, 10)).lt("accident_date", monthIso.slice(0, 10)),
               supabase.from("soldiers").select("id", { count: "exact", head: true }).eq("brigade", code).eq("is_active", true),
               supabase.from("soldiers").select("id", { count: "exact", head: true }).eq("brigade", code).eq("is_active", true).lt("military_license_expiry", new Date().toISOString().slice(0, 10)),
             ]);
@@ -101,9 +101,9 @@ const DivisionMap = () => {
           <div>
             <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
               <MapIcon className="w-7 h-7 text-primary" />
-              מפת איו"ש
+              מפת פלנגים
             </h1>
-            <p className="text-slate-600 text-sm mt-1">צביעת חטיבות לפי ציון בטיחות חודשי</p>
+            <p className="text-slate-600 text-sm mt-1">פלוגות נהגי בט"ש (פלנג) בלבד — ציון בטיחות חודשי</p>
           </div>
 
           <Card className="bg-white border-2 border-slate-200 shadow-md p-4">

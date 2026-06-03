@@ -62,3 +62,14 @@ export const isValidBrigade = (value: unknown): value is BrigadeCode =>
 
 export const getBrigade = (code: string | null | undefined): BrigadeInfo =>
   (code && isValidBrigade(code) ? BRIGADES[code] : BRIGADES.binyamin);
+
+// Special "division" pseudo-brigade representing the מפאו"ג איו"ש HQ itself.
+// Users registered through /auth/division get role=division_admin and brigade='division'.
+export const DIVISION_BRIGADE_CODE = 'division' as const;
+export const DIVISION_AUTH_PATH = '/auth/division';
+export const DIVISION_LABEL = 'מפאו"ג איו"ש';
+
+export const getBrigadeLabel = (code: string | null | undefined): string => {
+  if (code === DIVISION_BRIGADE_CODE) return DIVISION_LABEL;
+  return getBrigade(code).name;
+};

@@ -24,9 +24,13 @@ import {
   Mountain,
   Activity,
   Repeat,
+  CalendarDays,
+  FileDown,
+  Sparkles,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { toast } from "sonner";
-import { differenceInDays, parseISO, addYears, format } from "date-fns";
+import { differenceInDays, parseISO, addYears, format, subMonths, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 
 interface BrigadeStats {
@@ -106,6 +110,12 @@ export const DivisionDashboard = () => {
   const [stats, setStats] = useState<BrigadeStats[]>([]);
   const [drill, setDrill] = useState<{ kind: DrillKind; title: string; rows: DrillRow[] } | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
+  // 6-month trend per brigade (accidents)
+  const [monthlyTrend, setMonthlyTrend] = useState<Array<Record<string, any>>>([]);
+  // Normalized vs absolute view for benchmark chart
+  const [normalized, setNormalized] = useState(false);
+  // Division calendar: critical expiries in next 30 days
+  const [calendar, setCalendar] = useState<Array<{ brigade: string; full_name: string; type: string; date: string }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -222,6 +232,69 @@ export const DivisionDashboard = () => {
       }
     };
     load();
+  }, []);
+
+  // Load 6-month trend (accidents per brigade per month) + 30-day division calendar
+  useEffect(() => {
+    const loadExtras = async () => {
+      try {
+        const since = startOfMonth(subMonths(new Date(), 5)).toISOString().slice(0, 10);
+        const trendResults = await Promise.all(
+          BRIGADE_CODES.map(async (code) => {
+            const { data, error } = await supabase
+              .from("accidents")
+              .select("accident_date")
+              .eq("brigade", code)
+              .gte("accident_date", since);
+            if (error) throw error;
+            const buckets: Record<string, number> = {};
+            (data || []).forEach((r: any) => {
+              if (!r.accident_date) return;
+              const key = r.accident_date.slice(0, 7); // YYYY-MM
+              buckets[key] = (buckets[key] || 0) + 1;
+            });
+            return { code, buckets };
+          })
+        );
+        // Build month axis (last 6 months)
+        const months: string[] = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = subMonths(new Date(), i);
+          months.push(format(startOfMonth(d), "yyyy-MM"));
+        }
+        const trendRows = months.map((m) => {
+          const row: any = { month: format(parseISO(m + "-01"), "MMM", { locale: he }) };
+          trendResults.forEach((t) => {
+            row[BRIGADES[t.code].shortLabel] = t.buckets[m] || 0;
+          });
+          return row;
+        });
+        setMonthlyTrend(trendRows);
+
+        // Calendar: military + civilian license expiries within next 30 days
+        const today = new Date().toISOString().slice(0, 10);
+        const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        const { data: solData } = await supabase
+          .from("soldiers")
+          .select("full_name, brigade, military_license_expiry, civilian_license_expiry")
+          .eq("is_active", true);
+        const items: Array<{ brigade: string; full_name: string; type: string; date: string }> = [];
+        (solData || []).forEach((s: any) => {
+          if (s.military_license_expiry && s.military_license_expiry >= today && s.military_license_expiry <= in30) {
+            items.push({ brigade: s.brigade, full_name: s.full_name, type: "רישיון צבאי", date: s.military_license_expiry });
+          }
+          if (s.civilian_license_expiry && s.civilian_license_expiry >= today && s.civilian_license_expiry <= in30) {
+            items.push({ brigade: s.brigade, full_name: s.full_name, type: "רישיון אזרחי", date: s.civilian_license_expiry });
+          }
+        });
+        items.sort((a, b) => a.date.localeCompare(b.date));
+        setCalendar(items);
+      } catch (e: any) {
+        // silent — extras are non-critical
+        console.warn("Division extras load failed:", e?.message || e);
+      }
+    };
+    loadExtras();
   }, []);
 
   const totals = stats.reduce(
@@ -440,6 +513,57 @@ export const DivisionDashboard = () => {
     }
   };
 
+  // === Predictive alerts: detect 3-month rising trend per brigade ===
+  const predictiveAlerts: { text: string; tone: "red" | "amber" }[] = [];
+  if (monthlyTrend.length >= 4) {
+    BRIGADE_CODES.forEach((code) => {
+      const key = BRIGADES[code].shortLabel;
+      const series = monthlyTrend.map((m) => Number(m[key] || 0));
+      // Compare last 3 months trajectory
+      const last3 = series.slice(-3);
+      if (last3[0] < last3[1] && last3[1] < last3[2] && last3[2] >= 2) {
+        const projected = last3[2] + (last3[2] - last3[0]);
+        predictiveAlerts.push({
+          text: `${BRIGADES[code].name}: מגמת עלייה רצופה 3 חודשים בתאונות – צפי חודש הבא ~${projected}`,
+          tone: "red",
+        });
+      }
+    });
+  }
+
+  // === Weekly digest export (CSV summary) ===
+  const exportWeeklyDigest = () => {
+    const lines: string[] = [];
+    lines.push(`דוח שבועי – מפאו"ג איו"ש – ${format(new Date(), "dd/MM/yyyy")}`);
+    lines.push("");
+    lines.push(`סה"כ תאונות חודש: ${totals.accidents} (חודש קודם: ${totals.accidentsPrev}, ${accidentsTrend >= 0 ? "+" : ""}${accidentsTrendPct}%)`);
+    lines.push(`תאונות דרכים: ${totals.road} | התהפכויות: ${totals.rollovers} | התחפרויות: ${totals.entrenchments}`);
+    lines.push(`חיילים פעילים: ${totals.soldiers} | כשירות אוגדתית: ${divisionFitPct}%`);
+    lines.push(`רישיון צבאי פג: ${totals.unfit} | פג ב-30 יום: ${totals.militarySoon} | נה"נ נדרשת: ${totals.correctDrivingDue} | ללא מונעת: ${totals.noDefensive}`);
+    lines.push("");
+    lines.push("חטיבה,תאונות חודש,חודש קודם,התהפכויות,התחפרויות,פעילים,כשירות %,ציון");
+    stats.forEach((s) => {
+      lines.push([BRIGADES[s.code].name, s.accidentsMonth, s.accidentsPrevMonth, s.rolloversMonth, s.entrenchmentsMonth, s.activeSoldiers, s.fitPct, s.score].join(","));
+    });
+    if (predictiveAlerts.length) {
+      lines.push("");
+      lines.push("התראות חיזוי:");
+      predictiveAlerts.forEach((p) => lines.push(p.text));
+    }
+    const csv = "\uFEFF" + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `division-digest-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("דוח שבועי הורד");
+  };
+
+  // Calendar grouped by week
+  const calendarByDate = calendar.slice(0, 30);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 pb-24" dir="rtl">
       {/* Header */}
@@ -579,8 +703,130 @@ export const DivisionDashboard = () => {
           </Card>
         )}
 
+        {/* Brigade benchmark – horizontal bar chart comparing accidents/rollovers per brigade this month */}
+        {!loading && stats.length > 0 && (
+          <Card className="p-4 bg-white border-2 border-slate-200 shadow-md">
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                השוואת חטיבות – מדדים מרכזיים (חודש)
+              </h2>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant={normalized ? "outline" : "default"} className="h-7 text-xs font-bold" onClick={() => setNormalized(false)}>מספר מוחלט</Button>
+                <Button size="sm" variant={normalized ? "default" : "outline"} className="h-7 text-xs font-bold" onClick={() => setNormalized(true)}>ל-100 נהגים</Button>
+              </div>
+            </div>
+            <div className="w-full" style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.map((s) => {
+                  const f = (v: number) => normalized && s.activeSoldiers > 0 ? Math.round((v / s.activeSoldiers) * 100 * 10) / 10 : v;
+                  return {
+                    name: BRIGADES[s.code].shortLabel,
+                    תאונות: f(s.accidentsMonth),
+                    התהפכויות: f(s.rolloversMonth),
+                    התחפרויות: f(s.entrenchmentsMonth),
+                  };
+                })}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#334155" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#334155" }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="תאונות" fill="#dc2626" />
+                  <Bar dataKey="התהפכויות" fill="#e11d48" />
+                  <Bar dataKey="התחפרויות" fill="#d97706" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 text-xs text-slate-600 font-medium">
+              {normalized ? "אירועים מנורמלים ל-100 נהגים פעילים – השוואה הוגנת בין חטיבות בגדלים שונים." : "מספר אירועים שדווחו החודש – בערכים מוחלטים."}
+            </div>
+          </Card>
+        )}
+
+        {/* 6-month trend line chart per brigade */}
+        {monthlyTrend.length > 0 && (
+          <Card className="p-4 bg-white border-2 border-slate-200 shadow-md">
+            <h2 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              מגמת תאונות – 6 חודשים אחרונים
+            </h2>
+            <div className="w-full" style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyTrend} margin={{ top: 5, right: 8, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#334155" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#334155" }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  {BRIGADE_CODES.map((code, i) => {
+                    const colors = ["#dc2626", "#2563eb", "#059669", "#d97706", "#7c3aed", "#db2777"];
+                    return <Line key={code} type="monotone" dataKey={BRIGADES[code].shortLabel} stroke={colors[i]} strokeWidth={2} dot={{ r: 3 }} />;
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 text-xs text-slate-600 font-medium">קו מגמה לכל חטיבה – זיהוי שיפור או התדרדרות לאורך זמן.</div>
+          </Card>
+        )}
+
+        {/* Predictive alerts */}
+        {predictiveAlerts.length > 0 && (
+          <Card className="p-4 bg-gradient-to-l from-red-50 to-rose-50 border-2 border-red-400 shadow-md">
+            <h2 className="text-lg font-black text-slate-900 mb-3 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-red-600" />
+              התראות חיזוי – צפי 30 יום
+            </h2>
+            <div className="space-y-2">
+              {predictiveAlerts.map((a, i) => (
+                <div key={i} className="p-3 rounded-xl border-2 border-red-300 bg-red-100 text-red-800 font-semibold text-sm">
+                  {a.text}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Division calendar – next 30 days critical expiries */}
+        {calendarByDate.length > 0 && (
+          <Card className="p-4 bg-white border-2 border-slate-200 shadow-md">
+            <h2 className="text-lg font-black text-slate-900 mb-3 flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-primary" />
+              לוח שנה אוגדתי – 30 יום קדימה ({calendar.length})
+            </h2>
+            <div className="max-h-72 overflow-y-auto space-y-1 -mx-1 px-1">
+              {calendarByDate.map((c, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-slate-900 truncate">{c.full_name}</div>
+                    <div className="text-[11px] text-slate-600 font-medium">{c.type} · {BRIGADES[c.brigade as BrigadeCode]?.shortLabel || c.brigade}</div>
+                  </div>
+                  <div className="text-xs font-black text-red-700 whitespace-nowrap">{format(parseISO(c.date), "dd/MM", { locale: he })}</div>
+                </div>
+              ))}
+              {calendar.length > 30 && (
+                <div className="text-center text-xs text-slate-500 font-bold py-2">+ {calendar.length - 30} נוספים</div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Weekly digest export */}
+        <Card className="p-4 bg-gradient-to-l from-primary/5 to-accent/5 border-2 border-primary/30 shadow-md">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <FileDown className="w-5 h-5 text-primary" /> דוח שבועי / חודשי – ייצוא מהיר
+              </h2>
+              <p className="text-xs text-slate-600 font-medium mt-1">סיכום מלא של כל המדדים האוגדתיים – להעברה למפקדים.</p>
+            </div>
+            <Button onClick={exportWeeklyDigest} className="bg-primary hover:bg-primary/90 text-white font-bold">
+              <FileDown className="w-4 h-4 ml-1" /> הורד
+            </Button>
+          </div>
+        </Card>
+
         {/* Quick links */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Button
             variant="outline"
             className="h-14 border-2 border-primary/30 hover:border-primary text-slate-900 font-bold"
@@ -604,6 +850,14 @@ export const DivisionDashboard = () => {
           >
             <Gauge className="w-5 h-5 ml-2" />
             כשירות נהגים
+          </Button>
+          <Button
+            variant="outline"
+            className="h-14 border-2 border-red-400/40 hover:border-red-500 text-slate-900 font-bold"
+            onClick={() => navigate("/safety-events")}
+          >
+            <ShieldAlert className="w-5 h-5 ml-2" />
+            אירועי בטיחות
           </Button>
         </div>
 

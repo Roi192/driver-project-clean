@@ -57,8 +57,8 @@ const BrigadeContextSelector = () => {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-3">
               <Globe className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-xl font-black text-slate-900 mb-1">כל החטיבות</h2>
-            <p className="text-sm text-slate-700 font-medium">תצוגה אוגדתית — רואה הכל</p>
+            <h2 className="text-xl font-black text-slate-900 mb-1">מפאו"ג איו"ש</h2>
+            <p className="text-sm text-slate-700 font-medium">תצוגה אוגדתית — שש החטיבות</p>
             <div className="flex items-center gap-1 mt-3 text-primary text-sm font-semibold">
               <span>כניסה</span>
               <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, AppRole } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { BRIGADES, BRIGADE_CODES, getBrigade, type BrigadeCode } from "@/lib/brigades";
+import { BRIGADES, BRIGADE_CODES, getBrigade, type BrigadeCode, DIVISION_BRIGADE_CODE, DIVISION_LABEL } from "@/lib/brigades";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,8 +93,15 @@ const UsersManagement = () => {
   const navigate = useNavigate();
   const { user, canDelete, isSuperAdmin, isDivisionAdmin, brigade: myBrigade } = useAuth();
   const { isAdmin, canAccessUsersManagement, isLoading: roleLoading } = useUserRole();
-  // canSeeAllBrigades is true only when viewing the whole division (no specific brigade context)
-  const canSeeAllBrigades = isDivisionAdmin;
+  // In the division (מפאו"ג איו"ש) view the page must show ONLY users that registered
+  // through the dedicated division link (brigade='division'). Brigade admins see only
+  // their own brigade users. The "all brigades" mode is no longer used here.
+  const inDivisionView = isDivisionAdmin; // true only when no brigade override is active
+  const effectiveBrigadeFilter: string | null = inDivisionView
+    ? DIVISION_BRIGADE_CODE
+    : (myBrigade || null);
+  // Kept for backward-compat with edit dialog logic below.
+  const canSeeAllBrigades = inDivisionView;
   
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
@@ -149,8 +156,8 @@ const UsersManagement = () => {
             .select("*")
             .or("department.eq.planag,department.is.null")
             .neq("user_type", "battalion");
-          if (!canSeeAllBrigades && myBrigade) {
-            q = q.eq("brigade", myBrigade);
+          if (effectiveBrigadeFilter) {
+            q = q.eq("brigade", effectiveBrigadeFilter);
           }
           return q.order("created_at", { ascending: false });
         })(),
@@ -184,9 +191,9 @@ const UsersManagement = () => {
               if (utype === "battalion") return false;
               if (dept === "hagmar" || dept === "battalion") return false;
               // Brigade scoping for orphan auth users
-              if (!canSeeAllBrigades && myBrigade) {
+              if (effectiveBrigadeFilter) {
                 const userBrigade = u.user_metadata?.brigade || 'binyamin';
-                if (userBrigade !== myBrigade) return false;
+                if (userBrigade !== effectiveBrigadeFilter) return false;
               }
               return true;
             })
@@ -418,9 +425,9 @@ const UsersManagement = () => {
         {/* Header */}
         <PageHeader
           icon={Users}
-          title="ניהול משתמשים"
-          subtitle="צפייה ועריכת משתמשים רשומים"
-          badge="ניהול משתמשים"
+          title={inDivisionView ? `ניהול משתמשים — ${DIVISION_LABEL}` : "ניהול משתמשים"}
+          subtitle={inDivisionView ? "רק קצינים שנרשמו דרך הלינק האוגדתי /auth/division" : "צפייה ועריכת משתמשים רשומים"}
+          badge={inDivisionView ? DIVISION_LABEL : "ניהול משתמשים"}
         />
 
         {/* Stats Card */}

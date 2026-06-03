@@ -50,6 +50,7 @@ import MyWarnings from "./pages/MyWarnings";
 import DepartmentSelector from "./pages/DepartmentSelector";
 import HagmarAuth from "./pages/HagmarAuth";
 import BrigadeAuth from "./pages/BrigadeAuth";
+import DivisionAuth from "./pages/DivisionAuth";
 import HagmarHome from "./pages/HagmarHome";
 import HagmarUsersManagement from "./pages/HagmarUsersManagement";
 import WeaponHoldersTracking from "./pages/WeaponHoldersTracking";
@@ -77,6 +78,7 @@ import BrigadeOutpostsManagement from "./pages/BrigadeOutpostsManagement";
 import BrigadeContextSelector from "./pages/BrigadeContextSelector";
 import DivisionReport from "./pages/DivisionReport";
 import DivisionMap from "./pages/DivisionMap";
+import DivisionBrigadeMap from "./pages/DivisionBrigadeMap";
 import DivisionFitness from "./pages/DivisionFitness";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
@@ -101,6 +103,7 @@ const App = () => (
             <Route path="/auth/gdud" element={<AuthBattalion />} />
             <Route path="/auth/hagmar" element={<HagmarAuth />} />
             <Route path="/auth/brigade/:code" element={<BrigadeAuth />} />
+            <Route path="/auth/division" element={<DivisionAuth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/department-selector"
@@ -131,6 +134,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DivisionMap />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/division/brigade-map"
+              element={
+                <ProtectedRoute>
+                  <DivisionBrigadeMap />
                 </ProtectedRoute>
               }
             />
