@@ -66,7 +66,7 @@ const BrigadeContextSelector = () => {
           </button>
           )}
 
-          {BRIGADE_CODES.map((code) => (
+          {canSelect && BRIGADE_CODES.map((code) => (
             <button
               key={code}
               onClick={() => pick(code)}

@@ -4300,6 +4300,7 @@ export type Database = {
       }
       is_battalion_user: { Args: { _user_id: string }; Returns: boolean }
       is_division_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_division_user: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -4311,6 +4312,7 @@ export type Database = {
         | "hagmar_admin"
         | "ravshatz"
         | "division_admin"
+        | "division_user"
       drill_type: "descent" | "rollover" | "fire"
       safety_category: "vardim" | "vulnerability" | "parsa"
       safety_event_category:
@@ -4456,6 +4458,7 @@ export const Constants = {
         "hagmar_admin",
         "ravshatz",
         "division_admin",
+        "division_user",
       ],
       drill_type: ["descent", "rollover", "fire"],
       safety_category: ["vardim", "vulnerability", "parsa"],

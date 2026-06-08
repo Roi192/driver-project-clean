@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
-  const { user, isAdmin, isPlatoonCommander, isBattalionAdmin, isSuperAdmin, loading, role, isBattalion, activeBrigade, realIsDivisionAdmin } = useAuth() as any;
+  const { user, isAdmin, isPlatoonCommander, isBattalionAdmin, isSuperAdmin, loading, role, isBattalion, activeBrigade, realIsDivisionAdmin, isDivisionUser } = useAuth() as any;
   const navigate = useNavigate();
   const location = useLocation();
   const [departmentChecked, setDepartmentChecked] = useState(false);
@@ -96,7 +96,7 @@ const Index = () => {
   }, [user, isSuperAdmin, role, loading, navigate, isRootPath, activeBrigade, isBattalion]);
 
   const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin || (realIsDivisionAdmin && !!activeBrigade);
-  const inDivisionView = realIsDivisionAdmin && !activeBrigade;
+  const inDivisionView = isDivisionUser && !activeBrigade;
 
   if (loading || !departmentChecked || isRedirecting) {
     return (

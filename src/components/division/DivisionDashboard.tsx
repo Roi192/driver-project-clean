@@ -105,7 +105,7 @@ interface DrillRow {
 
 export const DivisionDashboard = () => {
   const navigate = useNavigate();
-  const { setActiveBrigade } = useAuth() as any;
+  const { setActiveBrigade, realIsDivisionAdmin } = useAuth() as any;
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<BrigadeStats[]>([]);
   const [drill, setDrill] = useState<{ kind: DrillKind; title: string; rows: DrillRow[] } | null>(null);
@@ -948,13 +948,15 @@ export const DivisionDashboard = () => {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={() => enterBrigade(code)}
-                    className="w-full bg-primary hover:bg-primary/90 text-white font-bold"
-                  >
-                    כניסה לחטיבה
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                  </Button>
+                  {realIsDivisionAdmin && (
+                    <Button
+                      onClick={() => enterBrigade(code)}
+                      className="w-full bg-primary hover:bg-primary/90 text-white font-bold"
+                    >
+                      כניסה לחטיבה
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                    </Button>
+                  )}
                 </Card>
               );
             })}

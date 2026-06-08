@@ -80,7 +80,8 @@ interface Soldier {
 // Role display names in Hebrew
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "מנהל ראשי",
-  division_admin: "מפאו\"ג איו\"ש",
+  division_admin: "מנהל מפאו\"ג איו\"ש",
+  division_user: "משתמש מפאו\"ג רגיל",
   admin: "מנהל מ\"פ נהגים",
   platoon_commander: "מנהל מ\"מ נהגים",
   battalion_admin: "מנהל גדוד תע\"ם",
@@ -662,6 +663,7 @@ const UsersManagement = () => {
                     <SelectContent className="bg-popover border-border z-[10000]">
                     {isSuperAdmin && <SelectItem value="super_admin">מנהל ראשי (מח"ט)</SelectItem>}
                     {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_admin">מנהל מפאו"ג איו"ש (אוגדתי)</SelectItem>}
+                    {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_user">משתמש מפאו"ג רגיל</SelectItem>}
                     <SelectItem value="admin">מנהל מ"פ נהגים (גישה מלאה)</SelectItem>
                     <SelectItem value="platoon_commander">מנהל מ"מ נהגים</SelectItem>
                     {!isDivisionAdmin || isSuperAdmin ? (
@@ -672,6 +674,7 @@ const UsersManagement = () => {
                 <p className="text-xs text-muted-foreground mt-1">
                   {editFormData.role === 'super_admin' && '✓ מנהל ראשי - גישה מלאה לכל המחלקות וכל החטיבות'}
                   {editFormData.role === 'division_admin' && '✓ מפאו"ג - רואה את כל החטיבות, מנהל מ"פ ומ"מ בכל החטיבות'}
+                  {editFormData.role === 'division_user' && '✓ משתמש מפאו"ג רגיל - תצוגה אוגדתית בלבד, ללא כניסה לחטיבות וללא עריכה'}
                   {editFormData.role === 'admin' && '✓ גישה מלאה לכל הפיצ\'רים כולל מחיקה וניהול משתמשים'}
                   {editFormData.role === 'platoon_commander' && '✓ ללא דו"ח בו"מ, ניהול משתמשים ומחיקות'}
                   {editFormData.role === 'driver' && '✓ צפייה בלבד + מילוי טפסים'}
@@ -692,6 +695,7 @@ const UsersManagement = () => {
                       <SelectValue placeholder="בחר חטיבה" />
                     </SelectTrigger>
                     <SelectContent className="bg-popover border-border z-[10000]">
+                      <SelectItem value={DIVISION_BRIGADE_CODE}>{DIVISION_LABEL}</SelectItem>
                       {BRIGADE_CODES.map(code => (
                         <SelectItem key={code} value={code}>{BRIGADES[code].name}</SelectItem>
                       ))}

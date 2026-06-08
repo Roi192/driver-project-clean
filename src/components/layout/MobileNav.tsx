@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import unitLogo from "@/assets/unit-logo.png";
-import { BRIGADES, getBrigade } from "@/lib/brigades";
+import { BRIGADES, getBrigade, getBrigadeLabel } from "@/lib/brigades";
 
 // Base nav items - shift-form will be filtered based on user type
 const getNavItems = (userType: string | null, isBattalionAdmin: boolean, brigade: string | null) => {
@@ -111,6 +111,7 @@ export function MobileNav() {
     canAccessWorkSchedule,
     canAccessWeeklyMeeting,
     canAccessEquipmentTracking,
+    isDivisionUser,
   } = useAuth();
   const navigate = useNavigate();
   const { realIsDivisionAdmin, activeBrigade, isBattalion } = useAuth() as any;
@@ -134,16 +135,16 @@ export function MobileNav() {
   // Show minimal hagmar menu for fighters
   const showHagmarFighterMenu = isHagmarFighter;
   // Division view = super_admin / division_admin viewing all brigades (no active brigade picked)
-  const isInDivisionView = realIsDivisionAdmin && !activeBrigade && !isInHagmar && !isOnDepartmentSelector;
+  const isInDivisionView = isDivisionUser && !activeBrigade && !isInHagmar && !isOnDepartmentSelector;
   // Only show planag menu when NOT in hagmar AND NOT on department selector (for super_admin) AND NOT a hagmar fighter AND NOT in battalion context AND NOT in division-wide view
   const showPlanagMenu = !isInHagmar && !isHagmarFighter && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
   // Show battalion menu when in battalion context
   const showBattalionMenu = isInBattalionContext && !isOnDepartmentSelector;
   // Hide driver nav items when in admin/division contexts so מפאו"ג users are not sent to soldier-linked screens
-  const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView && !realIsDivisionAdmin;
+  const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView && !isDivisionUser;
   
   // Department label for header
-  const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי' : (isInHagmar || isHagmarFighter) ? 'הגמ"ר' : isInBattalionContext ? 'גדוד תע"ם' : getBrigade(brigade).shortLabel;
+  const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי' : (isInHagmar || isHagmarFighter) ? 'הגמ"ר' : isInBattalionContext ? 'גדוד תע"ם' : isInDivisionView ? getBrigadeLabel('division') : getBrigade(brigade).shortLabel;
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -374,7 +375,7 @@ export function MobileNav() {
           )}
 
           {/* Division-wide menu - shown only in division view (no specific brigade picked) */}
-          {realIsDivisionAdmin && !activeBrigade && !isInHagmar && !isOnDepartmentSelector && (
+          {isDivisionUser && !activeBrigade && !isInHagmar && !isOnDepartmentSelector && (
             <>
               <div className="px-2 pt-2 pb-1 text-xs font-black text-amber-500 uppercase tracking-wider">תצוגה אוגדתית</div>
               <NavLink to="/" onClick={() => setIsOpen(false)}
@@ -432,16 +433,18 @@ export function MobileNav() {
                 <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-rose-400 group-hover:-translate-x-1 transition-all duration-300" />
               </NavLink>
 
-              <NavLink to="/users-management" onClick={() => setIsOpen(false)}
-                className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
-                activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
-              >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <UserCog className="w-6 h-6" />
-                </div>
-                <span className="font-bold text-base relative z-10 flex-1">ניהול משתמשים אוגדתי</span>
-                <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-purple-400 group-hover:-translate-x-1 transition-all duration-300" />
-              </NavLink>
+              {realIsDivisionAdmin && (
+                <NavLink to="/users-management" onClick={() => setIsOpen(false)}
+                  className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
+                  activeClassName="bg-gradient-to-l from-amber-500/30 to-transparent text-amber-400 border-amber-500/60"
+                >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <UserCog className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-base relative z-10 flex-1">ניהול משתמשים אוגדתי</span>
+                  <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-purple-400 group-hover:-translate-x-1 transition-all duration-300" />
+                </NavLink>
+              )}
 
               <NavLink to="/safety-events" onClick={() => setIsOpen(false)}
                 className={cn("flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all duration-300 relative overflow-hidden group border border-amber-500/30", "hover:bg-gradient-to-l hover:from-amber-500/20 hover:to-transparent hover:border-amber-500/60")}
