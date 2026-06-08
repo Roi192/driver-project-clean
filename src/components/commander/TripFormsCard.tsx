@@ -64,8 +64,8 @@ export function TripFormsCard() {
       let query = supabase
         .from('trip_forms')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .gte('form_date', periodStartStr)
+        .order('created_at', { ascending: false });
 
       if (!isDivisionAdmin && brigade) query = query.eq('brigade', brigade);
 
@@ -74,7 +74,7 @@ export function TripFormsCard() {
       if (error) throw error;
       const loadedForms = (data as TripForm[]) || [];
       setForms(loadedForms);
-      setPeriodForms(loadedForms.filter((form) => form.form_date >= periodStartStr));
+      setPeriodForms(loadedForms);
     } catch (error) {
       console.error('Error fetching trip forms:', error);
     } finally {

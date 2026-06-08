@@ -75,12 +75,7 @@ export default function AdminDriverInterviews() {
     acc[region] = [...(acc[region] || []), outpost.name];
     return acc;
   }, {});
-  const regions = Array.from(
-    new Set([
-      ...Object.keys(regionOutpostsMap),
-      ...interviews.map((interview) => interview.region || "ללא גזרה"),
-    ]),
-  ).sort();
+  const regions = Object.keys(regionOutpostsMap).sort();
 
   useEffect(() => {
     if (!authLoading && !canAccessDriverInterviews) {

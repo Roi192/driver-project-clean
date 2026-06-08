@@ -269,7 +269,7 @@ export default function AnnualWorkPlan() {
   const [contentCycleOverrides, setContentCycleOverrides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"month" | "week" | "list">("list");
+  const [viewMode, setViewMode] = useState<"month" | "week" | "list">("month");
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<WorkPlanEvent | null>(null);
@@ -408,15 +408,6 @@ export default function AnnualWorkPlan() {
     if (!eventsRes.error) {
       const loadedEvents = (eventsRes.data || []) as WorkPlanEvent[];
       setEvents(loadedEvents);
-      if (showLoading && loadedEvents.length > 0) {
-        const latestEventDate = parseISO(
-          [...loadedEvents].sort(
-            (a, b) => parseISO(b.event_date).getTime() - parseISO(a.event_date).getTime(),
-          )[0].event_date,
-        );
-        setCurrentDate(latestEventDate);
-        setCurrentWeek(latestEventDate);
-      }
     }
     if (!holidaysRes.error) setHolidays(holidaysRes.data || []);
     const loadedSoldiers: Soldier[] = soldiersRes.error
