@@ -12,6 +12,7 @@ import { CleaningParadeCards } from "./CleaningParadeCards";
 import { TripFormsCard } from "./TripFormsCard";
 import { ProcedureSignaturesComplianceCard } from "./ProcedureSignaturesComplianceCard";
 import { TripFormsComplianceCard } from "./TripFormsComplianceCard";
+import { ShiftReportsOverviewCard } from "./ShiftReportsOverviewCard";
 
 export function CommanderDashboard() {
   const { user, signOut } = useAuth();
@@ -118,6 +119,11 @@ export function CommanderDashboard() {
         {/* Trip Forms Card */}
         <section className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
           <TripFormsCard />
+        </section>
+
+        {/* Shift Reports Overview */}
+        <section className="animate-slide-up" style={{ animationDelay: '0.32s' }}>
+          <ShiftReportsOverviewCard />
         </section>
 
         {/* Procedure Signatures Compliance Card */}

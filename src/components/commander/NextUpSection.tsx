@@ -51,7 +51,7 @@ export function NextUpSection() {
 
     try {
       // Fetch next upcoming event
-      const { data: events } = await scopeQuery(supabase
+      let { data: events } = await scopeQuery(supabase
         .from('work_plan_events')
         .select('id, title, event_date, category, status, description')
         .gte('event_date', today.toISOString().split('T')[0])
@@ -59,9 +59,16 @@ export function NextUpSection() {
         .order('event_date', { ascending: true })
         .limit(1));
 
-      if (events && events.length > 0) {
-        setNextEvent(events[0]);
+      if (!events || events.length === 0) {
+        const latest = await scopeQuery(supabase
+          .from('work_plan_events')
+          .select('id, title, event_date, category, status, description')
+          .order('event_date', { ascending: false })
+          .limit(1));
+        events = latest.data || [];
       }
+
+      setNextEvent(events && events.length > 0 ? events[0] : null);
 
       // Fetch pending tasks
       const { data: tasks } = await scopeQuery(supabase

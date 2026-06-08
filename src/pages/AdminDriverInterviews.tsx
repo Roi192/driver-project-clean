@@ -75,7 +75,12 @@ export default function AdminDriverInterviews() {
     acc[region] = [...(acc[region] || []), outpost.name];
     return acc;
   }, {});
-  const regions = Object.keys(regionOutpostsMap).sort();
+  const regions = Array.from(
+    new Set([
+      ...Object.keys(regionOutpostsMap),
+      ...interviews.map((interview) => interview.region || "ללא גזרה"),
+    ]),
+  ).sort();
 
   useEffect(() => {
     if (!authLoading && !canAccessDriverInterviews) {
@@ -112,7 +117,7 @@ export default function AdminDriverInterviews() {
   // Get interviews for a specific region (any outpost in that region)
   const getRegionInterviews = (region: string) => {
     const regionOutposts = regionOutpostsMap[region] || [];
-    return interviews.filter(i => regionOutposts.includes(i.outpost));
+    return interviews.filter(i => regionOutposts.includes(i.outpost) || (i.region || "ללא גזרה") === region);
   };
 
   // Get unique battalions for a region based on actual interviews

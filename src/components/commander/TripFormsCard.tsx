@@ -27,6 +27,7 @@ interface TripForm {
 
 export function TripFormsCard() {
   const { brigade, isDivisionAdmin } = useAuth();
+  const [forms, setForms] = useState<TripForm[]>([]);
   const [periodForms, setPeriodForms] = useState<TripForm[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<TripForm | null>(null);
@@ -63,15 +64,17 @@ export function TripFormsCard() {
       let query = supabase
         .from('trip_forms')
         .select('*')
-        .gte('form_date', periodStartStr)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (!isDivisionAdmin && brigade) query = query.eq('brigade', brigade);
 
       const { data, error } = await query;
 
       if (error) throw error;
-      setPeriodForms((data as TripForm[]) || []);
+      const loadedForms = (data as TripForm[]) || [];
+      setForms(loadedForms);
+      setPeriodForms(loadedForms.filter((form) => form.form_date >= periodStartStr));
     } catch (error) {
       console.error('Error fetching trip forms:', error);
     } finally {
@@ -82,7 +85,7 @@ export function TripFormsCard() {
   const getFormsByOutpost = (): { [key: string]: TripForm[] } => {
     const formsByOutpost: { [key: string]: TripForm[] } = {};
     
-    periodForms.forEach(form => {
+    forms.forEach(form => {
       const outpost = form.outpost || "לא משויך";
       if (!formsByOutpost[outpost]) formsByOutpost[outpost] = [];
       formsByOutpost[outpost].push(form);
@@ -110,16 +113,8 @@ export function TripFormsCard() {
     });
   };
 
-  const now = new Date();
-  const periodStart = getMostRecentThursday(now);
-  const rangeStartLabel = format(periodStart, 'dd/MM/yyyy', { locale: he });
-  const rangeEndLabel = format(now, 'dd/MM/yyyy', { locale: he });
-  const rangeLabel =
-    rangeStartLabel === rangeEndLabel
-      ? rangeStartLabel
-      : `${rangeStartLabel}–${rangeEndLabel}`;
-
-  const formCount = periodForms.length;
+  const formCount = forms.length;
+  const recentFormCount = periodForms.length;
   const formsByOutpost = getFormsByOutpost();
   const outpostCount = Object.keys(formsByOutpost).length;
 
@@ -137,7 +132,7 @@ export function TripFormsCard() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
                 <Home className="w-5 h-5 text-white" />
               </div>
-              <span>טפסי טיולים מאז חמישי</span>
+              <span>טפסי טיולים</span>
             </div>
             <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-primary group-hover:-translate-x-1 transition-all" />
           </CardTitle>
@@ -156,7 +151,8 @@ export function TripFormsCard() {
                 </div>
                 <div>
                   <div className="text-3xl font-black text-slate-800">{formCount}</div>
-                  <div className="text-sm text-slate-500">חיילים מילאו</div>
+                  <div className="text-sm text-slate-500">טפסים בחטיבה</div>
+                  <div className="text-xs text-emerald-600 font-bold">{recentFormCount} מאז חמישי</div>
                 </div>
               </div>
               
@@ -184,14 +180,14 @@ export function TripFormsCard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Home className="w-5 h-5 text-emerald-500" />
-              טפסי טיולים • {rangeLabel}
+              טפסי טיולים • אחרונים בחטיבה
             </DialogTitle>
           </DialogHeader>
           
-          {periodForms.length === 0 ? (
+          {forms.length === 0 ? (
             <div className="text-center py-8">
               <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500">אין טפסים מאז חמישי</p>
+              <p className="text-slate-500">אין טפסים בחטיבה שנבחרה</p>
             </div>
           ) : (
             <div className="space-y-3 mt-4">
