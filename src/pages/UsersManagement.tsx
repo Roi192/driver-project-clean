@@ -661,7 +661,7 @@ const UsersManagement = () => {
                   </SelectTrigger>
                     <SelectContent className="bg-popover border-border z-[10000]">
                     {isSuperAdmin && <SelectItem value="super_admin">מנהל ראשי (מח"ט)</SelectItem>}
-                    {isSuperAdmin && <SelectItem value="division_admin">מפאו"ג איו"ש (אוגדתי)</SelectItem>}
+                    {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_admin">מנהל מפאו"ג איו"ש (אוגדתי)</SelectItem>}
                     <SelectItem value="admin">מנהל מ"פ נהגים (גישה מלאה)</SelectItem>
                     <SelectItem value="platoon_commander">מנהל מ"מ נהגים</SelectItem>
                     {!isDivisionAdmin || isSuperAdmin ? (
