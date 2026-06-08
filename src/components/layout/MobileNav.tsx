@@ -122,7 +122,7 @@ export function MobileNav() {
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
 
   // Check if user has any admin-level role
-  const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin;
+  const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin || (realIsDivisionAdmin && !!activeBrigade);
   
   // Check if super_admin is on the department selector (neutral context)
   const isOnDepartmentSelector = location.pathname === '/department-selector';
@@ -139,8 +139,8 @@ export function MobileNav() {
   const showPlanagMenu = !isInHagmar && !isHagmarFighter && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
   // Show battalion menu when in battalion context
   const showBattalionMenu = isInBattalionContext && !isOnDepartmentSelector;
-  // Hide driver nav items when in hagmar OR when super_admin is on department selector OR hagmar fighter OR battalion context OR division-wide view
-  const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
+  // Hide driver nav items when in admin/division contexts so מפאו"ג users are not sent to soldier-linked screens
+  const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView && !realIsDivisionAdmin;
   
   // Department label for header
   const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי' : (isInHagmar || isHagmarFighter) ? 'הגמ"ר' : isInBattalionContext ? 'גדוד תע"ם' : getBrigade(brigade).shortLabel;

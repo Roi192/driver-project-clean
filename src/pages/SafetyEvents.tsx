@@ -287,12 +287,12 @@ const getFields = (
 };
 
 export default function SafetyEvents() {
-  const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin } = useAuth();
+  const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin, realIsDivisionAdmin } = useAuth() as any;
   const isBattalionUser = userType === 'battalion';
   const myBrigade = userBrigade || 'binyamin';
   // Division admins (מפאו"ג איו"ש) may file events on behalf of any brigade OR on the division itself.
-  const showBrigadeSelector = isBattalionUser || isDivisionAdmin;
-  const includeDivisionOption = isDivisionAdmin;
+  const showBrigadeSelector = isBattalionUser || realIsDivisionAdmin;
+  const includeDivisionOption = realIsDivisionAdmin;
   const [view, setView] = useState<View>("categories");
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
   const [selectedItem, setSelectedItem] = useState<SafetyContent | null>(null);
@@ -413,7 +413,7 @@ export default function SafetyEvents() {
       return;
     }
     const targetBrigade = showBrigadeSelector
-      ? (toNullableText(data.brigade) || (isDivisionAdmin ? DIVISION_BRIGADE_CODE : myBrigade))
+      ? (toNullableText(data.brigade) || (realIsDivisionAdmin ? DIVISION_BRIGADE_CODE : myBrigade))
       : myBrigade;
 
     // Parse and validate coordinates - must be in valid range for Israel
