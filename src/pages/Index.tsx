@@ -95,7 +95,7 @@ const Index = () => {
     else if (!loading) setDepartmentChecked(true);
   }, [user, isSuperAdmin, role, loading, navigate, isRootPath, activeBrigade, isBattalion]);
 
-  const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin;
+  const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin || (realIsDivisionAdmin && !!activeBrigade);
   const inDivisionView = realIsDivisionAdmin && !activeBrigade;
 
   if (loading || !departmentChecked || isRedirecting) {
