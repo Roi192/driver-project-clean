@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     }
     const ALLOWED_ROLES = [
       'driver','admin','super_admin','hagmar_admin','battalion_admin',
-      'platoon_commander','division_admin','ravshatz','company_commander'
+      'platoon_commander','division_admin','division_user','ravshatz','company_commander'
     ]
     if (newRole !== undefined && (typeof newRole !== 'string' || !ALLOWED_ROLES.includes(newRole))) {
       throw new Error('newRole is not a recognized role')
