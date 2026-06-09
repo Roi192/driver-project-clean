@@ -59,6 +59,27 @@ const startOfPrevMonthIso = () => {
   return new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString();
 };
 
+// Returns the set of soldier_ids whose last 3 monthly safety scores are all < 75.
+const computeLowScoreSoldierIds = (
+  rows: Array<{ soldier_id: string; score_month: string; safety_score: number | null }>
+): Set<string> => {
+  const bySoldier = new Map<string, Array<{ score_month: string; safety_score: number | null }>>();
+  rows.forEach((r) => {
+    if (!r.soldier_id || !r.score_month) return;
+    const arr = bySoldier.get(r.soldier_id) || [];
+    arr.push({ score_month: r.score_month, safety_score: r.safety_score });
+    bySoldier.set(r.soldier_id, arr);
+  });
+  const result = new Set<string>();
+  bySoldier.forEach((arr, id) => {
+    arr.sort((a, b) => b.score_month.localeCompare(a.score_month));
+    if (arr.length >= 3 && arr.slice(0, 3).every((x) => (x.safety_score ?? 100) < 75)) {
+      result.add(id);
+    }
+  });
+  return result;
+};
+
 const computeScore = (s: { accidentsMonth: number; rolloversMonth: number; entrenchmentsMonth: number; fitPct: number; activeSoldiers: number }) => {
   let score = 100;
   score -= Math.min(35, s.accidentsMonth * 6);
@@ -129,7 +150,7 @@ export const DivisionDashboard = () => {
 
         const results = await Promise.all(
           BRIGADE_CODES.map(async (code) => {
-            const [ac, acPrev, acRoad, acRoll, acEnt, sol, milExpired, milSoon, civExpired, noDef, soldiersForCD] = await Promise.all([
+            const [ac, acPrev, acRoad, acRoll, acEnt, sol, milExpired, milSoon, civExpired, noDef, soldiersForCD, lowScoreRows] = await Promise.all([
               supabase
                 .from("accidents")
                 .select("id", { count: "exact", head: true })
@@ -191,9 +212,14 @@ export const DivisionDashboard = () => {
                 .or("defensive_driving_passed.is.null,defensive_driving_passed.eq.false"),
               supabase
                 .from("soldiers")
-                .select("correct_driving_in_service_date, qualified_date, military_license_expiry, civilian_license_expiry")
+                .select("id, correct_driving_in_service_date, qualified_date, military_license_expiry, civilian_license_expiry")
                 .eq("brigade", code)
                 .eq("is_active", true),
+              supabase
+                .from("monthly_safety_scores")
+                .select("soldier_id, score_month, safety_score")
+                .eq("brigade", code)
+                .gte("score_month", format(startOfMonth(subMonths(new Date(), 3)), "yyyy-MM-dd")),
             ]);
 
             const active = sol.count || 0;
@@ -207,8 +233,10 @@ export const DivisionDashboard = () => {
             }).length;
             // Unfit definition (per division policy):
             // expired military license OR expired civilian license OR
-            // correct-driving-in-service older than 1 year (or missing).
+            // correct-driving-in-service older than 1 year (or missing) OR
+            // safety score < 75 for the last 3 consecutive months.
             // Defensive driving is NOT part of unfit anymore.
+            const lowScoreIds = computeLowScoreSoldierIds((lowScoreRows.data as any) || []);
             const todayDate = new Date();
             const unfitBroad = (soldiersForCD.data || []).filter((s: any) => {
               if (s.military_license_expiry && s.military_license_expiry < todayIso) return true;
@@ -216,7 +244,9 @@ export const DivisionDashboard = () => {
               const ref = s.correct_driving_in_service_date || s.qualified_date;
               if (!ref) return true;
               const days = differenceInDays(addYears(parseISO(ref), 1), todayDate);
-              return days < 0;
+              if (days < 0) return true;
+              if (s.id && lowScoreIds.has(s.id)) return true;
+              return false;
             }).length;
             const fitPct = active === 0 ? 100 : Math.max(0, Math.round(((active - unfitBroad) / active) * 100));
 
@@ -533,25 +563,32 @@ export const DivisionDashboard = () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-      const baseCols = "full_name, personal_number, outpost, brigade, military_license_expiry, civilian_license_expiry, defensive_driving_passed, correct_driving_in_service_date, qualified_date";
-      const [exp, soon, civ, noDef, all] = await Promise.all([
+      const baseCols = "id, full_name, personal_number, outpost, brigade, military_license_expiry, civilian_license_expiry, correct_driving_in_service_date, qualified_date";
+      const [exp, soon, civ, all, scores] = await Promise.all([
         supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).lt("military_license_expiry", today),
         supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).gte("military_license_expiry", today).lte("military_license_expiry", in30),
         supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).lt("civilian_license_expiry", today),
-        supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).or("defensive_driving_passed.is.null,defensive_driving_passed.eq.false"),
         supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true),
+        supabase
+          .from("monthly_safety_scores")
+          .select("soldier_id, score_month, safety_score")
+          .eq("brigade", code)
+          .gte("score_month", format(startOfMonth(subMonths(new Date(), 3)), "yyyy-MM-dd")),
       ]);
       const fmt = (d?: string) => d ? format(parseISO(d), "dd/MM/yyyy", { locale: he }) : "";
       const rows: DrillRow[] = [];
       (exp.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "רישיון צבאי פג", date: fmt(s.military_license_expiry) }));
       (soon.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "פג ב-30 יום", date: fmt(s.military_license_expiry) }));
       (civ.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "רישיון אזרחי פג", date: fmt(s.civilian_license_expiry) }));
-      (noDef.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "ללא נהיגה מונעת" }));
       (all.data || []).filter((s: any) => {
         const ref = s.correct_driving_in_service_date || s.qualified_date;
         if (!ref) return true;
         return differenceInDays(addYears(parseISO(ref), 1), new Date()) <= 60;
       }).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: 'נה"נ בשירות נדרשת' }));
+      const lowScoreIds = computeLowScoreSoldierIds((scores.data as any) || []);
+      (all.data || []).filter((s: any) => s.id && lowScoreIds.has(s.id)).forEach((s: any) =>
+        rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "ציון בטיחות <75 (3 חודשים רצוף)" })
+      );
       setDrill((d) => d && { ...d, title: `פירוט כשירות – ${BRIGADES[code].name} (${rows.length} סעיפים)`, rows });
     } catch (e: any) {
       toast.error(`שגיאה: ${e?.message || e}`);
