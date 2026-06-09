@@ -14,6 +14,9 @@ import { he } from "date-fns/locale";
 interface Row {
   code: BrigadeCode;
   safetyEvents: number;
+  safetyEventsSecurity: number;
+  safetyEventsCombat: number;
+  safetyEventsGeneral: number;
   accidents: number;
   stuck: number;
   rollovers: number;
@@ -111,6 +114,8 @@ const DivisionReport = () => {
           BRIGADE_CODES.map(async (code) => {
             const seQ = supabase.from("safety_content").select("id", { count: "exact", head: true })
               .eq("brigade", code).eq("category", "sector_events");
+            const seByDriverQ = (dt: string) => supabase.from("safety_content").select("id", { count: "exact", head: true })
+              .eq("brigade", code).eq("category", "sector_events").eq("driver_type", dt);
             const acQ = (incident?: string) => {
               let q = supabase.from("accidents").select("id", { count: "exact", head: true }).eq("brigade", code);
               if (incident) q = q.eq("incident_type", incident);
@@ -130,8 +135,11 @@ const DivisionReport = () => {
               return q;
             };
 
-            const [se, ac, st, ro, oth, di, pu, wr, sc] = await Promise.all([
+            const [se, seSec, seCom, seGen, ac, st, ro, oth, di, pu, wr, sc] = await Promise.all([
               dateRange(seQ, "event_date"),
+              dateRange(seByDriverQ("security"), "event_date"),
+              dateRange(seByDriverQ("combat"), "event_date"),
+              dateRange(seByDriverQ("general"), "event_date"),
               dateRange(acQ("accident"), "accident_date"),
               dateRange(acQ("stuck"), "accident_date"),
               dateRange(acQ("rollover"), "accident_date"),
@@ -147,6 +155,9 @@ const DivisionReport = () => {
             return {
               code,
               safetyEvents: se.count || 0,
+              safetyEventsSecurity: seSec.count || 0,
+              safetyEventsCombat: seCom.count || 0,
+              safetyEventsGeneral: seGen.count || 0,
               accidents: ac.count || 0,
               stuck: st.count || 0,
               rollovers: ro.count || 0,
@@ -168,11 +179,11 @@ const DivisionReport = () => {
   }, [from, to]);
 
   const exportCsv = () => {
-    const header = ["חטיבה", "אירועי בטיחות", "תאונות דרכים", "התחפרות", "התהפכות", "אחר", "ראיונות נהגים", "ענישה", "אזהרות", "ממוצע ציון בטיחות"];
+    const header = ["חטיבה", "אירועי בטיחות", "מתוכם בט\"ש", "מתוכם גדוד", "מתוכם כללי", "תאונות דרכים", "התחפרות", "התהפכות", "אחר", "ראיונות נהגים", "ענישה", "אזהרות", "ממוצע ציון בטיחות"];
     const lines = [header.join(",")];
     rows.forEach((r) => {
       lines.push(
-        [BRIGADES[r.code].name, r.safetyEvents, r.accidents, r.stuck, r.rollovers, r.other, r.interviews, r.punishments, r.warnings, r.avgSafetyScore ?? "—"].join(",")
+        [BRIGADES[r.code].name, r.safetyEvents, r.safetyEventsSecurity, r.safetyEventsCombat, r.safetyEventsGeneral, r.accidents, r.stuck, r.rollovers, r.other, r.interviews, r.punishments, r.warnings, r.avgSafetyScore ?? "—"].join(",")
       );
     });
     const csv = "\uFEFF" + lines.join("\n");
@@ -243,6 +254,9 @@ const DivisionReport = () => {
                   <tr className="text-right text-slate-800 font-black">
                     <th className="p-3 whitespace-nowrap">חטיבה</th>
                     <th className="p-3 whitespace-nowrap">אירועי בטיחות</th>
+                    <th className="p-3 whitespace-nowrap">מתוכם בט"ש</th>
+                    <th className="p-3 whitespace-nowrap">מתוכם גדוד</th>
+                    <th className="p-3 whitespace-nowrap">מתוכם כללי</th>
                     <th className="p-3 whitespace-nowrap">תאונות דרכים</th>
                     <th className="p-3 whitespace-nowrap">התחפרות</th>
                     <th className="p-3 whitespace-nowrap">התהפכות</th>
@@ -256,7 +270,7 @@ const DivisionReport = () => {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-600">טוען...</td>
+                      <td colSpan={13} className="p-8 text-center text-slate-600">טוען...</td>
                     </tr>
                   ) : (
                     rows.map((r) => (
@@ -272,6 +286,9 @@ const DivisionReport = () => {
                           </span>
                         </td>
                         <td className="p-3 text-slate-800">{r.safetyEvents}</td>
+                        <td className="p-3 text-slate-800">{r.safetyEventsSecurity}</td>
+                        <td className="p-3 text-slate-800">{r.safetyEventsCombat}</td>
+                        <td className="p-3 text-slate-800">{r.safetyEventsGeneral}</td>
                         <td className="p-3 text-slate-800">{r.accidents}</td>
                         <td className="p-3 text-slate-800">{r.stuck}</td>
                         <td className="p-3 text-slate-800">{r.rollovers}</td>

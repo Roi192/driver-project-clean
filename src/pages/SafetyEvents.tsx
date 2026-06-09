@@ -89,6 +89,7 @@ const EVENT_TYPES = [
 const DRIVER_TYPES = [
   { value: "security", label: 'נהג בט"ש' },
   { value: "combat", label: "נהג גדוד" },
+  { value: "general", label: "נהג כללי" },
 ] as const;
 
 const SEVERITY_TYPES = [
@@ -251,7 +252,7 @@ const getFields = (
         label: "שם הנהג", 
         type: "text",
         placeholder: "הזן שם נהג...",
-        dependsOn: { field: "driver_type", value: "combat" }
+        dependsOn: { field: "driver_type", value: ["combat", "general"] }
       },
       { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב...", required: true },
       { 

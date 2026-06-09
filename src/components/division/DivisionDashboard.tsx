@@ -129,7 +129,7 @@ export const DivisionDashboard = () => {
 
         const results = await Promise.all(
           BRIGADE_CODES.map(async (code) => {
-            const [ac, acPrev, acRoad, acRoll, acEnt, sol, milExpired, milSoon, civExpired, noDef, soldiersForCD] = await Promise.all([
+            const [ac, acPrev, acRoad, acRoll, acEnt, sol, milExpired, milSoon, civExpired, noDef, soldiersForCD, unfitAny] = await Promise.all([
               supabase
                 .from("accidents")
                 .select("id", { count: "exact", head: true })
@@ -194,11 +194,18 @@ export const DivisionDashboard = () => {
                 .select("correct_driving_in_service_date, qualified_date")
                 .eq("brigade", code)
                 .eq("is_active", true),
+              supabase
+                .from("soldiers")
+                .select("id", { count: "exact", head: true })
+                .eq("brigade", code)
+                .eq("is_active", true)
+                .or(`military_license_expiry.lt.${todayIso},civilian_license_expiry.lt.${todayIso},defensive_driving_passed.is.null,defensive_driving_passed.eq.false`),
             ]);
 
             const active = sol.count || 0;
             const unfit = milExpired.count || 0;
-            const fitPct = active === 0 ? 100 : Math.round(((active - unfit) / active) * 100);
+            const unfitBroad = unfitAny.count || 0;
+            const fitPct = active === 0 ? 100 : Math.max(0, Math.round(((active - unfitBroad) / active) * 100));
             // Correct driving due: ref date (correct OR qualified) + 1yr is in past or within 60 days
             const cdDue = (soldiersForCD.data || []).filter((s: any) => {
               const ref = s.correct_driving_in_service_date || s.qualified_date;

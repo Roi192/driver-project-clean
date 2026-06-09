@@ -69,13 +69,14 @@ interface SectorEvent {
   soldiers?: Soldier;
 }
 
-type DriverType = 'security' | 'combat';
+type DriverType = 'security' | 'combat' | 'general';
 type Severity = 'minor' | 'moderate' | 'severe';
 type IncidentType = 'accident' | 'rollover' | 'stuck' | 'other';
 
 const driverTypeLabels: Record<DriverType, string> = {
   security: 'נהג בט"ש',
-  combat: 'נהג גדוד'
+  combat: 'נהג גדוד',
+  general: 'נהג כללי'
 };
 
 const severityLabels: Record<string, string> = {
@@ -348,16 +349,18 @@ const AccidentsTracking = () => {
   const stats = useMemo(() => {
     const securityCount = filteredEvents.filter(e => e.driver_type === 'security').length;
     const combatCount = filteredEvents.filter(e => e.driver_type === 'combat').length;
+    const generalCount = filteredEvents.filter(e => e.driver_type === 'general').length;
     return {
       security: securityCount,
       combat: combatCount,
-      total: securityCount + combatCount,
+      general: generalCount,
+      total: securityCount + combatCount + generalCount,
     };
   }, [filteredEvents]);
 
   // Calculate monthly trends (last 12 months)
   const monthlyTrends = useMemo(() => {
-    const months: { month: string; security: number; combat: number; total: number }[] = [];
+    const months: { month: string; security: number; combat: number; general: number; total: number }[] = [];
     
     for (let i = 11; i >= 0; i--) {
       const date = subMonths(new Date(), i);
@@ -373,12 +376,14 @@ const AccidentsTracking = () => {
       
       const security = monthEvents.filter(e => e.driver_type === 'security').length;
       const combat = monthEvents.filter(e => e.driver_type === 'combat').length;
+      const general = monthEvents.filter(e => e.driver_type === 'general').length;
       
       months.push({
         month: monthLabel,
         security,
         combat,
-        total: security + combat
+        general,
+        total: security + combat + general
       });
     }
     
@@ -464,6 +469,7 @@ const AccidentsTracking = () => {
             <SelectContent>
               <SelectItem value="security">נהג בט"ש</SelectItem>
               <SelectItem value="combat">נהג גדוד</SelectItem>
+              <SelectItem value="general">נהג כללי</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -502,7 +508,7 @@ const AccidentsTracking = () => {
           <Input
             value={formData.driver_name}
             onChange={(e) => setFormData(p => ({ ...p, driver_name: e.target.value }))}
-            placeholder="הזן שם נהג גדוד"
+            placeholder="הזן שם נהג"
           />
         </div>
       )}
@@ -626,6 +632,7 @@ const AccidentsTracking = () => {
                       <SelectItem value="all" className="text-slate-700">הכל</SelectItem>
                       <SelectItem value="security" className="text-slate-700">נהגי בט"ש</SelectItem>
                       <SelectItem value="combat" className="text-slate-700">נהגי גדוד</SelectItem>
+                      <SelectItem value="general" className="text-slate-700">נהגים כלליים</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -672,7 +679,7 @@ const AccidentsTracking = () => {
         )}
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">נהגי בט"ש</CardTitle>
@@ -690,6 +697,16 @@ const AccidentsTracking = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-600">{stats.combat}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">נהגים כלליים</CardTitle>
+              <Car className="h-5 w-5 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-amber-600">{stats.general}</div>
             </CardContent>
           </Card>
 
