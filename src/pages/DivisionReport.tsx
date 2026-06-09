@@ -27,17 +27,23 @@ interface Row {
 type Preset = "month" | "quarter" | "year" | "all" | "custom";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const monthsAgoIso = (m: number) => {
+const startOfMonthIsoStr = () => {
   const d = new Date();
-  d.setMonth(d.getMonth() - m);
-  return d.toISOString().slice(0, 10);
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 };
+const startOfQuarterIsoStr = () => {
+  const d = new Date();
+  const q = Math.floor(d.getMonth() / 3) * 3;
+  return new Date(d.getFullYear(), q, 1).toISOString().slice(0, 10);
+};
+const startOfYearIsoStr = () =>
+  new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
 
 const DivisionReport = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
   const [preset, setPreset] = useState<Preset>("month");
-  const [from, setFrom] = useState<string>(monthsAgoIso(1));
+  const [from, setFrom] = useState<string>(startOfMonthIsoStr());
   const [to, setTo] = useState<string>(todayIso());
   // Drill-down dialog state
   const [drillBrigade, setDrillBrigade] = useState<BrigadeCode | null>(null);
@@ -60,7 +66,7 @@ const DivisionReport = () => {
         .eq("brigade", code).eq("category", "sector_events")
         .order("event_date", { ascending: false });
       const puQ = supabase.from("punishments")
-        .select("id, punishment_date, punishment_type, reason, days, soldiers(full_name, personal_number)")
+        .select("id, punishment_date, offense, punishment, judge, notes, soldiers(full_name, personal_number)")
         .eq("brigade", code)
         .order("punishment_date", { ascending: false }).limit(100);
       const filterDate = (q: any, col: string) => {
@@ -91,9 +97,9 @@ const DivisionReport = () => {
 
   const applyPreset = (p: Preset) => {
     setPreset(p);
-    if (p === "month") { setFrom(monthsAgoIso(1)); setTo(todayIso()); }
-    else if (p === "quarter") { setFrom(monthsAgoIso(3)); setTo(todayIso()); }
-    else if (p === "year") { setFrom(monthsAgoIso(12)); setTo(todayIso()); }
+    if (p === "month") { setFrom(startOfMonthIsoStr()); setTo(todayIso()); }
+    else if (p === "quarter") { setFrom(startOfQuarterIsoStr()); setTo(todayIso()); }
+    else if (p === "year") { setFrom(startOfYearIsoStr()); setTo(todayIso()); }
     else if (p === "all") { setFrom(""); setTo(""); }
   };
 
@@ -130,7 +136,7 @@ const DivisionReport = () => {
               dateRange(acQ("stuck"), "accident_date"),
               dateRange(acQ("rollover"), "accident_date"),
               dateRange(acOtherQ, "accident_date"),
-              dateRange(diQ, "created_at"),
+              dateRange(diQ, "interview_date"),
               dateRange(puQ, "punishment_date"),
               dateRange(wrQ, "created_at"),
               dateRange(scQ, "score_month"),
@@ -189,7 +195,13 @@ const DivisionReport = () => {
                 <FileSpreadsheet className="w-7 h-7 text-primary" />
                 דוח אוגדתי מרוכז
               </h1>
-              <p className="text-slate-600 text-sm mt-1">כל הנתונים מסונכרנים מהאירועים והתאונות שמוזנים בכל חטיבה</p>
+              <p className="text-slate-600 text-sm mt-1">
+                כל הנתונים מסונכרנים מהאירועים, התאונות, הראיונות והענישה שמוזנים בכל חטיבה.
+                {" "}
+                <span className="font-bold text-slate-800">
+                  טווח פעיל: {from || "מהתחלה"} — {to || "היום"}
+                </span>
+              </p>
             </div>
             <Button onClick={exportCsv} disabled={loading} className="bg-primary hover:bg-primary/90 text-white font-bold">
               <Download className="w-4 h-4 ml-2" />
@@ -367,9 +379,9 @@ const DivisionReport = () => {
                             <tr>
                               <th className="p-2 text-right">תאריך</th>
                               <th className="p-2 text-right">חייל</th>
-                              <th className="p-2 text-right">סוג</th>
-                              <th className="p-2 text-right">ימים</th>
-                              <th className="p-2 text-right">סיבה</th>
+                              <th className="p-2 text-right">עבירה</th>
+                              <th className="p-2 text-right">ענישה</th>
+                              <th className="p-2 text-right">שופט</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -377,9 +389,9 @@ const DivisionReport = () => {
                               <tr key={r.id} className="border-t border-slate-200">
                                 <td className="p-2 text-slate-800">{r.punishment_date ? format(parseISO(r.punishment_date), "dd/MM/yyyy", { locale: he }) : "—"}</td>
                                 <td className="p-2 text-slate-800">{r.soldiers?.full_name || "—"}</td>
-                                <td className="p-2 text-slate-800">{r.punishment_type || "—"}</td>
-                                <td className="p-2 text-slate-800">{r.days ?? "—"}</td>
-                                <td className="p-2 text-slate-800">{r.reason || "—"}</td>
+                                <td className="p-2 text-slate-800">{r.offense || "—"}</td>
+                                <td className="p-2 text-slate-800">{r.punishment || "—"}</td>
+                                <td className="p-2 text-slate-800">{r.judge || "—"}</td>
                               </tr>
                             ))}
                           </tbody>

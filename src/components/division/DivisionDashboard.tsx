@@ -513,6 +513,40 @@ export const DivisionDashboard = () => {
     }
   };
 
+  // Brigade-level fitness breakdown ("why did % drop?")
+  const openBrigadeFitness = async (code: BrigadeCode) => {
+    setDrill({ kind: "military-expired", title: `פירוט כשירות – ${BRIGADES[code].name}`, rows: [] });
+    setDrillLoading(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const baseCols = "full_name, personal_number, outpost, brigade, military_license_expiry, civilian_license_expiry, defensive_driving_passed, correct_driving_in_service_date, qualified_date";
+      const [exp, soon, civ, noDef, all] = await Promise.all([
+        supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).lt("military_license_expiry", today),
+        supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).gte("military_license_expiry", today).lte("military_license_expiry", in30),
+        supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).lt("civilian_license_expiry", today),
+        supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true).or("defensive_driving_passed.is.null,defensive_driving_passed.eq.false"),
+        supabase.from("soldiers").select(baseCols).eq("brigade", code).eq("is_active", true),
+      ]);
+      const fmt = (d?: string) => d ? format(parseISO(d), "dd/MM/yyyy", { locale: he }) : "";
+      const rows: DrillRow[] = [];
+      (exp.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "רישיון צבאי פג", date: fmt(s.military_license_expiry) }));
+      (soon.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "פג ב-30 יום", date: fmt(s.military_license_expiry) }));
+      (civ.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "רישיון אזרחי פג", date: fmt(s.civilian_license_expiry) }));
+      (noDef.data || []).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: "ללא נהיגה מונעת" }));
+      (all.data || []).filter((s: any) => {
+        const ref = s.correct_driving_in_service_date || s.qualified_date;
+        if (!ref) return true;
+        return differenceInDays(addYears(parseISO(ref), 1), new Date()) <= 60;
+      }).forEach((s: any) => rows.push({ brigade: s.brigade, primary: s.full_name, secondary: `מ.א ${s.personal_number}`, tertiary: s.outpost || "", badge: 'נה"נ בשירות נדרשת' }));
+      setDrill((d) => d && { ...d, title: `פירוט כשירות – ${BRIGADES[code].name} (${rows.length} סעיפים)`, rows });
+    } catch (e: any) {
+      toast.error(`שגיאה: ${e?.message || e}`);
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
   // === Predictive alerts: detect 3-month rising trend per brigade ===
   const predictiveAlerts: { text: string; tone: "red" | "amber" }[] = [];
   if (monthlyTrend.length >= 4) {
@@ -888,7 +922,11 @@ export const DivisionDashboard = () => {
 
         {/* Brigade cards */}
         <div>
-          <h2 className="text-xl font-black text-slate-900 mb-3 px-1">חטיבות האוגדה</h2>
+          <h2 className="text-xl font-black text-slate-900 mb-1 px-1">חטיבות האוגדה</h2>
+          <p className="text-xs text-slate-600 font-medium mb-3 px-1">
+            תאונות / התהפכויות / התחפרויות נספרות <span className="font-bold">מתחילת החודש הנוכחי</span>.
+            לחיצה על <span className="font-bold">% כשירות</span> מציגה את הגורמים לירידה (רישיונות פגים, חוסר נה"נ וכד').
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {BRIGADE_CODES.map((code) => {
               const s = stats.find((x) => x.code === code);
@@ -942,10 +980,15 @@ export const DivisionDashboard = () => {
                       <div className="text-lg font-black text-amber-800">{loading ? "—" : s?.entrenchmentsMonth ?? 0}</div>
                       <div className="text-[10px] text-amber-700 font-bold">התחפרויות</div>
                     </div>
-                    <div className="text-center p-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <button
+                      type="button"
+                      onClick={() => openBrigadeFitness(code)}
+                      className="text-center p-2 rounded-lg bg-emerald-50 border border-emerald-200 hover:border-emerald-500 hover:bg-emerald-100 transition cursor-pointer"
+                      title="לחץ לפירוט גורמי כשירות"
+                    >
                       <div className="text-lg font-black text-emerald-800">{loading ? "—" : `${s?.fitPct ?? 0}%`}</div>
-                      <div className="text-[10px] text-emerald-700 font-bold">כשירות</div>
-                    </div>
+                      <div className="text-[10px] text-emerald-700 font-bold underline">כשירות · פירוט</div>
+                    </button>
                   </div>
 
                   {realIsDivisionAdmin && (
