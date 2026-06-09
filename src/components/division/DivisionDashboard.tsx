@@ -129,7 +129,7 @@ export const DivisionDashboard = () => {
 
         const results = await Promise.all(
           BRIGADE_CODES.map(async (code) => {
-            const [ac, acPrev, acRoad, acRoll, acEnt, sol, milExpired, milSoon, civExpired, noDef, soldiersForCD, unfitAny] = await Promise.all([
+            const [ac, acPrev, acRoad, acRoll, acEnt, sol, milExpired, milSoon, civExpired, noDef, soldiersForCD] = await Promise.all([
               supabase
                 .from("accidents")
                 .select("id", { count: "exact", head: true })
@@ -191,21 +191,13 @@ export const DivisionDashboard = () => {
                 .or("defensive_driving_passed.is.null,defensive_driving_passed.eq.false"),
               supabase
                 .from("soldiers")
-                .select("correct_driving_in_service_date, qualified_date")
+                .select("correct_driving_in_service_date, qualified_date, military_license_expiry, civilian_license_expiry")
                 .eq("brigade", code)
                 .eq("is_active", true),
-              supabase
-                .from("soldiers")
-                .select("id", { count: "exact", head: true })
-                .eq("brigade", code)
-                .eq("is_active", true)
-                .or(`military_license_expiry.lt.${todayIso},civilian_license_expiry.lt.${todayIso},defensive_driving_passed.is.null,defensive_driving_passed.eq.false`),
             ]);
 
             const active = sol.count || 0;
             const unfit = milExpired.count || 0;
-            const unfitBroad = unfitAny.count || 0;
-            const fitPct = active === 0 ? 100 : Math.max(0, Math.round(((active - unfitBroad) / active) * 100));
             // Correct driving due: ref date (correct OR qualified) + 1yr is in past or within 60 days
             const cdDue = (soldiersForCD.data || []).filter((s: any) => {
               const ref = s.correct_driving_in_service_date || s.qualified_date;
@@ -213,6 +205,20 @@ export const DivisionDashboard = () => {
               const days = differenceInDays(addYears(parseISO(ref), 1), new Date());
               return days <= 60;
             }).length;
+            // Unfit definition (per division policy):
+            // expired military license OR expired civilian license OR
+            // correct-driving-in-service older than 1 year (or missing).
+            // Defensive driving is NOT part of unfit anymore.
+            const todayDate = new Date();
+            const unfitBroad = (soldiersForCD.data || []).filter((s: any) => {
+              if (s.military_license_expiry && s.military_license_expiry < todayIso) return true;
+              if (s.civilian_license_expiry && s.civilian_license_expiry < todayIso) return true;
+              const ref = s.correct_driving_in_service_date || s.qualified_date;
+              if (!ref) return true;
+              const days = differenceInDays(addYears(parseISO(ref), 1), todayDate);
+              return days < 0;
+            }).length;
+            const fitPct = active === 0 ? 100 : Math.max(0, Math.round(((active - unfitBroad) / active) * 100));
 
             const base = {
               accidentsMonth: ac.count || 0,
