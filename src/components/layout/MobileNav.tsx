@@ -140,8 +140,9 @@ export function MobileNav() {
   const showPlanagMenu = !isInHagmar && !isHagmarFighter && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
   // Show battalion menu when in battalion context
   const showBattalionMenu = isInBattalionContext && !isOnDepartmentSelector;
-  // Hide driver nav items when in admin/division contexts so מפאו"ג users are not sent to soldier-linked screens
-  const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView && !isDivisionUser;
+  // Hide driver nav items only in division-wide view (no brigade picked) or non-planag contexts.
+  // Division/super admins who entered a specific brigade should see the full planag menu like a brigade commander.
+  const showDriverNavItems = !showHagmarMenu && !showHagmarFighterMenu && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView && (!isDivisionUser || !!activeBrigade);
   
   // Department label for header
   const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי' : (isInHagmar || isHagmarFighter) ? 'הגמ"ר' : isInBattalionContext ? 'גדוד תע"ם' : isInDivisionView ? getBrigadeLabel('division') : getBrigade(brigade).shortLabel;
