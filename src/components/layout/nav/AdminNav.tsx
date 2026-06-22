@@ -72,7 +72,7 @@ export function AdminNav({ onClose }: Props) {
       {canAccessWeeklyMeeting && <NavMenuItem to="/weekly-meeting" label="פתיחת שבוע" icon={CalendarDays} iconBg="from-amber-500 to-amber-600" theme="gold" onClose={onClose} />}
       {canAccessHolidays && <NavMenuItem to="/holidays-management" label="חגים ואזכורים" icon={Calendar} iconBg="from-yellow-500 to-yellow-600" theme="gold" onClose={onClose} />}
       {canAccessEquipmentTracking && <NavMenuItem to="/equipment-tracking" label='מעקב צל"ם' icon={Crosshair} iconBg="from-rose-500 to-rose-700" theme="gold" onClose={onClose} />}
-      {(isAdmin || isPlatoonCommander || isSuperAdmin) && <NavMenuItem to="/frameworks" label="ניהול מסגרות" icon={Building2} iconBg="from-teal-500 to-teal-600" theme="gold" onClose={onClose} />}
+      <NavMenuItem to="/frameworks" label="ניהול מסגרות" icon={Building2} iconBg="from-teal-500 to-teal-600" theme="gold" onClose={onClose} />
       <NavMenuItem to="/notification-settings" label="הגדרות התראות" icon={Bell} iconBg="from-sky-500 to-sky-600" theme="gold" onClose={onClose} />
     </>
   );

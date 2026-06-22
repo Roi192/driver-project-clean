@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Home, Menu, X, LogOut, ChevronLeft, Building } from "lucide-react";
+import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -202,7 +203,8 @@ export function MobileNav() {
 
         {/* Footer */}
         <div className="p-4 border-t border-gold/20 mt-4 relative z-10">
-          <div className="text-center">
+          <PWAInstallButton />
+          <div className="text-center mt-4">
             <p className="text-sm font-bold bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent">נהג מוביל - פלוגה מנצחת</p>
             <p className="text-xs text-slate-500 mt-1">© פלנ"ג בנימין</p>
           </div>
