@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
 interface PushNotificationSetupProps {
@@ -12,17 +13,12 @@ interface PushNotificationSetupProps {
 
 export function PushNotificationSetup({ className }: PushNotificationSetupProps) {
   const [soldierId, setSoldierId] = useState<string | undefined>();
-  const [soldierName, setSoldierName] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  
-  const { 
-    isSupported, 
-    isSubscribed, 
-    permission, 
-    loading: pushLoading, 
-    subscribe, 
-    unsubscribe 
-  } = usePushNotifications(soldierId);
+  const { isSuperAdmin, isAdmin, isPlatoonCommander, isBattalionAdmin } = useAuth();
+  const isAdminUser = isSuperAdmin || isAdmin || isPlatoonCommander || isBattalionAdmin;
+
+  const { isSupported, isSubscribed, permission, loading: pushLoading, subscribe, unsubscribe } =
+    usePushNotifications(soldierId);
 
   useEffect(() => {
     fetchCurrentSoldier();
@@ -31,30 +27,21 @@ export function PushNotificationSetup({ className }: PushNotificationSetupProps)
   const fetchCurrentSoldier = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+      if (!user) { setLoading(false); return; }
 
-      // Get profile to find personal number
       const { data: profile } = await supabase
         .from('profiles')
-        .select('personal_number, full_name')
+        .select('personal_number')
         .eq('user_id', user.id)
         .single();
 
       if (profile?.personal_number) {
-        // Find matching soldier
         const { data: soldier } = await supabase
           .from('soldiers')
-          .select('id, full_name')
+          .select('id')
           .eq('personal_number', profile.personal_number)
           .single();
-
-        if (soldier) {
-          setSoldierId(soldier.id);
-          setSoldierName(soldier.full_name);
-        }
+        if (soldier) setSoldierId(soldier.id);
       }
     } catch (err) {
       console.error('Error fetching soldier:', err);
@@ -63,7 +50,6 @@ export function PushNotificationSetup({ className }: PushNotificationSetupProps)
     }
   };
 
-  // Still loading soldier info
   if (loading) return null;
 
   if (!isSupported) {
@@ -84,8 +70,8 @@ export function PushNotificationSetup({ className }: PushNotificationSetupProps)
     );
   }
 
-  // Show setup even if no soldier linked - just prompt to enable
-  if (!soldierId) {
+  // Show info for non-admin users without a linked soldier
+  if (!soldierId && !isAdminUser) {
     return (
       <Card className={`border-amber-500/20 bg-amber-500/5 ${className}`}>
         <CardContent className="p-4">
@@ -113,7 +99,9 @@ export function PushNotificationSetup({ className }: PushNotificationSetupProps)
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          קבל התראות על משמרות, רישיונות שפגים, טפסים חסרים ועוד
+          {isAdminUser
+            ? 'קבל התראות יומיות: רישיונות שפגים, מוצבים שלא מילאו טופס לפני משמרת ועוד'
+            : 'קבל התראות על משמרות, רישיונות שפגים, טפסים חסרים ועוד'}
         </p>
 
         {isSubscribed ? (
@@ -131,11 +119,7 @@ export function PushNotificationSetup({ className }: PushNotificationSetupProps)
               disabled={pushLoading}
               className="w-full"
             >
-              {pushLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin ml-2" />
-              ) : (
-                <BellOff className="w-4 h-4 ml-2" />
-              )}
+              {pushLoading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <BellOff className="w-4 h-4 ml-2" />}
               בטל התראות
             </Button>
           </div>
@@ -151,11 +135,7 @@ export function PushNotificationSetup({ className }: PushNotificationSetupProps)
                 disabled={pushLoading}
                 className="w-full bg-gradient-to-r from-primary to-primary/80"
               >
-                {pushLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin ml-2" />
-                ) : (
-                  <Bell className="w-4 h-4 ml-2" />
-                )}
+                {pushLoading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Bell className="w-4 h-4 ml-2" />}
                 הפעל התראות
               </Button>
             )}

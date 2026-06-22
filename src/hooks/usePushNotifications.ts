@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// VAPID public key (publishable - safe in client code)
 const VAPID_PUBLIC_KEY = 'BB-ERTopQnMocIHOoi3infXShHMGKYTQyHVn3lZD14CrDB6Psc6mJM4o5QBKhT7YcQEJpq5F7I_KCGGhKqpLD7U';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -23,6 +22,7 @@ interface PushSubscriptionState {
   loading: boolean;
 }
 
+// soldierId is optional — admins subscribe without a linked soldier
 export function usePushNotifications(soldierId?: string) {
   const [state, setState] = useState<PushSubscriptionState>({
     isSupported: false,
@@ -30,10 +30,17 @@ export function usePushNotifications(soldierId?: string) {
     permission: 'unsupported',
     loading: true,
   });
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    checkSupport();
-  }, [soldierId]);
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (userId !== null) checkSupport();
+  }, [soldierId, userId]);
 
   const checkSupport = async () => {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -42,28 +49,32 @@ export function usePushNotifications(soldierId?: string) {
     }
 
     const permission = Notification.permission;
-    
+
     let isSubscribed = false;
-    if (soldierId && permission === 'granted') {
-      const { data } = await supabase
-        .from('push_subscriptions')
-        .select('id')
-        .eq('soldier_id', soldierId)
-        .limit(1);
-      
-      isSubscribed = (data?.length ?? 0) > 0;
+    if (permission === 'granted') {
+      if (soldierId) {
+        const { data } = await supabase
+          .from('push_subscriptions')
+          .select('id')
+          .eq('soldier_id', soldierId)
+          .limit(1);
+        isSubscribed = (data?.length ?? 0) > 0;
+      } else if (userId) {
+        const { data } = await supabase
+          .from('push_subscriptions')
+          .select('id')
+          .eq('user_id', userId)
+          .is('soldier_id', null)
+          .limit(1);
+        isSubscribed = (data?.length ?? 0) > 0;
+      }
     }
 
-    setState({
-      isSupported: true,
-      isSubscribed,
-      permission,
-      loading: false,
-    });
+    setState({ isSupported: true, isSubscribed, permission, loading: false });
   };
 
   const subscribe = useCallback(async () => {
-    if (!state.isSupported || !soldierId) {
+    if (!state.isSupported) {
       toast.error('התראות לא נתמכות במכשיר זה');
       return false;
     }
@@ -72,52 +83,55 @@ export function usePushNotifications(soldierId?: string) {
 
     try {
       const permission = await Notification.requestPermission();
-      
       if (permission !== 'granted') {
         toast.error('נדחתה בקשת ההרשאה להתראות');
         setState(prev => ({ ...prev, permission, loading: false }));
         return false;
       }
 
-      // Register service worker
       const registration = await navigator.serviceWorker.register('/sw-push.js');
       await navigator.serviceWorker.ready;
 
-      // Subscribe to Web Push with VAPID key
       let pushSubscription = await registration.pushManager.getSubscription();
-      
       if (!pushSubscription) {
-        const appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         pushSubscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: appServerKey as BufferSource,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
         });
       }
 
       const subscriptionJson = pushSubscription.toJSON();
       const keys = subscriptionJson.keys || {};
 
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const subscriptionData = {
-        soldier_id: soldierId,
-        user_id: user.id,
-        endpoint: pushSubscription.endpoint,
-        p256dh: keys.p256dh || '',
-        auth: keys.auth || '',
-      };
+      if (soldierId) {
+        // Soldier-linked subscription
+        const { error } = await supabase
+          .from('push_subscriptions')
+          .upsert({
+            soldier_id: soldierId,
+            user_id: user.id,
+            endpoint: pushSubscription.endpoint,
+            p256dh: keys.p256dh || '',
+            auth: keys.auth || '',
+          }, { onConflict: 'soldier_id,endpoint' });
+        if (error) throw error;
+      } else {
+        // Admin / user without soldier
+        const { error } = await supabase
+          .from('push_subscriptions')
+          .upsert({
+            soldier_id: null,
+            user_id: user.id,
+            endpoint: pushSubscription.endpoint,
+            p256dh: keys.p256dh || '',
+            auth: keys.auth || '',
+          }, { onConflict: 'user_id,endpoint' });
+        if (error) throw error;
+      }
 
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .upsert(subscriptionData, {
-          onConflict: 'soldier_id,endpoint'
-        });
-
-      if (error) throw error;
-
-      // Show confirmation notification
       if (registration.showNotification) {
         await registration.showNotification('התראות הופעלו! 🎉', {
           body: 'תקבל התראות חכמות על משמרות, רישיונות ועוד',
@@ -129,13 +143,7 @@ export function usePushNotifications(soldierId?: string) {
         });
       }
 
-      setState(prev => ({ 
-        ...prev, 
-        isSubscribed: true, 
-        permission: 'granted',
-        loading: false 
-      }));
-
+      setState(prev => ({ ...prev, isSubscribed: true, permission: 'granted', loading: false }));
       toast.success('התראות הופעלו בהצלחה!');
       return true;
     } catch (error) {
@@ -144,29 +152,32 @@ export function usePushNotifications(soldierId?: string) {
       setState(prev => ({ ...prev, loading: false }));
       return false;
     }
-  }, [soldierId, state.isSupported]);
+  }, [soldierId, userId, state.isSupported]);
 
   const unsubscribe = useCallback(async () => {
-    if (!soldierId) return false;
-
     setState(prev => ({ ...prev, loading: true }));
 
     try {
-      // Unsubscribe from browser push
       const registration = await navigator.serviceWorker.getRegistration('/sw-push.js');
       if (registration) {
         const subscription = await registration.pushManager.getSubscription();
-        if (subscription) {
-          await subscription.unsubscribe();
-        }
+        if (subscription) await subscription.unsubscribe();
       }
 
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .delete()
-        .eq('soldier_id', soldierId);
-
-      if (error) throw error;
+      if (soldierId) {
+        const { error } = await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('soldier_id', soldierId);
+        if (error) throw error;
+      } else if (userId) {
+        const { error } = await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('user_id', userId)
+          .is('soldier_id', null);
+        if (error) throw error;
+      }
 
       setState(prev => ({ ...prev, isSubscribed: false, loading: false }));
       toast.success('התראות בוטלו');
@@ -177,12 +188,7 @@ export function usePushNotifications(soldierId?: string) {
       setState(prev => ({ ...prev, loading: false }));
       return false;
     }
-  }, [soldierId]);
+  }, [soldierId, userId]);
 
-  return {
-    ...state,
-    subscribe,
-    unsubscribe,
-    refresh: checkSupport,
-  };
+  return { ...state, subscribe, unsubscribe, refresh: checkSupport };
 }

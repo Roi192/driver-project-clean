@@ -14,8 +14,9 @@ import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { StorageImage } from "@/components/shared/StorageImage";
 import flagInvestigationThumbnail from "@/assets/flag-investigation-thumbnail.png";
 import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.png";
-import { REGIONS, OUTPOSTS } from "@/lib/constants";
 import { BRIGADES, BRIGADE_CODES, getBrigade, DIVISION_BRIGADE_CODE, DIVISION_LABEL } from "@/lib/brigades";
+import { useFrameworks } from "@/hooks/useFrameworks";
+import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
 
 type View = "categories" | "items" | "itemDetail";
 type ContentCategory = "flag_investigations" | "sector_events" | "neighbor_events" | "monthly_summaries";
@@ -92,27 +93,9 @@ const EVENT_TYPES = [
 
 const DRIVER_TYPES = [
   { value: "security", label: 'נהג בט"ש' },
+  { value: "combat", label: "נהג גדוד" },
   { value: "vehicle_officer", label: "נהג קצין רכב" },
-  { value: "combat", label: "נהג גדוד גזרתי" },
-  { value: "general", label: "נהג כללי / אגפי" },
-  { value: "other", label: "אחר" },
-] as const;
-
-const FRAMEWORK_TYPES = [
-  { value: "planag", label: 'פלנ"ג' },
-  { value: "maphot", label: 'מפח"ט' },
-  { value: "gdud", label: 'גדוד תע"ם' },
-  { value: "other", label: "אחר" },
-] as const;
-
-const MAPHOT_DEPARTMENTS = [
-  { value: "tashkuv", label: "תקשוב" },
-  { value: "modiin", label: "מודיעין" },
-  { value: "agam", label: 'אג"מ' },
-  { value: "logistics", label: "לוגיסטיקה" },
-  { value: "medical", label: "רפואה" },
-  { value: "shlishut", label: "שלישות" },
-  { value: "chimush", label: "חימוש" },
+  { value: "general", label: "נהג אגפי" },
   { value: "other", label: "אחר" },
 ] as const;
 
@@ -200,6 +183,11 @@ const getFields = (
   soldiers: { id: string; full_name: string; personal_number: string }[] = [],
   showBrigadeSelector = false,
   includeDivisionOption = false,
+  frameworkOptions: { value: string; label: string }[] = [],
+  frameworkNamesWithDepts: string[] = [],
+  departmentOptions: { value: string; label: string }[] = [],
+  regionOptions: { value: string; label: string }[] = [],
+  outpostOptions: { value: string; label: string }[] = [],
 ): FieldConfig[] => {
   const brigadeField: FieldConfig = {
     name: "brigade",
@@ -232,28 +220,26 @@ const getFields = (
       { name: "title", label: "כותרת", type: "text", required: true, placeholder: "הזן כותרת..." },
       ...(showBrigadeSelector ? [brigadeField] : []),
       { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך", required: true },
-      { 
-        name: "region", 
-        label: "גזרה", 
+      {
+        name: "framework_type",
+        label: "מסגרת",
         type: "select",
-        options: REGIONS.map(r => ({ value: r, label: r })),
-        placeholder: "בחר גזרה",
-        required: true
+        options: frameworkOptions.length > 0
+          ? frameworkOptions
+          : [{ value: "other", label: "אחר" }],
+        placeholder: "בחר מסגרת",
       },
-      { 
-        name: "outpost", 
-        label: "מוצב", 
+      {
+        name: "department",
+        label: "אגף",
         type: "select",
-        options: OUTPOSTS.map(o => ({ value: o, label: o })),
-        placeholder: "בחר מוצב"
-      },
-      { 
-        name: "event_type", 
-        label: "סוג אירוע", 
-        type: "select",
-        options: EVENT_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר סוג אירוע",
-        required: true
+        options: departmentOptions.length > 0
+          ? departmentOptions
+          : [{ value: "other", label: "אחר" }],
+        placeholder: "בחר אגף",
+        dependsOn: frameworkNamesWithDepts.length > 0
+          ? { field: "framework_type", value: frameworkNamesWithDepts }
+          : { field: "framework_type", value: "__never__" },
       },
       {
         name: "driver_type",
@@ -262,35 +248,6 @@ const getFields = (
         options: DRIVER_TYPES.map(t => ({ value: t.value, label: t.label })),
         placeholder: "בחר סוג נהג",
         required: true
-      },
-      {
-        name: "framework_type",
-        label: "מסגרת",
-        type: "select",
-        options: FRAMEWORK_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר מסגרת",
-      },
-      {
-        name: "department",
-        label: "אגף / מחלקה",
-        type: "select",
-        options: MAPHOT_DEPARTMENTS.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר אגף",
-        dependsOn: { field: "framework_type", value: "maphot" },
-      },
-      {
-        name: "battalion_name",
-        label: "שם הגדוד",
-        type: "text",
-        placeholder: "הזן שם גדוד...",
-        dependsOn: { field: "framework_type", value: "gdud" },
-      },
-      {
-        name: "sector",
-        label: "גזרה",
-        type: "text",
-        placeholder: "לדוגמה: גזרה צפונית",
-        dependsOn: { field: "framework_type", value: "gdud" },
       },
       {
         name: "soldier_id",
@@ -306,6 +263,33 @@ const getFields = (
         type: "text",
         placeholder: "הזן שם נהג...",
         dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "general", "other"] }
+      },
+      {
+        name: "region",
+        label: "גזרה",
+        type: "select",
+        options: regionOptions.length > 0
+          ? regionOptions
+          : [{ value: "other", label: "אחר" }],
+        placeholder: "בחר גזרה",
+        required: true
+      },
+      {
+        name: "outpost",
+        label: "מוצב",
+        type: "select",
+        options: outpostOptions.length > 0
+          ? outpostOptions
+          : [{ value: "other", label: "אחר" }],
+        placeholder: "בחר מוצב"
+      },
+      {
+        name: "event_type",
+        label: "סוג אירוע",
+        type: "select",
+        options: EVENT_TYPES.map(t => ({ value: t.value, label: t.label })),
+        placeholder: "בחר סוג אירוע",
+        required: true
       },
       { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב...", required: true },
       { 
@@ -344,9 +328,23 @@ export default function SafetyEvents() {
   const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin, realIsDivisionAdmin } = useAuth() as any;
   const isBattalionUser = userType === 'battalion';
   const myBrigade = userBrigade || 'binyamin';
-  // Division admins (מפאו"ג איו"ש) may file events on behalf of any brigade OR on the division itself.
   const showBrigadeSelector = isBattalionUser || realIsDivisionAdmin;
   const includeDivisionOption = realIsDivisionAdmin;
+
+  // Dynamic frameworks and outposts from DB
+  const { rootFrameworks, getChildren } = useFrameworks();
+  const { outposts } = useBrigadeOutposts();
+
+  const frameworkOptions = rootFrameworks.map(f => ({ value: f.name, label: f.name }));
+  const frameworkNamesWithDepts = rootFrameworks
+    .filter(f => getChildren(f.id).length > 0)
+    .map(f => f.name);
+  const departmentOptions = rootFrameworks
+    .flatMap(f => getChildren(f.id))
+    .map(d => ({ value: d.name, label: d.name }));
+  const regionOptions = [...new Set(outposts.map(o => o.region).filter(Boolean))]
+    .map(r => ({ value: r as string, label: r as string }));
+  const outpostOptions = outposts.map(o => ({ value: o.name, label: o.name }));
   const [view, setView] = useState<View>("categories");
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
   const [selectedItem, setSelectedItem] = useState<SafetyContent | null>(null);
@@ -437,7 +435,7 @@ export default function SafetyEvents() {
   const openAddDialog = () => {
     if (!selectedCategory) return;
 
-    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption));
+    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions));
     writeSafetyEventDraft({ mode: "add", category: selectedCategory, formData: initialFormData, selectedItem: null });
     setAddDraftData(initialFormData);
     setAddDialogOpen(true);
@@ -516,7 +514,6 @@ export default function SafetyEvents() {
       return;
     }
 
-    const frameworkType = toNullableText(data.framework_type);
     const insertData = {
       title,
       category: selectedCategory,
@@ -529,10 +526,10 @@ export default function SafetyEvents() {
       longitude,
       event_type: eventType,
       driver_type: driverType,
-      framework_type: frameworkType,
-      department: frameworkType === "maphot" ? toNullableText(data.department) : null,
-      battalion_name: frameworkType === "gdud" ? toNullableText(data.battalion_name) : null,
-      sector: frameworkType === "gdud" ? toNullableText(data.sector) : null,
+      framework_type: toNullableText(data.framework_type),
+      department: toNullableText(data.department),
+      battalion_name: null,
+      sector: null,
       region: toNullableText(data.region),
       outpost: toNullableText(data.outpost),
       soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
@@ -624,7 +621,6 @@ export default function SafetyEvents() {
     const eventDate = toNullableText(data.event_date);
     const description = toNullableText(data.description);
 
-    const frameworkTypeEdit = toNullableText(data.framework_type);
     const updateData = {
       title,
       description,
@@ -636,10 +632,10 @@ export default function SafetyEvents() {
       longitude,
       event_type: eventType,
       driver_type: driverType,
-      framework_type: frameworkTypeEdit,
-      department: frameworkTypeEdit === "maphot" ? toNullableText(data.department) : null,
-      battalion_name: frameworkTypeEdit === "gdud" ? toNullableText(data.battalion_name) : null,
-      sector: frameworkTypeEdit === "gdud" ? toNullableText(data.sector) : null,
+      framework_type: toNullableText(data.framework_type),
+      department: toNullableText(data.department),
+      battalion_name: null,
+      sector: null,
       region: toNullableText(data.region),
       outpost: toNullableText(data.outpost),
       soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
@@ -1254,7 +1250,7 @@ export default function SafetyEvents() {
     return null;
   };
 
-  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption) : [];
+  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions) : [];
 
   return (
     <AppLayout>
