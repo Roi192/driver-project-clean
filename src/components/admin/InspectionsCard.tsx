@@ -18,38 +18,38 @@ interface Inspection {
   commander_name: string;
   soldier_id: string;
   inspector_name: string;
-  combat_score: number;
-  vehicle_score: number;
-  procedures_score: number;
-  safety_score: number;
-  routes_familiarity_score: number;
-  simulations_score: number;
-  total_score: number;
+  combat_score: number | null;
+  vehicle_score: number | null;
+  procedures_score: number | null;
+  safety_score: number | null;
+  routes_familiarity_score: number | null;
+  simulations_score: number | null;
+  total_score: number | null;
   general_notes: string | null;
   combat_debrief_by: string | null;
-  combat_driver_participated: boolean;
-  combat_driver_in_debrief: boolean;
-  vehicle_tlt_oil: boolean;
-  vehicle_tlt_water: boolean;
-  vehicle_tlt_nuts: boolean;
-  vehicle_tlt_pressure: boolean;
-  vehicle_vardim_knowledge: boolean;
-  vehicle_mission_sheet: boolean;
-  vehicle_work_card: boolean;
-  vehicle_clean: boolean;
-  vehicle_equipment_secured: boolean;
-  procedures_descent_drill: boolean;
-  procedures_rollover_drill: boolean;
-  procedures_fire_drill: boolean;
-  procedures_combat_equipment: boolean;
-  procedures_weapon_present: boolean;
-  safety_ten_commandments: boolean;
-  safety_driver_tools_extinguisher: boolean;
-  safety_driver_tools_jack: boolean;
-  safety_driver_tools_wheel_key: boolean;
-  safety_driver_tools_vest: boolean;
-  safety_driver_tools_triangle: boolean;
-  safety_driver_tools_license: boolean;
+  combat_driver_participated: boolean | null;
+  combat_driver_in_debrief: boolean | null;
+  vehicle_tlt_oil: boolean | null;
+  vehicle_tlt_water: boolean | null;
+  vehicle_tlt_nuts: boolean | null;
+  vehicle_tlt_pressure: boolean | null;
+  vehicle_vardim_knowledge: boolean | null;
+  vehicle_mission_sheet: boolean | null;
+  vehicle_work_card: boolean | null;
+  vehicle_clean: boolean | null;
+  vehicle_equipment_secured: boolean | null;
+  procedures_descent_drill: boolean | null;
+  procedures_rollover_drill: boolean | null;
+  procedures_fire_drill: boolean | null;
+  procedures_combat_equipment: boolean | null;
+  procedures_weapon_present: boolean | null;
+  safety_ten_commandments: boolean | null;
+  safety_driver_tools_extinguisher: boolean | null;
+  safety_driver_tools_jack: boolean | null;
+  safety_driver_tools_wheel_key: boolean | null;
+  safety_driver_tools_vest: boolean | null;
+  safety_driver_tools_triangle: boolean | null;
+  safety_driver_tools_license: boolean | null;
   routes_notes: string | null;
   soldiers?: { full_name: string; personal_number: string };
 }
@@ -82,7 +82,7 @@ export function InspectionsCard() {
   };
 
   const avgScore = inspections.length > 0
-    ? Math.round(inspections.reduce((sum, i) => sum + i.total_score, 0) / inspections.length)
+    ? Math.round(inspections.reduce((sum, i) => sum + (i.total_score ?? 0), 0) / inspections.length)
     : 0;
 
   const getInspectionPerformedAt = (inspection: Pick<Inspection, "created_at" | "inspection_date">) =>
@@ -110,7 +110,7 @@ export function InspectionsCard() {
       });
       
       const avg = monthInspections.length > 0
-        ? Math.round(monthInspections.reduce((sum, i) => sum + i.total_score, 0) / monthInspections.length)
+        ? Math.round(monthInspections.reduce((sum, i) => sum + (i.total_score ?? 0), 0) / monthInspections.length)
         : 0;
       
       return {
@@ -204,7 +204,7 @@ export function InspectionsCard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge className={`${getScoreColor(inspection.total_score)} text-white`}>
+                        <Badge className={`${getScoreColor(inspection.total_score ?? 0)} text-white`}>
                           {inspection.total_score}
                         </Badge>
                         <Eye className="w-4 h-4 text-slate-400" />
@@ -344,7 +344,7 @@ export function InspectionsCard() {
                   { label: "מקתגים", score: selectedInspection.simulations_score, max: 15 },
                 ].map(item => (
                   <div key={item.label} className="text-center p-3 rounded-xl bg-slate-50">
-                    <p className={`text-xl font-black ${item.score / item.max >= 0.7 ? 'text-emerald-600' : item.score / item.max >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
+                    <p className={`text-xl font-black ${(item.score ?? 0) / item.max >= 0.7 ? 'text-emerald-600' : (item.score ?? 0) / item.max >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
                       {item.score}/{item.max}
                     </p>
                     <p className="text-xs text-slate-500">{item.label}</p>

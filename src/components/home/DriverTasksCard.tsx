@@ -65,12 +65,13 @@ export function DriverTasksCard() {
   }, [user]);
 
   const loadInitialData = async () => {
+    if (!user) return;
     setInitialLoading(true);
     try {
       const { data: profile } = await supabase
         .from("profiles")
         .select("personal_number, outpost")
-        .eq("user_id", user?.id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (!profile?.personal_number) {
@@ -101,19 +102,20 @@ export function DriverTasksCard() {
   };
 
   const loadShiftFormStatus = async () => {
+    if (!user) return;
     const today = format(new Date(), "yyyy-MM-dd");
-    
+
     const [todayReportResult, lastReportResult] = await Promise.all([
       supabase
         .from("shift_reports")
         .select("id")
-        .eq("user_id", user?.id)
+        .eq("user_id", user.id)
         .eq("report_date", today)
         .limit(1),
       supabase
         .from("shift_reports")
         .select("report_date")
-        .eq("user_id", user?.id)
+        .eq("user_id", user.id)
         .order("report_date", { ascending: false })
         .limit(1)
     ]);

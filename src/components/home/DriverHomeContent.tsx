@@ -80,13 +80,14 @@ export function DriverHomeContent() {
   }, [user]);
 
   const loadAllData = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       // Get soldier info
       const { data: profile } = await supabase
         .from("profiles")
         .select("personal_number, outpost")
-        .eq("user_id", user?.id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (!profile?.personal_number) {
@@ -111,13 +112,13 @@ export function DriverHomeContent() {
         supabase
           .from("shift_reports")
           .select("id")
-          .eq("user_id", user?.id)
+          .eq("user_id", user.id)
           .eq("report_date", todayStr)
           .limit(1),
         supabase
           .from("shift_reports")
           .select("report_date")
-          .eq("user_id", user?.id)
+          .eq("user_id", user.id)
           .order("report_date", { ascending: false })
           .limit(1)
       ]);

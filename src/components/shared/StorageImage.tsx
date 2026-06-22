@@ -3,7 +3,7 @@ import { getSignedUrl } from "@/lib/storage-utils";
 import { cn } from "@/lib/utils";
 import { ImageIcon, Loader2 } from "lucide-react";
 
-interface StorageImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+interface StorageImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   src: string | null | undefined;
   bucket?: string;
   fallback?: React.ReactNode;

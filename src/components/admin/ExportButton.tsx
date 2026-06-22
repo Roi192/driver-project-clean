@@ -11,24 +11,24 @@ interface ShiftReport {
   driver_name: string;
   vehicle_number: string;
   shift_type: string;
-  is_complete: boolean;
-  emergency_procedure_participation: boolean;
-  commander_briefing_attendance: boolean;
-  work_card_completed: boolean;
-  has_ceramic_vest: boolean;
-  has_helmet: boolean;
-  has_personal_weapon: boolean;
-  has_ammunition: boolean;
-  pre_movement_checks_completed: boolean;
-  pre_movement_items_checked?: string[];
-  driver_tools_checked: boolean;
-  driver_tools_items_checked?: string[];
-  descent_drill_completed: boolean;
-  rollover_drill_completed: boolean;
-  fire_drill_completed: boolean;
-  safety_vulnerabilities?: string;
-  vardim_procedure_explanation?: string;
-  vardim_points?: string;
+  is_complete: boolean | null;
+  emergency_procedure_participation: boolean | null;
+  commander_briefing_attendance: boolean | null;
+  work_card_completed: boolean | null;
+  has_ceramic_vest: boolean | null;
+  has_helmet: boolean | null;
+  has_personal_weapon: boolean | null;
+  has_ammunition: boolean | null;
+  pre_movement_checks_completed: boolean | null;
+  pre_movement_items_checked?: string[] | null;
+  driver_tools_checked: boolean | null;
+  driver_tools_items_checked?: string[] | null;
+  descent_drill_completed: boolean | null;
+  rollover_drill_completed: boolean | null;
+  fire_drill_completed: boolean | null;
+  safety_vulnerabilities?: string | null;
+  vardim_procedure_explanation?: string | null;
+  vardim_points?: string | null;
 }
 
 interface ExportButtonProps {

@@ -34,7 +34,7 @@ interface Soldier {
   full_name: string;
   outpost: string | null;
   phone: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
 }
 
 interface WorkScheduleEntry {

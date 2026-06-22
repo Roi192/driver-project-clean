@@ -224,7 +224,7 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
     if (accidents.length > 0) {
       const accidentsData = accidents.map(a => ({
         'תאריך': format(parseISO(a.accident_date), 'dd/MM/yyyy'),
-        'חומרה': severityLabels[a.severity] || a.severity,
+        'חומרה': severityLabels[a.severity ?? ''] || a.severity,
         'מיקום': a.location || '-',
         'רכב': a.vehicle_number || '-',
         'תיאור': a.description || '-',
@@ -291,8 +291,8 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
                   <span className="font-bold">
                     {format(parseISO(accident.accident_date), 'dd/MM/yyyy')}
                   </span>
-                  <Badge className={severityColors[accident.severity] || 'bg-gray-100'}>
-                    {severityLabels[accident.severity] || accident.severity}
+                  <Badge className={severityColors[accident.severity ?? ''] || 'bg-gray-100'}>
+                    {severityLabels[accident.severity ?? ''] || accident.severity}
                   </Badge>
                 </div>
                 {accident.location && (

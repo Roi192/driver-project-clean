@@ -31,7 +31,7 @@ export interface WeeklyFitnessIssue {
   soldier_id: string;
   issue_type: string;
   issue_details: string | null;
-  resolved: boolean;
+  resolved: boolean | null;
   soldier?: { full_name: string; personal_number: string };
 }
 
@@ -42,10 +42,10 @@ export interface WeeklySafetyActivity {
   title: string;
   description: string | null;
   soldier_id: string | null;
-  needs_commander_help: boolean;
+  needs_commander_help: boolean | null;
   commander_help_type: string | null;
   planned_date: string | null;
-  completed: boolean;
+  completed: boolean | null;
   soldier?: { full_name: string } | null;
 }
 
@@ -58,7 +58,7 @@ export interface WeeklyScheduleItem {
   scheduled_day: number;
   scheduled_time: string | null;
   end_time?: string | null;
-  completed: boolean;
+  completed: boolean | null;
 }
 
 export interface WeeklyClosing {

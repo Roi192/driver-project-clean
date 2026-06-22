@@ -23,7 +23,7 @@ interface RegionData {
   safetyActivities: any[];
   schedule: any[];
   concerns: string | null;
-  needsCommanderHelp: boolean;
+  needsCommanderHelp: boolean | null;
   commanderHelpDescription: string | null;
 }
 

@@ -13,7 +13,7 @@ interface Report {
   outpost: string;
   vehicle_number: string;
   shift_type: string;
-  is_complete: boolean;
+  is_complete: boolean | null;
 }
 
 const shiftTypeMap: Record<string, string> = {

@@ -30,7 +30,7 @@ interface Holiday {
   title: string;
   event_date: string;
   category: string;
-  is_recurring: boolean;
+  is_recurring: boolean | null;
 }
 
 export default function HolidaysManagement() {
@@ -152,7 +152,7 @@ export default function HolidaysManagement() {
       title: holiday.title,
       event_date: holiday.event_date,
       category: holiday.category as "holiday" | "memorial",
-      is_recurring: holiday.is_recurring
+      is_recurring: holiday.is_recurring ?? false
     });
     setDialogOpen(true);
   };

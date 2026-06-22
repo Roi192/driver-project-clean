@@ -108,7 +108,7 @@ export function FitnessSection({ region, fitnessIssues, manpower, onAdd, onToggl
               >
                 <div className="flex items-center gap-3">
                   <Checkbox
-                    checked={issue.resolved}
+                    checked={issue.resolved ?? undefined}
                     onCheckedChange={(checked) => onToggleResolved(issue.id, !!checked)}
                   />
                   <div className={issue.resolved ? "line-through opacity-60" : ""}>

@@ -1,6 +1,16 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/integrations/supabase/client';
+
+const PRODUCTION_URL = 'https://driver-project.vercel.app';
+
+const getAuthRedirectUrl = (path: string): string => {
+  if (Capacitor.isNativePlatform()) {
+    return `${PRODUCTION_URL}${path}`;
+  }
+  return `${window.location.origin}${path}`;
+};
 
 // Updated roles: super_admin (מנהל ראשי), admin (מ"פ), platoon_commander (מ"מ), battalion_admin (גדוד), hagmar_admin (מנהל הגמ"ר), driver (נהג)
 export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'hagmar_admin' | 'ravshatz' | 'division_admin' | 'division_user';
@@ -209,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (data: SignUpData) => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = getAuthRedirectUrl('/');
     
     const { error } = await supabase.auth.signUp({
       email: data.email,
@@ -236,7 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = getAuthRedirectUrl('/');
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

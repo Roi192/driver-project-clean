@@ -42,13 +42,14 @@ export default function CleaningParadeHighlightsManagement() {
 
   const fetchHighlights = async () => {
     try {
-      const { data, error } = await supabase
-        .from('cleaning_parade_highlights')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
+      const { data, error } = await db.from('cleaning_parade_highlights')
         .select('*')
         .order('display_order', { ascending: true });
 
       if (error) throw error;
-      setHighlights(data || []);
+      setHighlights((data || []) as Highlight[]);
     } catch (error: any) {
       console.error('Error fetching highlights:', error);
       toast.error("שגיאה בטעינת הדגשים");
@@ -69,12 +70,11 @@ export default function CleaningParadeHighlightsManagement() {
         ? Math.max(...highlights.map(h => h.display_order)) 
         : 0;
 
-      const { error } = await supabase
-        .from('cleaning_parade_highlights')
-        .insert({
-          title: newTitle.trim(),
-          display_order: maxOrder + 1
-        });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('cleaning_parade_highlights').insert({
+        title: newTitle.trim(),
+        display_order: maxOrder + 1,
+      });
 
       if (error) throw error;
       
@@ -98,10 +98,8 @@ export default function CleaningParadeHighlightsManagement() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('cleaning_parade_highlights')
-        .update({ title: newTitle.trim() })
-        .eq('id', editingHighlight.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('cleaning_parade_highlights').update({ title: newTitle.trim() }).eq('id', editingHighlight.id);
 
       if (error) throw error;
       
@@ -122,10 +120,8 @@ export default function CleaningParadeHighlightsManagement() {
     if (!confirm("האם אתה בטוח שברצונך למחוק דגש זה?")) return;
 
     try {
-      const { error } = await supabase
-        .from('cleaning_parade_highlights')
-        .delete()
-        .eq('id', id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('cleaning_parade_highlights').delete().eq('id', id);
 
       if (error) throw error;
       

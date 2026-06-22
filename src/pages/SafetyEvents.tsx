@@ -33,6 +33,10 @@ interface SafetyContent {
   longitude: number | null;
   event_type: string | null;
   driver_type: string | null;
+  framework_type: string | null;
+  department: string | null;
+  battalion_name: string | null;
+  sector: string | null;
   region: string | null;
   outpost: string | null;
   soldier_id: string | null;
@@ -88,8 +92,28 @@ const EVENT_TYPES = [
 
 const DRIVER_TYPES = [
   { value: "security", label: 'נהג בט"ש' },
-  { value: "combat", label: "נהג גדוד" },
-  { value: "general", label: "נהג כללי" },
+  { value: "vehicle_officer", label: "נהג קצין רכב" },
+  { value: "combat", label: "נהג גדוד גזרתי" },
+  { value: "general", label: "נהג כללי / אגפי" },
+  { value: "other", label: "אחר" },
+] as const;
+
+const FRAMEWORK_TYPES = [
+  { value: "planag", label: 'פלנ"ג' },
+  { value: "maphot", label: 'מפח"ט' },
+  { value: "gdud", label: 'גדוד תע"ם' },
+  { value: "other", label: "אחר" },
+] as const;
+
+const MAPHOT_DEPARTMENTS = [
+  { value: "tashkuv", label: "תקשוב" },
+  { value: "modiin", label: "מודיעין" },
+  { value: "agam", label: 'אג"מ' },
+  { value: "logistics", label: "לוגיסטיקה" },
+  { value: "medical", label: "רפואה" },
+  { value: "shlishut", label: "שלישות" },
+  { value: "chimush", label: "חימוש" },
+  { value: "other", label: "אחר" },
 ] as const;
 
 const SEVERITY_TYPES = [
@@ -231,28 +255,57 @@ const getFields = (
         placeholder: "בחר סוג אירוע",
         required: true
       },
-      { 
-        name: "driver_type", 
-        label: "סוג נהג", 
+      {
+        name: "driver_type",
+        label: "סוג נהג",
         type: "select",
         options: DRIVER_TYPES.map(t => ({ value: t.value, label: t.label })),
         placeholder: "בחר סוג נהג",
         required: true
       },
-      { 
-        name: "soldier_id", 
-        label: "בחר חייל", 
+      {
+        name: "framework_type",
+        label: "מסגרת",
+        type: "select",
+        options: FRAMEWORK_TYPES.map(t => ({ value: t.value, label: t.label })),
+        placeholder: "בחר מסגרת",
+      },
+      {
+        name: "department",
+        label: "אגף / מחלקה",
+        type: "select",
+        options: MAPHOT_DEPARTMENTS.map(t => ({ value: t.value, label: t.label })),
+        placeholder: "בחר אגף",
+        dependsOn: { field: "framework_type", value: "maphot" },
+      },
+      {
+        name: "battalion_name",
+        label: "שם הגדוד",
+        type: "text",
+        placeholder: "הזן שם גדוד...",
+        dependsOn: { field: "framework_type", value: "gdud" },
+      },
+      {
+        name: "sector",
+        label: "גזרה",
+        type: "text",
+        placeholder: "לדוגמה: גזרה צפונית",
+        dependsOn: { field: "framework_type", value: "gdud" },
+      },
+      {
+        name: "soldier_id",
+        label: "בחר חייל",
         type: "select",
         options: soldiers.map(s => ({ value: s.id, label: `${s.full_name} (${s.personal_number})` })),
         placeholder: "בחר חייל מהרשימה",
         dependsOn: { field: "driver_type", value: "security" }
       },
-      { 
-        name: "driver_name", 
-        label: "שם הנהג", 
+      {
+        name: "driver_name",
+        label: "שם הנהג",
         type: "text",
         placeholder: "הזן שם נהג...",
-        dependsOn: { field: "driver_type", value: ["combat", "general"] }
+        dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "general", "other"] }
       },
       { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב...", required: true },
       { 
@@ -463,6 +516,7 @@ export default function SafetyEvents() {
       return;
     }
 
+    const frameworkType = toNullableText(data.framework_type);
     const insertData = {
       title,
       category: selectedCategory,
@@ -475,10 +529,14 @@ export default function SafetyEvents() {
       longitude,
       event_type: eventType,
       driver_type: driverType,
+      framework_type: frameworkType,
+      department: frameworkType === "maphot" ? toNullableText(data.department) : null,
+      battalion_name: frameworkType === "gdud" ? toNullableText(data.battalion_name) : null,
+      sector: frameworkType === "gdud" ? toNullableText(data.sector) : null,
       region: toNullableText(data.region),
       outpost: toNullableText(data.outpost),
       soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
-      driver_name: driverType === "combat" ? toNullableText(data.driver_name) : null,
+      driver_name: driverType !== "security" ? toNullableText(data.driver_name) : null,
       vehicle_number: toNullableText(data.vehicle_number),
       severity: toText(data.severity) || 'minor',
       brigade: targetBrigade,
@@ -566,6 +624,7 @@ export default function SafetyEvents() {
     const eventDate = toNullableText(data.event_date);
     const description = toNullableText(data.description);
 
+    const frameworkTypeEdit = toNullableText(data.framework_type);
     const updateData = {
       title,
       description,
@@ -577,10 +636,14 @@ export default function SafetyEvents() {
       longitude,
       event_type: eventType,
       driver_type: driverType,
+      framework_type: frameworkTypeEdit,
+      department: frameworkTypeEdit === "maphot" ? toNullableText(data.department) : null,
+      battalion_name: frameworkTypeEdit === "gdud" ? toNullableText(data.battalion_name) : null,
+      sector: frameworkTypeEdit === "gdud" ? toNullableText(data.sector) : null,
       region: toNullableText(data.region),
       outpost: toNullableText(data.outpost),
       soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
-      driver_name: driverType === "combat" ? toNullableText(data.driver_name) : null,
+      driver_name: driverType !== "security" ? toNullableText(data.driver_name) : null,
       vehicle_number: toNullableText(data.vehicle_number),
       severity: toText(data.severity) || 'minor',
     };

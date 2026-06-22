@@ -268,8 +268,9 @@ export default function TripForm() {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('trip_forms').insert({
-        user_id: user?.id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from('trip_forms') as any).insert({
+        user_id: user?.id ?? "",
         brigade: brigade || "binyamin",
         soldier_name: userName,
         outpost: formData.outpost,

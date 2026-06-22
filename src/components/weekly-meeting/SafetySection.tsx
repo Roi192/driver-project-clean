@@ -127,7 +127,7 @@ export function SafetySection({ region, activities, onAdd, onUpdate, isLoading }
               >
                 <div className="flex items-start gap-3">
                   <Checkbox
-                    checked={activity.completed}
+                    checked={activity.completed ?? undefined}
                     onCheckedChange={(checked) => onUpdate(activity.id, { completed: !!checked })}
                   />
                   <div className="flex-1">

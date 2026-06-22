@@ -50,7 +50,7 @@ interface Soldier {
   personal_number: string;
   full_name: string;
   outpost?: string | null;
-  is_active?: boolean;
+  is_active?: boolean | null;
   release_date?: string | null;
   control_removed_at?: string | null;
   qualified_date?: string | null;
@@ -1069,15 +1069,15 @@ export default function SafetyScoresManagement() {
 
   const singleMonthScoreRows = !isRangeMode
     ? Array.from(
-        new Map([
+        new Map<string, { id: string; soldier: Soldier | null | undefined; score: SafetyScore | null }>([
           ...soldiersForSelectedMonth.map(soldier => [
             soldier.id,
-            { id: soldier.id, soldier, score: visibleScores.find(score => score.soldier_id === soldier.id) || null },
-          ] as const),
+            { id: soldier.id, soldier, score: visibleScores.find(score => score.soldier_id === soldier.id) ?? null },
+          ] as [string, { id: string; soldier: Soldier | null | undefined; score: SafetyScore | null }]),
           ...visibleScores.map(score => [
             score.soldier_id,
             { id: score.soldier_id, soldier: getSoldierMeta(score.soldier_id), score },
-          ] as const),
+          ] as [string, { id: string; soldier: Soldier | null | undefined; score: SafetyScore | null }]),
         ]).values(),
       ).filter(row => (row.soldier?.full_name || getSoldierName(row.id)).includes(searchTerm))
     : [];
@@ -1286,7 +1286,7 @@ export default function SafetyScoresManagement() {
                               {/* Last month score */}
                               <div className="flex items-center gap-1">
                                 <span className="text-slate-500">{lastMonthLabel.split(' ')[0]}:</span>
-                                {soldier.lastMonthScore !== null ? (
+                                {soldier.lastMonthScore != null ? (
                                   <Badge className={`${getScoreColor(soldier.lastMonthScore)} text-white text-xs px-2 py-0`}>
                                     {soldier.lastMonthScore}
                                   </Badge>
@@ -1294,9 +1294,9 @@ export default function SafetyScoresManagement() {
                                   <span className="text-slate-400">-</span>
                                 )}
                               </div>
-                              
+
                               {/* Km */}
-                              {soldier.lastMonthKm !== null && (
+                              {soldier.lastMonthKm != null && (
                                 <div className="flex items-center gap-1">
                                   <span className="text-slate-500">ק"מ:</span>
                                   <Badge variant="outline" className="text-xs text-slate-700 border-slate-300 px-2 py-0">
@@ -1307,11 +1307,11 @@ export default function SafetyScoresManagement() {
                                   )}
                                 </div>
                               )}
-                              
+
                               {/* Prev month score */}
                               <div className="flex items-center gap-1">
                                 <span className="text-slate-500">{prevMonthLabel.split(' ')[0]}:</span>
-                                {soldier.prevMonthScore !== null ? (
+                                {soldier.prevMonthScore != null ? (
                                   <Badge className={`${getScoreColor(soldier.prevMonthScore)} text-white text-xs px-2 py-0`}>
                                     {soldier.prevMonthScore}
                                   </Badge>

@@ -243,7 +243,7 @@ interface MapPoint {
   longitude: number;
   point_type: string;
   severity: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
 }
 
 interface SafetyEvent {

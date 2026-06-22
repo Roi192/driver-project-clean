@@ -701,3 +701,23 @@
 .leaflet-heatmap-layer {
   mix-blend-mode: screen;
 }
+
+/* Safe area utilities for Capacitor native apps (iPhone notch / home bar) */
+.h-header-safe {
+  height: calc(4rem + env(safe-area-inset-top, 0px));
+}
+.pt-header-content {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pt-content-safe {
+  padding-top: calc(4rem + env(safe-area-inset-top, 0px));
+}
+.top-header-safe {
+  top: calc(4rem + env(safe-area-inset-top, 0px));
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pb-8-safe {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+}

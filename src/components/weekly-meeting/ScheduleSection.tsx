@@ -250,7 +250,7 @@ export function ScheduleSection({ schedule, onAdd, onUpdate, onDelete, isLoading
                       <div key={day.value} className="relative border-l border-slate-100">
                         {dayTasks.map((task) => {
                           const topPosition = getTaskPosition(task.scheduled_time);
-                          const taskHeight = getTaskHeight(task.scheduled_time, task.end_time);
+                          const taskHeight = getTaskHeight(task.scheduled_time, task.end_time ?? null);
                           return (
                             <div
                               key={task.id}
@@ -264,7 +264,7 @@ export function ScheduleSection({ schedule, onAdd, onUpdate, onDelete, isLoading
                             >
                               <div className="flex items-start gap-1 h-full">
                                 <Checkbox
-                                  checked={task.completed}
+                                  checked={task.completed ?? undefined}
                                   onCheckedChange={(checked) => onUpdate(task.id, { completed: !!checked })}
                                   className="mt-0.5 h-3 w-3 flex-shrink-0"
                                   onClick={(e) => e.stopPropagation()}

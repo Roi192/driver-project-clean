@@ -53,14 +53,15 @@ export default function CleaningParadesManagement() {
 
   const fetchExamples = async () => {
     try {
-      const { data, error } = await supabase
-        .from('cleaning_parade_examples')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
+      const { data, error } = await db.from('cleaning_parade_examples')
         .select('*')
         .order('outpost', { ascending: true })
         .order('display_order', { ascending: true });
 
       if (error) throw error;
-      setExamples(data || []);
+      setExamples((data || []) as ExamplePhoto[]);
     } catch (error: any) {
       console.error('Error fetching examples:', error);
       toast.error("שגיאה בטעינת הדוגמאות");
@@ -118,14 +119,13 @@ export default function CleaningParadesManagement() {
         : -1;
 
       // Insert record
-      const { error: insertError } = await supabase
-        .from('cleaning_parade_examples')
-        .insert({
-          outpost: newOutpost,
-          description: newDescription,
-          image_url: signedUrl,
-          display_order: maxOrder + 1,
-        });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insertError } = await (supabase as any).from('cleaning_parade_examples').insert({
+        outpost: newOutpost,
+        description: newDescription,
+        image_url: signedUrl,
+        display_order: maxOrder + 1,
+      });
 
       if (insertError) throw insertError;
 
@@ -143,10 +143,8 @@ export default function CleaningParadesManagement() {
 
   const handleDeleteExample = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('cleaning_parade_examples')
-        .delete()
-        .eq('id', id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('cleaning_parade_examples').delete().eq('id', id);
 
       if (error) throw error;
 

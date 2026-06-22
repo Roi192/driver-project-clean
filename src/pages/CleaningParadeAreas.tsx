@@ -72,7 +72,7 @@ const CleaningParadeAreas = () => {
         .order("display_order");
 
       if (error) throw error;
-      setAreas(data || []);
+      setAreas((data || []) as unknown as ResponsibilityArea[]);
     } catch (error) {
       console.error("Error fetching areas:", error);
       toast.error("שגיאה בטעינת תחומי האחריות");
@@ -91,23 +91,25 @@ const CleaningParadeAreas = () => {
       if (editingArea) {
         const { error } = await supabase
           .from("cleaning_responsibility_areas")
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .update({
             outpost: areaForm.outpost,
             area_name: areaForm.area_name,
             description: areaForm.description || null,
             display_order: areaForm.display_order,
-          })
+          } as any)
           .eq("id", editingArea.id);
 
         if (error) throw error;
         toast.success("תחום האחריות עודכן בהצלחה");
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await supabase.from("cleaning_responsibility_areas").insert({
           outpost: areaForm.outpost,
           area_name: areaForm.area_name,
           description: areaForm.description || null,
           display_order: areaForm.display_order,
-        });
+        } as any);
 
         if (error) throw error;
         toast.success("תחום האחריות נוסף בהצלחה");
@@ -164,7 +166,8 @@ const CleaningParadeAreas = () => {
         display_order: index,
       }));
 
-      const { error } = await supabase.from("cleaning_responsibility_areas").insert(newAreas);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.from("cleaning_responsibility_areas").insert(newAreas as any);
       if (error) throw error;
 
       toast.success(`נוספו ${defaultAreas.length} תחומי אחריות למוצב ${selectedOutpost}`);

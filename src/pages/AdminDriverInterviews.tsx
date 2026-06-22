@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -218,7 +218,7 @@ export default function AdminDriverInterviews() {
   }
 
   const renderBreadcrumb = () => {
-    const parts = [];
+    const parts: React.ReactNode[] = [];
     parts.push(
       <span 
         key="regions"

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from '@/hooks/useAuth';
+import { PWAInstallButton } from '@/components/pwa/PWAInstallButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,8 +85,9 @@ export default function Auth() {
       return;
     }
     setForgotLoading(true);
+    const baseUrl = Capacitor.isNativePlatform() ? 'https://driver-project.vercel.app' : window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${baseUrl}/reset-password`,
     });
     setForgotLoading(false);
     if (error) {
@@ -337,6 +340,8 @@ export default function Auth() {
               <span className="text-purple-700 font-bold text-sm">כניסה ←</span>
             </div>
           </button>
+
+          {!Capacitor.isNativePlatform() && <PWAInstallButton />}
         </CardContent>
       </Card>
 

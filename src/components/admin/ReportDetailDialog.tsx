@@ -27,30 +27,30 @@ interface ShiftReport {
   driver_name: string;
   vehicle_number: string;
   shift_type: string;
-  is_complete: boolean;
+  is_complete: boolean | null;
   created_at: string;
-  emergency_procedure_participation: boolean;
-  commander_briefing_attendance: boolean;
-  work_card_completed: boolean;
-  has_ceramic_vest: boolean;
-  has_helmet: boolean;
-  has_personal_weapon: boolean;
-  has_ammunition: boolean;
-  pre_movement_checks_completed: boolean;
+  emergency_procedure_participation: boolean | null;
+  commander_briefing_attendance: boolean | null;
+  work_card_completed: boolean | null;
+  has_ceramic_vest: boolean | null;
+  has_helmet: boolean | null;
+  has_personal_weapon: boolean | null;
+  has_ammunition: boolean | null;
+  pre_movement_checks_completed: boolean | null;
   pre_movement_items_checked?: string[] | null;
-  driver_tools_checked: boolean;
+  driver_tools_checked: boolean | null;
   driver_tools_items_checked?: string[] | null;
-  descent_drill_completed: boolean;
-  rollover_drill_completed: boolean;
-  fire_drill_completed: boolean;
-  safety_vulnerabilities?: string;
-  vardim_procedure_explanation?: string;
-  vardim_points?: string;
-  photo_front?: string;
-  photo_left?: string;
-  photo_right?: string;
-  photo_back?: string;
-  photo_steering_wheel?: string;
+  descent_drill_completed: boolean | null;
+  rollover_drill_completed: boolean | null;
+  fire_drill_completed: boolean | null;
+  safety_vulnerabilities?: string | null;
+  vardim_procedure_explanation?: string | null;
+  vardim_points?: string | null;
+  photo_front?: string | null;
+  photo_left?: string | null;
+  photo_right?: string | null;
+  photo_back?: string | null;
+  photo_steering_wheel?: string | null;
 }
 
 interface ReportDetailDialogProps {
@@ -65,7 +65,7 @@ const shiftTypeMap: Record<string, string> = {
   evening: 'ערב',
 };
 
-const CheckItem = ({ label, checked }: { label: string; checked: boolean }) => (
+const CheckItem = ({ label, checked }: { label: string; checked: boolean | null }) => (
   <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white border border-slate-100">
     <span className="text-sm font-medium text-slate-700">{label}</span>
     {checked ? (

@@ -45,13 +45,18 @@ export const registerAppServiceWorker = async () => {
   return registration;
 };
 
-export const listenForServiceWorkerUpdates = () => {
+export const listenForServiceWorkerUpdates = (onUpdate?: () => void) => {
   if (!("serviceWorker" in navigator)) return;
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!shouldReloadForUpdate()) return;
     markReloadForUpdate();
-    window.location.reload();
+
+    if (onUpdate) {
+      onUpdate();
+    } else {
+      window.location.reload();
+    }
   });
 };
 

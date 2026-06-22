@@ -60,6 +60,10 @@ interface SectorEvent {
   longitude: number | null;
   event_type: string | null;
   driver_type: string | null;
+  framework_type: string | null;
+  department: string | null;
+  battalion_name: string | null;
+  sector: string | null;
   region: string | null;
   outpost: string | null;
   soldier_id: string | null;
@@ -69,14 +73,35 @@ interface SectorEvent {
   soldiers?: Soldier;
 }
 
-type DriverType = 'security' | 'combat' | 'general';
+type DriverType = 'security' | 'vehicle_officer' | 'combat' | 'general' | 'other';
+type FrameworkType = 'planag' | 'maphot' | 'gdud' | 'other';
 type Severity = 'minor' | 'moderate' | 'severe';
 type IncidentType = 'accident' | 'rollover' | 'stuck' | 'other';
 
 const driverTypeLabels: Record<DriverType, string> = {
   security: 'נהג בט"ש',
-  combat: 'נהג גדוד',
-  general: 'נהג כללי'
+  vehicle_officer: 'נהג קצין רכב',
+  combat: 'נהג גדוד גזרתי',
+  general: 'נהג כללי / אגפי',
+  other: 'אחר',
+};
+
+const frameworkTypeLabels: Record<FrameworkType, string> = {
+  planag: 'פלנ"ג',
+  maphot: 'מפח"ט',
+  gdud: 'גדוד תע"ם',
+  other: 'אחר',
+};
+
+const maphotDepartmentLabels: Record<string, string> = {
+  tashkuv: 'תקשוב',
+  modiin: 'מודיעין',
+  agam: 'אג"מ',
+  logistics: 'לוגיסטיקה',
+  medical: 'רפואה',
+  shlishut: 'שלישות',
+  chimush: 'חימוש',
+  other: 'אחר',
 };
 
 const severityLabels: Record<string, string> = {
@@ -128,6 +153,10 @@ const AccidentsTracking = () => {
     event_date: format(new Date(), 'yyyy-MM-dd'),
     event_type: 'accident' as IncidentType,
     driver_type: 'security' as DriverType,
+    framework_type: '' as FrameworkType | '',
+    department: '',
+    battalion_name: '',
+    sector: '',
     soldier_id: '',
     driver_name: '',
     vehicle_number: '',
@@ -181,8 +210,12 @@ const AccidentsTracking = () => {
         event_date: data.event_date || null,
         event_type: data.event_type,
         driver_type: data.driver_type,
+        framework_type: data.framework_type || null,
+        department: data.framework_type === 'maphot' ? (data.department || null) : null,
+        battalion_name: data.framework_type === 'gdud' ? (data.battalion_name || null) : null,
+        sector: data.framework_type === 'gdud' ? (data.sector || null) : null,
         soldier_id: data.driver_type === 'security' ? data.soldier_id : null,
-        driver_name: data.driver_type === 'combat' ? (data.driver_name || null) : null,
+        driver_name: data.driver_type !== 'security' ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
         severity: data.severity,
         region: data.region || null,
@@ -217,8 +250,12 @@ const AccidentsTracking = () => {
         event_date: data.event_date || null,
         event_type: data.event_type,
         driver_type: data.driver_type,
+        framework_type: data.framework_type || null,
+        department: data.framework_type === 'maphot' ? (data.department || null) : null,
+        battalion_name: data.framework_type === 'gdud' ? (data.battalion_name || null) : null,
+        sector: data.framework_type === 'gdud' ? (data.sector || null) : null,
         soldier_id: data.driver_type === 'security' ? data.soldier_id : null,
-        driver_name: data.driver_type === 'combat' ? (data.driver_name || null) : null,
+        driver_name: data.driver_type !== 'security' ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
         severity: data.severity,
         region: data.region || null,
@@ -266,6 +303,10 @@ const AccidentsTracking = () => {
       event_date: format(new Date(), 'yyyy-MM-dd'),
       event_type: 'accident',
       driver_type: 'security',
+      framework_type: '',
+      department: '',
+      battalion_name: '',
+      sector: '',
       soldier_id: '',
       driver_name: '',
       vehicle_number: '',
@@ -288,6 +329,10 @@ const AccidentsTracking = () => {
       event_date: event.event_date || format(new Date(), 'yyyy-MM-dd'),
       event_type: (event.event_type as IncidentType) || 'accident',
       driver_type: (event.driver_type as DriverType) || 'security',
+      framework_type: (event.framework_type as FrameworkType) || '',
+      department: event.department || '',
+      battalion_name: event.battalion_name || '',
+      sector: event.sector || '',
       soldier_id: event.soldier_id || '',
       driver_name: event.driver_name || '',
       vehicle_number: event.vehicle_number || '',
@@ -459,8 +504,8 @@ const AccidentsTracking = () => {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>סוג נהג *</Label>
-          <Select 
-            value={formData.driver_type} 
+          <Select
+            value={formData.driver_type}
             onValueChange={(v: DriverType) => setFormData(p => ({ ...p, driver_type: v, soldier_id: '', driver_name: '' }))}
           >
             <SelectTrigger>
@@ -468,24 +513,86 @@ const AccidentsTracking = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="security">נהג בט"ש</SelectItem>
-              <SelectItem value="combat">נהג גדוד</SelectItem>
-              <SelectItem value="general">נהג כללי</SelectItem>
+              <SelectItem value="vehicle_officer">נהג קצין רכב</SelectItem>
+              <SelectItem value="combat">נהג גדוד גזרתי</SelectItem>
+              <SelectItem value="general">נהג כללי / אגפי</SelectItem>
+              <SelectItem value="other">אחר</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>חומרה</Label>
-          <Select value={formData.severity} onValueChange={(v: Severity) => setFormData(p => ({ ...p, severity: v }))}>
+          <Label>מסגרת</Label>
+          <Select
+            value={formData.framework_type}
+            onValueChange={(v: FrameworkType | '') => setFormData(p => ({ ...p, framework_type: v, department: '', battalion_name: '', sector: '' }))}
+          >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="בחר מסגרת" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="minor">קל</SelectItem>
-              <SelectItem value="moderate">בינוני</SelectItem>
-              <SelectItem value="severe">חמור</SelectItem>
+              <SelectItem value="planag">פלנ"ג</SelectItem>
+              <SelectItem value="maphot">מפח"ט</SelectItem>
+              <SelectItem value="gdud">גדוד תע"ם</SelectItem>
+              <SelectItem value="other">אחר</SelectItem>
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {formData.framework_type === 'maphot' && (
+        <div className="space-y-2">
+          <Label>אגף / מחלקה</Label>
+          <Select value={formData.department} onValueChange={(v) => setFormData(p => ({ ...p, department: v }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="בחר אגף" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tashkuv">תקשוב</SelectItem>
+              <SelectItem value="modiin">מודיעין</SelectItem>
+              <SelectItem value="agam">אג"מ</SelectItem>
+              <SelectItem value="logistics">לוגיסטיקה</SelectItem>
+              <SelectItem value="medical">רפואה</SelectItem>
+              <SelectItem value="shlishut">שלישות</SelectItem>
+              <SelectItem value="chimush">חימוש</SelectItem>
+              <SelectItem value="other">אחר</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {formData.framework_type === 'gdud' && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>שם הגדוד</Label>
+            <Input
+              value={formData.battalion_name}
+              onChange={(e) => setFormData(p => ({ ...p, battalion_name: e.target.value }))}
+              placeholder="הזן שם גדוד"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>גזרת הגדוד</Label>
+            <Input
+              value={formData.sector}
+              onChange={(e) => setFormData(p => ({ ...p, sector: e.target.value }))}
+              placeholder="לדוגמה: גזרה צפונית"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>חומרה</Label>
+        <Select value={formData.severity} onValueChange={(v: Severity) => setFormData(p => ({ ...p, severity: v }))}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="minor">קל</SelectItem>
+            <SelectItem value="moderate">בינוני</SelectItem>
+            <SelectItem value="severe">חמור</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {formData.driver_type === 'security' ? (

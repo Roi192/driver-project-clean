@@ -367,7 +367,7 @@ export default function DriverInterviews() {
     let interviewsQuery = supabase
       .from("driver_interviews")
       .select("id, interview_date, region, battalion, outpost, driver_name, interviewer_name, created_at")
-      .eq("user_id", user?.id)
+      .eq("user_id", user?.id ?? "")
       .order("interview_date", { ascending: false })
       .limit(20);
     let incidentsQuery = supabase
@@ -549,13 +549,12 @@ export default function DriverInterviews() {
       error = result.error;
     } else {
       // Insert new interview
-      const result = await supabase
-        .from("driver_interviews")
-        .insert({
-          user_id: user?.id,
-          ...interviewData,
-          signature: signature,
-        });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (supabase.from("driver_interviews") as any).insert({
+        user_id: user?.id ?? "",
+        ...interviewData,
+        signature: signature,
+      });
       
       error = result.error;
     }

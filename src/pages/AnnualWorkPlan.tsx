@@ -101,7 +101,7 @@ interface Soldier {
   release_date: string | null;
   control_removed_at?: string | null;
   created_at: string;
-  is_active: boolean;
+  is_active: boolean | null;
 }
 
 const ROTATION_GROUPS = [

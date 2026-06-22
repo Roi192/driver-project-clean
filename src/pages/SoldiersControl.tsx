@@ -57,7 +57,7 @@ interface Soldier {
   civilian_license_expiry: string | null;
   release_date: string | null;
   outpost: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
   created_at: string;
   release_reason?: string | null;
   defensive_driving_passed: boolean | null;

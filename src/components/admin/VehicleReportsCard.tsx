@@ -15,11 +15,11 @@ interface ShiftReport {
   outpost: string;
   driver_name: string;
   vehicle_number: string;
-  photo_front?: string;
-  photo_left?: string;
-  photo_right?: string;
-  photo_back?: string;
-  photo_steering_wheel?: string;
+  photo_front?: string | null;
+  photo_left?: string | null;
+  photo_right?: string | null;
+  photo_back?: string | null;
+  photo_steering_wheel?: string | null;
 }
 
 interface VehicleReportsCardProps {

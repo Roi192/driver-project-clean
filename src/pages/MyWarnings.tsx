@@ -35,12 +35,13 @@ export default function MyWarnings() {
   }, [user]);
 
   const load = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       const { data: profile } = await supabase
         .from("profiles")
         .select("personal_number")
-        .eq("user_id", user?.id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (!profile?.personal_number) {

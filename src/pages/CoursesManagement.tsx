@@ -37,8 +37,8 @@ interface Course {
   name: string;
   description: string | null;
   duration_days: number | null;
-  category: string;
-  is_active: boolean;
+  category: string | null;
+  is_active: boolean | null;
   created_at: string;
 }
 
@@ -267,7 +267,7 @@ const CoursesManagement = () => {
       name: course.name,
       description: course.description || "",
       duration_days: course.duration_days || 1,
-      category: course.category,
+      category: course.category ?? "",
     });
     setCourseDialogOpen(true);
   };

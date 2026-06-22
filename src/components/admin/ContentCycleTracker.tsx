@@ -58,7 +58,7 @@ interface Soldier {
   created_at?: string | null;
   release_date?: string | null;
   control_removed_at?: string | null;
-  is_active?: boolean;
+  is_active?: boolean | null;
 }
 
 interface ContentCycleOverride {

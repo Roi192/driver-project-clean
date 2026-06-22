@@ -1,10 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from '../_shared/cors.ts'
+import { sendWebPush } from '../_shared/webpush.ts'
 
 // Cleaning parade days configuration
 const CLEANING_DAYS = [
@@ -14,6 +11,8 @@ const CLEANING_DAYS = [
 ];
 
 serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'))
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -151,6 +150,9 @@ serve(async (req: Request) => {
         }
 
         // Send push notification to each subscription
+        const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY")!;
+        const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY")!;
+
         for (const sub of subscriptions) {
           try {
             const payload = JSON.stringify({
@@ -159,9 +161,12 @@ serve(async (req: Request) => {
               url: `/cleaning-parades?day=${cleaningDay.value}&outpost=${encodeURIComponent(outpost)}`,
             });
 
-            // Note: In production, you'd use web-push library here
-            // For now, we'll just log it and save to the log
-            console.log(`Would send push to ${soldier.full_name}: ${payload}`);
+            await sendWebPush(
+              { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+              payload,
+              vapidPublicKey,
+              vapidPrivateKey
+            );
           } catch (pushError) {
             console.error(`Push error for ${soldier.full_name}:`, pushError);
           }

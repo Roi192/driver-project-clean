@@ -17,7 +17,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-primary/3 to-accent/3 rounded-full blur-3xl pointer-events-none" />
 
       <MobileNav />
-      <main className="pt-16 pb-8 relative z-10 min-h-[calc(100vh-4rem)]">
+      <main className="pt-content-safe pb-8-safe relative z-10 min-h-[calc(100vh-4rem)]">
         {children}
       </main>
     </div>

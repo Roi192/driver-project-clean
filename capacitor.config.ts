@@ -14,7 +14,7 @@ const config: CapacitorConfig = {
   appName:  'Driver Shift',
   webDir: 'dist',
   server: {
-    cleartext: true
+    cleartext: false
   },
   plugins: {
     Geolocation: {

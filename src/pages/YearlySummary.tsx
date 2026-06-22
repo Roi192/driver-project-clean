@@ -228,7 +228,7 @@ export default function YearlySummary() {
       const releases = releasesAll.filter((r: any) => !isHidden("released", r.id));
       const releasesManual = manualOf("released");
       const releasesCombined = [...releases, ...releasesManual];
-      const intakeAll = soldiers.filter((s: any) => getDateKey(s.created_at) >= start && getDateKey(s.created_at) <= end);
+      const intakeAll = soldiers.filter((s: any) => { const d = getDateKey(s.created_at); return d !== null && d >= start && d <= end; });
       const intake = intakeAll.filter((s: any) => !isHidden("intake", s.id));
       const intakeManual = manualOf("intake");
       const intakeCombined = [...intake, ...intakeManual];

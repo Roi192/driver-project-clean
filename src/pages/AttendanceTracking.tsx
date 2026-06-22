@@ -61,7 +61,7 @@ interface Soldier {
   qualified_date: string | null;
   rotation_group: string | null;
   release_date: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
 }
 
 interface WorkPlanEvent {

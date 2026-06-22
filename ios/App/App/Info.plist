@@ -47,5 +47,26 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>האפליקציה משתמשת במצלמה לצילום תמונות של הרכב לפני ואחרי המשמרת</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>האפליקציה ניגשת לגלריה לבחירת תמונות לדוחות</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>האפליקציה שומרת תמונות בגלריה</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>האפליקציה משתמשת במיקום לצורך ניטור היציאה מאזור הפעילות</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>האפליקציה משתמשת במיקום ברקע לצורך ניטור היציאה מאזור הפעילות</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.driver.shift</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.driver.shift</string>
+		</dict>
+	</array>
 </dict>
 </plist>

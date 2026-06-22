@@ -4,7 +4,9 @@ import App from "./App.tsx";
 import "./index.css";
 import { listenForServiceWorkerUpdates } from "./lib/service-worker";
 
-listenForServiceWorkerUpdates();
+listenForServiceWorkerUpdates(() => {
+  document.dispatchEvent(new CustomEvent("sw-update-available"));
+});
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

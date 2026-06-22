@@ -92,7 +92,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
 
 const UsersManagement = () => {
   const navigate = useNavigate();
-  const { user, canDelete, isSuperAdmin, isDivisionAdmin, brigade: myBrigade } = useAuth();
+  const { user, canDelete, isSuperAdmin, isDivisionAdmin, isBattalionAdmin, brigade: myBrigade } = useAuth();
   const { isAdmin, canAccessUsersManagement, isLoading: roleLoading } = useUserRole();
   // In the division (מפאו"ג איו"ש) view the page must show ONLY users that registered
   // through the dedicated division link (brigade='division'). Brigade admins see only
@@ -149,14 +149,34 @@ const UsersManagement = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      
+
+      // For battalion admins: fetch their own battalion_name first, then scope the query
+      let myBattalionName: string | null = null;
+      if (isBattalionAdmin && user?.id) {
+        const { data: myProfile } = await supabase
+          .from("profiles")
+          .select("battalion_name")
+          .eq("user_id", user.id)
+          .single();
+        myBattalionName = myProfile?.battalion_name ?? null;
+      }
+
       const [profilesRes, rolesRes, soldiersRes] = await Promise.all([
         (() => {
           let q = supabase
             .from("profiles")
-            .select("*")
-            .or("department.eq.planag,department.is.null")
-            .neq("user_type", "battalion");
+            .select("*");
+
+          if (isBattalionAdmin) {
+            // Battalion admins see only their battalion's users
+            q = q.eq("user_type", "battalion");
+            if (myBattalionName) q = q.eq("battalion_name", myBattalionName);
+          } else {
+            q = q
+              .or("department.eq.planag,department.is.null")
+              .neq("user_type", "battalion");
+          }
+
           if (effectiveBrigadeFilter) {
             q = q.eq("brigade", effectiveBrigadeFilter);
           }
