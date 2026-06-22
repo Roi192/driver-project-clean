@@ -1,7 +1,7 @@
-// Service Worker for Push Notifications + basic PWA support
-const CACHE_NAME = "bvt-driving-v2";
+// Service Worker for Push Notifications + PWA caching
+// Military fleet management application - planag binyamin
+const CACHE_NAME = "bvt-driving-v3";
 const APP_SHELL = [
-  "/",
   "/manifest.json",
   "/pwa-192x192.png",
   "/pwa-512x512.png",
@@ -9,127 +9,78 @@ const APP_SHELL = [
   "/favicon.ico",
 ];
 
-// Install
+// Install - cache static assets only
 self.addEventListener("install", (event) => {
-  console.log("Push Service Worker installed");
-
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(APP_SHELL).catch((err) => {
-        console.warn("Failed to cache app shell:", err);
-      });
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(APP_SHELL).catch((err) => console.warn("Cache failed:", err))
+    )
   );
-
   self.skipWaiting();
 });
 
-// Activate
+// Activate - clean old caches
 self.addEventListener("activate", (event) => {
-  console.log("Push Service Worker activated");
-
   event.waitUntil(
     Promise.all([
       self.clients.claim(),
-      caches.keys().then((cacheNames) =>
-        Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME) {
-              return caches.delete(cacheName);
-            }
-          })
-        )
+      caches.keys().then((keys) =>
+        Promise.all(keys.map((k) => k !== CACHE_NAME && caches.delete(k)))
       ),
     ])
   );
 });
 
-// Fetch
+// Fetch - cache only static assets (images, icons, fonts)
+// Navigation and API requests always go to network
 self.addEventListener("fetch", (event) => {
-  const request = event.request;
-
-  // רק GET
+  const { request } = event;
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-
-  // לא מתערבים בקריאות של תוספים / כרום פנימי
   if (!url.protocol.startsWith("http")) return;
 
-  // Supabase / API - עדיף רשת קודם
-  if (url.hostname.includes("supabase.co")) {
-    event.respondWith(
-      fetch(request).catch(() => caches.match(request))
-    );
-    return;
+  // API and navigation requests: network only, no caching
+  if (
+    url.hostname.includes("supabase.co") ||
+    request.mode === "navigate"
+  ) {
+    return; // let browser handle normally
   }
 
-  // ניווטי דפים - network first, fallback ל-cache
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone);
-          });
-          return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match(request);
-          if (cached) return cached;
+  // Static assets (images, icons, fonts): cache first
+  const isStaticAsset =
+    request.destination === "image" ||
+    request.destination === "font" ||
+    url.pathname.startsWith("/pwa-") ||
+    url.pathname.startsWith("/apple-") ||
+    url.pathname === "/favicon.ico";
 
-          // fallback לדף הבית
-          const home = await caches.match("/");
-          return home || Response.error();
-        })
-    );
-    return;
-  }
+  if (!isStaticAsset) return;
 
-  // שאר הקבצים - cache first
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(request)
-        .then((response) => {
-          // שומרים רק תגובות תקינות
-          if (!response || response.status !== 200 || response.type !== "basic") {
-            return response;
+    caches.match(request).then(
+      (cached) =>
+        cached ||
+        fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
           }
-
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone);
-          });
-
           return response;
         })
-        .catch(() => {
-          // fallback לתמונות/אייקונים אם צריך
-          if (request.destination === "image") {
-            return caches.match("/pwa-192x192.png");
-          }
-          return Response.error();
-        });
-    })
+    )
   );
 });
 
-// Push notifications
+// Push notification received from server
 self.addEventListener("push", (event) => {
-  console.log("Push notification received:", event);
-
-  let data = {
-    title: "התראה",
-    body: "יש לך עדכון חדש",
+  let payload = {
+    title: "התראה חדשה",
+    body: "יש לך עדכון",
     icon: "/pwa-192x192.png",
     badge: "/pwa-192x192.png",
-    vibrate: [200, 100, 200],
-    tag: "default-notification",
-    renotify: true,
-    requireInteraction: true,
+    tag: "app-notification",
     dir: "rtl",
     lang: "he",
     data: { url: "/" },
@@ -137,52 +88,39 @@ self.addEventListener("push", (event) => {
 
   if (event.data) {
     try {
-      const payload = event.data.json();
-      data = { ...data, ...payload };
-    } catch (e) {
-      data.body = event.data.text();
+      Object.assign(payload, event.data.json());
+    } catch {
+      payload.body = event.data.text();
     }
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon,
-      badge: data.badge,
-      vibrate: data.vibrate || [200, 100, 200],
-      tag: data.tag,
-      renotify: data.renotify !== false,
-      requireInteraction: data.requireInteraction !== false,
-      dir: data.dir || "rtl",
-      lang: data.lang || "he",
-      data: data.data || { url: "/" },
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon,
+      badge: payload.badge,
+      tag: payload.tag,
+      dir: payload.dir,
+      lang: payload.lang,
+      data: payload.data,
+      requireInteraction: false,
+      renotify: false,
     })
   );
 });
 
-// Notification click
+// Notification click - open the app
 self.addEventListener("notificationclick", (event) => {
-  console.log("Notification clicked:", event);
   event.notification.close();
-
   const targetUrl = event.notification?.data?.url || "/";
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ("focus" in client) {
-          try {
-            client.navigate(targetUrl);
-          } catch (e) {
-            console.warn("Navigation failed:", e);
-          }
-          return client.focus();
-        }
-      }
-
-      if (self.clients.openWindow) {
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        const existing = clients.find((c) => c.url.includes(self.location.origin));
+        if (existing) return existing.focus();
         return self.clients.openWindow(targetUrl);
-      }
-    })
+      })
   );
 });
