@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, ChevronDown, ChevronUp, Sparkles, TrendingUp } from 'lucide-react';
-import { OUTPOSTS } from '@/lib/constants';
+import { MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ShiftReport {
@@ -15,14 +14,21 @@ interface ShiftReport {
 
 interface OutpostStatsCardProps {
   reports: ShiftReport[];
+  outposts: string[];
 }
 
-export function OutpostStatsCard({ reports }: OutpostStatsCardProps) {
+export function OutpostStatsCard({ reports, outposts }: OutpostStatsCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedOutpost, setSelectedOutpost] = useState<string | null>(null);
 
+  // Merge: tracked outposts + any outpost that has reports (for backwards compat)
+  const allOutpostNames = Array.from(new Set([
+    ...outposts,
+    ...reports.map(r => r.outpost).filter(Boolean),
+  ]));
+
   // Calculate reports per outpost
-  const outpostStats = OUTPOSTS.map(outpost => {
+  const outpostStats = allOutpostNames.map(outpost => {
     const outpostReports = reports.filter(r => r.outpost === outpost);
     return {
       name: outpost,

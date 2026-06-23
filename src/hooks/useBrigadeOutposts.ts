@@ -7,6 +7,7 @@ export interface BrigadeOutpost {
   brigade: string;
   name: string;
   region: string | null;
+  track_shift_forms: boolean;
 }
 
 /**

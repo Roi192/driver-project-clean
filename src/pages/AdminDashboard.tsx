@@ -352,7 +352,10 @@ export default function AdminDashboard() {
 
             <ShiftStatsCard reports={reports} />
             <VehicleReportsCard reports={reports} />
-            <OutpostStatsCard reports={reports} />
+            <OutpostStatsCard
+              reports={reports}
+              outposts={brigadeOutposts.filter(o => o.track_shift_forms !== false).map(o => o.name)}
+            />
             
             <IncompleteReportsCard 
               reports={reports} 

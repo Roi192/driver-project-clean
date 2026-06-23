@@ -11,6 +11,7 @@ import { useBrigadeOutposts, BrigadeOutpost } from "@/hooks/useBrigadeOutposts";
 import { supabase } from "@/integrations/supabase/client";
 import { BRIGADES, getBrigade } from "@/lib/brigades";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import { Building, Plus, Pencil, Trash2, Loader2, MapPin, Navigation, Lock, X, Layers } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { Navigate } from "react-router-dom";
@@ -121,6 +122,18 @@ export default function BrigadeOutpostsManagement() {
     }
     toast.success("המוצב נמחק בהצלחה");
     setDeleteTarget(null);
+    refetch();
+  };
+
+  const handleToggleTrackShiftForms = async (op: BrigadeOutpost) => {
+    const { error } = await supabase
+      .from("brigade_outposts" as any)
+      .update({ track_shift_forms: !op.track_shift_forms } as any)
+      .eq("id", op.id);
+    if (error) {
+      toast.error(`שגיאה בעדכון: ${error.message}`);
+      return;
+    }
     refetch();
   };
 
@@ -257,9 +270,16 @@ export default function BrigadeOutpostsManagement() {
                           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                             <MapPin className="w-4 h-4 text-primary" />
                           </div>
-                          <p className="font-bold text-slate-800 truncate">{op.name}</p>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 truncate">{op.name}</p>
+                            <p className="text-xs text-slate-500">מעקב טפסי משמרת</p>
+                          </div>
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Switch
+                            checked={op.track_shift_forms !== false}
+                            onCheckedChange={() => handleToggleTrackShiftForms(op)}
+                          />
                           <Button
                             size="icon"
                             variant="outline"
