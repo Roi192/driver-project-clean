@@ -24,7 +24,7 @@ export function PWAInstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [showIOSHint, setShowIOSHint] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
   useEffect(() => {
     if (wasDismissedRecently()) return;
@@ -46,15 +46,19 @@ export function PWAInstallButton() {
 
   const handleInstall = async () => {
     if (isIOS) {
-      setShowIOSHint(true);
+      setShowHint(true);
       return;
     }
     if (deferredPrompt) {
+      // Android native install prompt — triggers browser dialog automatically
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === "accepted") setVisible(false);
       setDeferredPrompt(null);
+      return;
     }
+    // Android but prompt not available (Chrome dismissed it or app already installed)
+    setShowHint(true);
   };
 
   const handleDismiss = () => {
@@ -87,16 +91,19 @@ export function PWAInstallButton() {
         </button>
       </div>
 
-      {/* iOS hint banner — appears below the button */}
-      {showIOSHint && (
-        <div className="mt-2 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm font-semibold animate-slide-up">
-          <Share2 className="w-5 h-5 shrink-0 text-blue-600" />
-          <span>לחץ על <Share2 className="inline w-4 h-4 mx-0.5" /> בתחתית הדפדפן ← "הוסף למסך הבית"</span>
-          <button
-            onClick={() => setShowIOSHint(false)}
-            className="mr-auto p-0.5 rounded hover:bg-blue-200 transition-colors"
-            aria-label="סגור"
-          >
+      {showHint && (
+        <div className="mt-2 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm font-semibold">
+          {isIOS ? (
+            <span className="flex items-center gap-1 flex-1">
+              <Share2 className="w-4 h-4 shrink-0 text-blue-600" />
+              לחץ על כפתור השיתוף בדפדפן ← "הוסף למסך הבית"
+            </span>
+          ) : (
+            <span className="flex-1">
+              לחץ על ⋮ בדפדפן ← "הוסף למסך הבית" / "התקן אפליקציה"
+            </span>
+          )}
+          <button onClick={() => setShowHint(false)} className="p-0.5 rounded hover:bg-blue-200 transition-colors shrink-0">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
