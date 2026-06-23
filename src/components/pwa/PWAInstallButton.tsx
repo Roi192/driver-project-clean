@@ -7,6 +7,12 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+declare global {
+  interface Window {
+    __pwaInstallPrompt: BeforeInstallPromptEvent | null;
+  }
+}
+
 const DISMISS_KEY = "pwa-install-btn-dismissed";
 const DISMISS_DAYS = 7;
 
@@ -36,6 +42,13 @@ export function PWAInstallButton() {
 
     if (ios) return;
 
+    // Pick up any prompt that was captured before React mounted (in index.html)
+    if (window.__pwaInstallPrompt) {
+      setDeferredPrompt(window.__pwaInstallPrompt);
+      window.__pwaInstallPrompt = null;
+    }
+
+    // Also listen for prompts that fire after mount
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -50,14 +63,13 @@ export function PWAInstallButton() {
       return;
     }
     if (deferredPrompt) {
-      // Android native install prompt — triggers browser dialog automatically
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === "accepted") setVisible(false);
       setDeferredPrompt(null);
       return;
     }
-    // Android but prompt not available (Chrome dismissed it or app already installed)
+    // Prompt not available — browser may have throttled it or app is already installed
     setShowHint(true);
   };
 
@@ -96,7 +108,7 @@ export function PWAInstallButton() {
           {isIOS ? (
             <span className="flex items-center gap-1 flex-1">
               <Share2 className="w-4 h-4 shrink-0 text-blue-600" />
-              לחץ על כפתור השיתוף בדפדפן ← "הוסף למסך הבית"
+              לחץ על כפתור השיתוף ← "הוסף למסך הבית"
             </span>
           ) : (
             <span className="flex-1">
