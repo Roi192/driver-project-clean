@@ -13,7 +13,7 @@ export interface BrigadeOutpost {
  * Fetches outposts for the current user's brigade (or a specific brigade if provided).
  * Division admins / super admins see all brigades when no `brigade` is passed.
  */
-export function useBrigadeOutposts(brigadeOverride?: string | null) {
+export function useBrigadeOutposts(brigadeOverride?: string | null, loadAll = false) {
   const { brigade: myBrigade, isDivisionAdmin } = useAuth();
   const targetBrigade = brigadeOverride ?? myBrigade ?? null;
   const [outposts, setOutposts] = useState<BrigadeOutpost[]>([]);
@@ -22,12 +22,13 @@ export function useBrigadeOutposts(brigadeOverride?: string | null) {
   const fetchOutposts = useCallback(async () => {
     setLoading(true);
     let query = supabase.from("brigade_outposts" as any).select("*").order("name");
-    // If a specific brigade is requested, always filter to it.
-    // Otherwise, division admins see all; everyone else sees their own brigade.
-    if (brigadeOverride) {
-      query = query.eq("brigade", brigadeOverride);
-    } else if (!isDivisionAdmin && targetBrigade) {
-      query = query.eq("brigade", targetBrigade);
+    // loadAll overrides all filtering — used when a brigade selector exists in-form
+    if (!loadAll) {
+      if (brigadeOverride) {
+        query = query.eq("brigade", brigadeOverride);
+      } else if (!isDivisionAdmin && targetBrigade) {
+        query = query.eq("brigade", targetBrigade);
+      }
     }
     const { data, error } = await query;
     if (!error && data) {
@@ -36,7 +37,7 @@ export function useBrigadeOutposts(brigadeOverride?: string | null) {
       setOutposts([]);
     }
     setLoading(false);
-  }, [brigadeOverride, isDivisionAdmin, targetBrigade]);
+  }, [brigadeOverride, isDivisionAdmin, targetBrigade, loadAll]);
 
   useEffect(() => {
     fetchOutposts();

@@ -31,7 +31,8 @@ export function AdminNav({ onClose }: Props) {
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
   const isInDivisionView = isDivisionUser && !activeBrigade && !isInHagmar && !isOnDepartmentSelector;
   const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin || (realIsDivisionAdmin && !!activeBrigade);
-  const showPlanagMenu = !isInHagmar && !isInBattalionContext && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
+  // Battalion admins who have selected a specific brigade should see the brigade admin menu
+  const showPlanagMenu = !isInHagmar && (!isInBattalionContext || (isBattalionAdmin && !!activeBrigade)) && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
   const showSuperAdminSelector = isSuperAdmin && isOnDepartmentSelector;
 
   if (!showSuperAdminSelector && (!hasAdminAccess || !showPlanagMenu)) return null;

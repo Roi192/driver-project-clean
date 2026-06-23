@@ -5,6 +5,7 @@ import { DivisionDashboard } from "@/components/division/DivisionDashboard";
 import { HeroSection } from "@/components/home/HeroSection";
 import { QuickActions } from "@/components/home/QuickActions";
 import { DriverHomeContent } from "@/components/home/DriverHomeContent";
+import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -132,6 +133,11 @@ const Index = () => {
       <HeroSection />
       {user && <DriverHomeContent />}
       <QuickActions />
+      {user && (
+        <div className="px-4 pb-4">
+          <PWAInstallButton />
+        </div>
+      )}
     </AppLayout>
   );
 };

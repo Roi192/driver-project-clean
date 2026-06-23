@@ -196,7 +196,9 @@ const getFields = (
   regionOptions: { value: string; label: string }[] = [],
   outpostOptions: { value: string; label: string }[] = [],
   battalionFrameworkValues: string[] = [],
-  outpostsData: { name: string; region: string | null }[] = [],
+  outpostsData: { name: string; region: string | null; brigade?: string }[] = [],
+  allFrameworks: import("@/hooks/useFrameworks").Framework[] = [],
+  myBrigade = "",
 ): FieldConfig[] => {
   const brigadeField: FieldConfig = {
     name: "brigade",
@@ -233,39 +235,60 @@ const getFields = (
         name: "framework_type",
         label: "מסגרת",
         type: "select",
-        options: frameworkOptions.length > 0
-          ? frameworkOptions
-          : [{ value: "other", label: "אחר" }],
+        // Dynamic options: filter planag frameworks by selected brigade, plus auto-generate battalion/sector options
+        dynamicOptions: (formData) => {
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const planagFws = allFrameworks.filter(f =>
+            !f.parent_id && f.is_active &&
+            (!selectedBrigade || f.brigade === selectedBrigade)
+          );
+          const planagOpts = planagFws.map(f => ({ value: f.name, label: f.name }));
+          const brigadeOutposts = selectedBrigade
+            ? outpostsData.filter(o => o.brigade === selectedBrigade)
+            : outpostsData;
+          const regions = [...new Set(brigadeOutposts.map(o => o.region).filter(Boolean))] as string[];
+          const battalionOpts = regions.map(r => ({ value: `sector:${r}`, label: `גדוד ${r}` }));
+          const combined = [...planagOpts, ...battalionOpts];
+          return combined.length > 0 ? combined : [{ value: "other", label: "אחר" }];
+        },
         placeholder: "בחר מסגרת",
       },
       {
         name: "department",
         label: "אגף",
         type: "select",
-        options: departmentOptions.length > 0
-          ? departmentOptions
-          : [{ value: "other", label: "אחר" }],
+        dynamicOptions: (formData) => {
+          const fw = String(formData.framework_type || "");
+          if (!fw || fw.startsWith("sector:")) return [];
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const parent = allFrameworks.find(f => f.name === fw && !f.parent_id && f.is_active && (!selectedBrigade || f.brigade === selectedBrigade));
+          if (!parent) return departmentOptions;
+          const children = allFrameworks.filter(f => f.parent_id === parent.id && f.is_active);
+          return children.length > 0 ? children.map(c => ({ value: c.name, label: c.name })) : [];
+        },
         placeholder: "בחר אגף",
-        dependsOn: frameworkNamesWithDepts.length > 0
-          ? { field: "framework_type", value: frameworkNamesWithDepts }
-          : { field: "framework_type", value: "__never__" },
+        condition: (formData) => {
+          const fw = String(formData.framework_type || "");
+          if (!fw || fw.startsWith("sector:")) return false;
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const parent = allFrameworks.find(f => f.name === fw && !f.parent_id && f.is_active && (!selectedBrigade || f.brigade === selectedBrigade));
+          if (!parent) return false;
+          return allFrameworks.some(f => f.parent_id === parent.id && f.is_active);
+        },
       },
       {
         name: "battalion_name",
         label: "שם הגדוד",
         type: "text",
         placeholder: "הזן שם גדוד...",
-        dependsOn: battalionFrameworkValues.length > 0
-          ? { field: "framework_type", value: battalionFrameworkValues }
-          : { field: "framework_type", value: "__never__" },
+        condition: (formData) => String(formData.framework_type || "").startsWith("sector:"),
       },
       {
         name: "driver_type",
         label: "סוג נהג",
         type: "select",
         dynamicOptions: (formData) => {
-          const fw = String(formData.framework_type || "");
-          if (battalionFrameworkValues.includes(fw)) {
+          if (String(formData.framework_type || "").startsWith("sector:")) {
             return [...DRIVER_TYPES_BATTALION];
           }
           return [...DRIVER_TYPES];
@@ -292,13 +315,17 @@ const getFields = (
         name: "region",
         label: "גזרה",
         type: "select",
-        options: regionOptions.length > 0
-          ? regionOptions
-          : [{ value: "other", label: "אחר" }],
+        dynamicOptions: (formData) => {
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const brigadeOutposts = selectedBrigade
+            ? outpostsData.filter(o => o.brigade === selectedBrigade)
+            : outpostsData;
+          const regions = [...new Set(brigadeOutposts.map(o => o.region).filter(Boolean))] as string[];
+          return regions.length > 0 ? regions.map(r => ({ value: r, label: r })) : [{ value: "other", label: "אחר" }];
+        },
         placeholder: "בחר גזרה",
-        dependsOn: battalionFrameworkValues.length > 0
-          ? { field: "framework_type", value: [...frameworkOptions.map(f => f.value).filter(v => !battalionFrameworkValues.includes(v)), "other"] }
-          : undefined,
+        // Only show region when a battalion/sector framework is selected
+        condition: (formData) => String(formData.framework_type || "").startsWith("sector:"),
       },
       {
         name: "outpost",
@@ -306,23 +333,22 @@ const getFields = (
         type: "select",
         dynamicOptions: (formData) => {
           const fw = String(formData.framework_type || "");
-          const reg = String(formData.region || "");
-          const isBattalionFw = battalionFrameworkValues.includes(fw);
-          if (isBattalionFw && fw.startsWith("sector:")) {
-            const region = fw.replace("sector:", "");
-            const filtered = outpostsData.filter(o => o.region === region);
-            return filtered.length > 0
-              ? filtered.map(o => ({ value: o.name, label: o.name }))
-              : [{ value: "other", label: "אחר" }];
-          }
-          if (reg) {
-            const filtered = outpostsData.filter(o => o.region === reg);
-            if (filtered.length > 0) return filtered.map(o => ({ value: o.name, label: o.name }));
-          }
-          return outpostsData.length > 0
-            ? outpostsData.map(o => ({ value: o.name, label: o.name }))
-            : [{ value: "other", label: "אחר" }];
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const isBattalionFw = fw.startsWith("sector:");
+          const region = isBattalionFw ? fw.replace("sector:", "") : String(formData.region || "");
+          const brigadeOutposts = selectedBrigade
+            ? outpostsData.filter(o => o.brigade === selectedBrigade)
+            : outpostsData;
+          const filtered = region
+            ? brigadeOutposts.filter(o => o.region === region)
+            : brigadeOutposts;
+          const outpostOpts = filtered.map(o => ({ value: o.name, label: o.name }));
+          // Add מפג"ד for battalion framework
+          if (isBattalionFw) outpostOpts.unshift({ value: "מפג\"ד", label: 'מפג"ד' });
+          return outpostOpts.length > 0 ? outpostOpts : [{ value: "other", label: "אחר" }];
         },
+        // Only show outpost when battalion framework selected
+        condition: (formData) => String(formData.framework_type || "").startsWith("sector:"),
         placeholder: "בחר מוצב"
       },
       {
@@ -386,28 +412,35 @@ export default function SafetyEvents() {
     });
   }, [isBattalionUser]);
 
-  // Dynamic frameworks and outposts from DB — filtered by brigade
-  const effectiveBrigade = isDivisionAdmin ? undefined : myBrigade;
-  const { rootFrameworks, getChildren } = useFrameworks(effectiveBrigade);
-  const { outposts } = useBrigadeOutposts();
+  // Load all frameworks and outposts when brigade selector is shown (battalion/division users)
+  // so the form can dynamically filter by the selected brigade
+  const { frameworks: allFrameworks, getChildren } = useFrameworks(showBrigadeSelector ? undefined : myBrigade);
+  const { outposts: allOutposts } = useBrigadeOutposts(null, showBrigadeSelector);
 
-  // Unique regions (sectors) from outpost management — generate battalion framework options
-  const uniqueRegions = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
-  const battalionFrameworkValues = uniqueRegions.map(r => `sector:${r}`);
+  // For non-brigade-selector users, filter to their own brigade
+  const myOutposts = showBrigadeSelector ? allOutposts : allOutposts.filter(o => o.brigade === myBrigade);
 
-  const planagFrameworkOptions = rootFrameworks.map(f => ({ value: f.name, label: f.name }));
-  const battalionFromRegionOptions = uniqueRegions.map(r => ({ value: `sector:${r}`, label: `גדוד ${r}` }));
-  const frameworkOptions = [...planagFrameworkOptions, ...battalionFromRegionOptions];
-
-  const frameworkNamesWithDepts = rootFrameworks
-    .filter(f => getChildren(f.id).length > 0)
+  // Static computed for non-brigade-selector users (used in submit handler)
+  const uniqueRegions = [...new Set(myOutposts.map(o => o.region).filter(Boolean))] as string[];
+  const frameworkNamesWithDepts = allFrameworks
+    .filter(f => !f.parent_id && f.is_active && f.brigade === myBrigade && getChildren(f.id).length > 0)
     .map(f => f.name);
-  const departmentOptions = rootFrameworks
+  const departmentOptions = allFrameworks
+    .filter(f => !f.parent_id && f.is_active && f.brigade === myBrigade)
     .flatMap(f => getChildren(f.id))
     .map(d => ({ value: d.name, label: d.name }));
   const regionOptions = uniqueRegions.map(r => ({ value: r, label: r }));
-  const outpostOptions = outposts.map(o => ({ value: o.name, label: o.name }));
-  const outpostsData = outposts.map(o => ({ name: o.name, region: o.region }));
+  const outpostOptions = myOutposts.map(o => ({ value: o.name, label: o.name }));
+  const outpostsData = allOutposts;
+
+  // frameworkOptions / battalionFrameworkValues are now dynamic (computed per selected brigade in form)
+  // These are only used as fallback for non-brigade-selector cases
+  const myRootFrameworks = allFrameworks.filter(f => !f.parent_id && f.is_active && f.brigade === myBrigade);
+  const frameworkOptions = [
+    ...myRootFrameworks.map(f => ({ value: f.name, label: f.name })),
+    ...uniqueRegions.map(r => ({ value: `sector:${r}`, label: `גדוד ${r}` })),
+  ];
+  const battalionFrameworkValues = uniqueRegions.map(r => `sector:${r}`);
 
   const [view, setView] = useState<View>("categories");
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
@@ -499,7 +532,7 @@ export default function SafetyEvents() {
   const openAddDialog = () => {
     if (!selectedCategory) return;
 
-    const builtFields = getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData);
+    const builtFields = getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData, allFrameworks, myBrigade);
     const initialFormData = {
       ...createEmptyFormData(builtFields),
       ...(isBattalionUser && userBattalionName ? { battalion_name: userBattalionName } : {}),
@@ -1330,7 +1363,7 @@ export default function SafetyEvents() {
     return null;
   };
 
-  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData) : [];
+  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData, allFrameworks, myBrigade) : [];
 
   return (
     <AppLayout>

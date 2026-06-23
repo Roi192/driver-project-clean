@@ -54,6 +54,8 @@ export interface FieldConfig {
     field: string;
     value: string | string[];
   };
+  // Dynamic condition function (overrides dependsOn if both present)
+  condition?: (formData: FormValues) => boolean;
 }
 
 interface AddEditDialogProps {
@@ -179,7 +181,8 @@ export function AddEditDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-5 pt-4">
           {fields.filter((field) => {
-            // Check if field should be displayed based on dependsOn condition
+            // condition function takes priority over dependsOn
+            if (field.condition) return field.condition(formData);
             if (!field.dependsOn) return true;
             const dependentValue = formData[field.dependsOn.field];
             if (Array.isArray(field.dependsOn.value)) {
