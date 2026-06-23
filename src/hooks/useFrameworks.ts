@@ -26,17 +26,17 @@ export const FRAMEWORK_TYPE_LABELS: Record<Framework["type"], string> = {
   other: "אחר",
 };
 
-export function useFrameworks() {
+export function useFrameworks(brigadeFilter?: string) {
   const queryClient = useQueryClient();
 
   const { data: frameworks = [], isLoading } = useQuery({
-    queryKey: ["frameworks"],
+    queryKey: ["frameworks", brigadeFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("frameworks" as any)
-        .select("*")
-        .order("type")
-        .order("name");
+      let q = supabase.from("frameworks" as any).select("*").order("type").order("name");
+      if (brigadeFilter) {
+        q = q.eq("brigade", brigadeFilter);
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return (data || []) as Framework[];
     },

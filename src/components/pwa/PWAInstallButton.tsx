@@ -33,6 +33,7 @@ export function PWAInstallButton() {
   const [isIOS, setIsIOS] = useState(false);
   const [visible, setVisible] = useState(false);
   const [showIOSDialog, setShowIOSDialog] = useState(false);
+  const [showAndroidDialog, setShowAndroidDialog] = useState(false);
 
   useEffect(() => {
     if (wasDismissedRecently()) return;
@@ -41,15 +42,14 @@ export function PWAInstallButton() {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as Window & { MSStream?: unknown }).MSStream;
     setIsIOS(ios);
 
-    if (ios) {
-      setVisible(true);
-      return;
-    }
+    // Always show the button (for iOS and non-iOS alike)
+    setVisible(true);
+
+    if (ios) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setVisible(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
@@ -60,13 +60,17 @@ export function PWAInstallButton() {
       setShowIOSDialog(true);
       return;
     }
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setVisible(false);
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        setVisible(false);
+      }
+      setDeferredPrompt(null);
+    } else {
+      // No native prompt available — show manual Android instructions
+      setShowAndroidDialog(true);
     }
-    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
@@ -135,6 +139,41 @@ export function PWAInstallButton() {
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 font-bold text-primary text-sm">3</div>
               <div className="text-right">
                 <p className="text-sm font-semibold">לחץ "הוסף" בפינה הימנית</p>
+                <p className="text-xs text-muted-foreground mt-0.5">האפליקציה תופיע על המסך</p>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAndroidDialog} onOpenChange={setShowAndroidDialog}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-right">
+              <Smartphone className="w-5 h-5 text-primary" />
+              הוסף למסך הבית
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              שלבים להוספת האפליקציה באנדרואיד
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 font-bold text-primary text-sm">1</div>
+              <div className="text-right">
+                <p className="text-sm font-semibold">לחץ על תפריט שלוש הנקודות ⋮ בדפדפן</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 font-bold text-primary text-sm">2</div>
+              <div className="text-right">
+                <p className="text-sm font-semibold">בחר 'הוסף למסך הבית' או 'התקן אפליקציה'</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 font-bold text-primary text-sm">3</div>
+              <div className="text-right">
+                <p className="text-sm font-semibold">לחץ 'התקן' / 'הוסף'</p>
                 <p className="text-xs text-muted-foreground mt-0.5">האפליקציה תופיע על המסך</p>
               </div>
             </div>

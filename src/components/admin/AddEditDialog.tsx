@@ -42,6 +42,7 @@ export interface FieldConfig {
   placeholder?: string;
   required?: boolean;
   options?: { value: string; label: string }[];
+  dynamicOptions?: (formData: FormValues) => { value: string; label: string }[];
   mediaTypes?: ("video" | "youtube" | "pdf" | "file")[];
   imagePickerMode?: "auto" | "file";
   imageAccept?: string;
@@ -213,7 +214,7 @@ export function AddEditDialog({
                     <SelectValue placeholder={field.placeholder || "בחר..."} />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-2 border-border/50 rounded-xl">
-                    {field.options?.map((option) => (
+                    {(field.dynamicOptions ? field.dynamicOptions(formData) : (field.options || [])).map((option) => (
                       <SelectItem key={option.value} value={option.value} className="rounded-lg text-slate-700">
                         {option.label}
                       </SelectItem>

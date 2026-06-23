@@ -11,15 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import { Shield, Loader2, Users } from 'lucide-react';
 import unitLogo from '@/assets/unit-logo.png';
 import bgVehicles from '@/assets/bg-vehicles.png';
-import { OUTPOSTS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
-
-const REGIONS = [
-  "ארץ בנימין",
-  "גבעת בנימין", 
-  "טלמונים",
-  "מכבים"
-] as const;
 
 const MILITARY_ROLES = [
   "מג\"ד",
@@ -31,20 +23,13 @@ const MILITARY_ROLES = [
   "אחר"
 ] as const;
 
-const PLATOONS = [
-  "גדודי",
-  ...OUTPOSTS
-] as const;
-
 export default function AuthBattalion() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [personalNumber, setPersonalNumber] = useState('');
-  const [region, setRegion] = useState('');
   const [militaryRole, setMilitaryRole] = useState('');
-  const [platoon, setPlatoon] = useState('');
   const [battalionName, setBattalionName] = useState('');
   
   const { signIn, signUp, signOut, user } = useAuth();
@@ -84,7 +69,7 @@ export default function AuthBattalion() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password || !fullName || !region || !militaryRole || !platoon || !battalionName) {
+    if (!email || !password || !fullName || !militaryRole || !battalionName) {
       toast({ title: 'שגיאה', description: 'נא למלא את כל השדות הנדרשים', variant: 'destructive' });
       return;
     }
@@ -109,9 +94,7 @@ export default function AuthBattalion() {
       password,
       fullName,
       userType: 'battalion',
-      region,
       militaryRole,
-      platoon,
       personalNumber: personalNumber || undefined,
       battalionName: battalionName || undefined,
     });
@@ -210,18 +193,6 @@ export default function AuthBattalion() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-800 font-semibold">גזרה *</Label>
-                  <Select value={region} onValueChange={setRegion}>
-                    <SelectTrigger className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl">
-                      <SelectValue placeholder="בחר גזרה" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {REGIONS.map(r => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
                   <Label className="text-slate-800 font-semibold">תפקיד *</Label>
                   <Select value={militaryRole} onValueChange={setMilitaryRole}>
                     <SelectTrigger className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl">
@@ -229,18 +200,6 @@ export default function AuthBattalion() {
                     </SelectTrigger>
                     <SelectContent>
                       {MILITARY_ROLES.map(r => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-slate-800 font-semibold">פלוגה *</Label>
-                  <Select value={platoon} onValueChange={setPlatoon}>
-                    <SelectTrigger className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl">
-                      <SelectValue placeholder="בחר פלוגה" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PLATOONS.map(p => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>

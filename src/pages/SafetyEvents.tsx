@@ -99,6 +99,13 @@ const DRIVER_TYPES = [
   { value: "other", label: "אחר" },
 ] as const;
 
+const DRIVER_TYPES_BATTALION = [
+  { value: "fighter", label: "נהג לוחם" },
+  { value: "palsar", label: 'נהג פלס"ם' },
+  { value: "general", label: "נהג כללי" },
+  { value: "security", label: 'נהג בט"ש' },
+] as const;
+
 const SEVERITY_TYPES = [
   { value: "minor", label: "קל" },
   { value: "moderate", label: "בינוני" },
@@ -188,6 +195,8 @@ const getFields = (
   departmentOptions: { value: string; label: string }[] = [],
   regionOptions: { value: string; label: string }[] = [],
   outpostOptions: { value: string; label: string }[] = [],
+  battalionFrameworkValues: string[] = [],
+  outpostsData: { name: string; region: string | null }[] = [],
 ): FieldConfig[] => {
   const brigadeField: FieldConfig = {
     name: "brigade",
@@ -242,10 +251,25 @@ const getFields = (
           : { field: "framework_type", value: "__never__" },
       },
       {
+        name: "battalion_name",
+        label: "שם הגדוד",
+        type: "text",
+        placeholder: "הזן שם גדוד...",
+        dependsOn: battalionFrameworkValues.length > 0
+          ? { field: "framework_type", value: battalionFrameworkValues }
+          : { field: "framework_type", value: "__never__" },
+      },
+      {
         name: "driver_type",
         label: "סוג נהג",
         type: "select",
-        options: DRIVER_TYPES.map(t => ({ value: t.value, label: t.label })),
+        dynamicOptions: (formData) => {
+          const fw = String(formData.framework_type || "");
+          if (battalionFrameworkValues.includes(fw)) {
+            return [...DRIVER_TYPES_BATTALION];
+          }
+          return [...DRIVER_TYPES];
+        },
         placeholder: "בחר סוג נהג",
         required: true
       },
@@ -262,7 +286,7 @@ const getFields = (
         label: "שם הנהג",
         type: "text",
         placeholder: "הזן שם נהג...",
-        dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "general", "other"] }
+        dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "fighter", "palsar", "general", "other"] }
       },
       {
         name: "region",
@@ -272,15 +296,33 @@ const getFields = (
           ? regionOptions
           : [{ value: "other", label: "אחר" }],
         placeholder: "בחר גזרה",
-        required: true
+        dependsOn: battalionFrameworkValues.length > 0
+          ? { field: "framework_type", value: [...frameworkOptions.map(f => f.value).filter(v => !battalionFrameworkValues.includes(v)), "other"] }
+          : undefined,
       },
       {
         name: "outpost",
         label: "מוצב",
         type: "select",
-        options: outpostOptions.length > 0
-          ? outpostOptions
-          : [{ value: "other", label: "אחר" }],
+        dynamicOptions: (formData) => {
+          const fw = String(formData.framework_type || "");
+          const reg = String(formData.region || "");
+          const isBattalionFw = battalionFrameworkValues.includes(fw);
+          if (isBattalionFw && fw.startsWith("sector:")) {
+            const region = fw.replace("sector:", "");
+            const filtered = outpostsData.filter(o => o.region === region);
+            return filtered.length > 0
+              ? filtered.map(o => ({ value: o.name, label: o.name }))
+              : [{ value: "other", label: "אחר" }];
+          }
+          if (reg) {
+            const filtered = outpostsData.filter(o => o.region === reg);
+            if (filtered.length > 0) return filtered.map(o => ({ value: o.name, label: o.name }));
+          }
+          return outpostsData.length > 0
+            ? outpostsData.map(o => ({ value: o.name, label: o.name }))
+            : [{ value: "other", label: "אחר" }];
+        },
         placeholder: "בחר מוצב"
       },
       {
@@ -325,26 +367,48 @@ const getFields = (
 };
 
 export default function SafetyEvents() {
-  const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin, realIsDivisionAdmin } = useAuth() as any;
-  const isBattalionUser = userType === 'battalion';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { canEditSafetyEvents: canEdit, canDelete, brigade: userBrigade, userType, isDivisionAdmin, realIsDivisionAdmin, isBattalion } = useAuth() as any;
+  const isBattalionUser = userType === 'battalion' || isBattalion;
   const myBrigade = userBrigade || 'binyamin';
   const showBrigadeSelector = isBattalionUser || realIsDivisionAdmin;
   const includeDivisionOption = realIsDivisionAdmin;
 
-  // Dynamic frameworks and outposts from DB
-  const { rootFrameworks, getChildren } = useFrameworks();
+  // Battalion user's registered battalion name (for pre-filling)
+  const [userBattalionName, setUserBattalionName] = useState<string>("");
+  useEffect(() => {
+    if (!isBattalionUser) return;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("profiles" as any).select("battalion_name").eq("user_id", user.id).maybeSingle() as Promise<{ data: { battalion_name?: string } | null; error: unknown }>)
+        .then(({ data }) => { if (data?.battalion_name) setUserBattalionName(data.battalion_name); });
+    });
+  }, [isBattalionUser]);
+
+  // Dynamic frameworks and outposts from DB — filtered by brigade
+  const effectiveBrigade = isDivisionAdmin ? undefined : myBrigade;
+  const { rootFrameworks, getChildren } = useFrameworks(effectiveBrigade);
   const { outposts } = useBrigadeOutposts();
 
-  const frameworkOptions = rootFrameworks.map(f => ({ value: f.name, label: f.name }));
+  // Unique regions (sectors) from outpost management — generate battalion framework options
+  const uniqueRegions = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
+  const battalionFrameworkValues = uniqueRegions.map(r => `sector:${r}`);
+
+  const planagFrameworkOptions = rootFrameworks.map(f => ({ value: f.name, label: f.name }));
+  const battalionFromRegionOptions = uniqueRegions.map(r => ({ value: `sector:${r}`, label: `גדוד ${r}` }));
+  const frameworkOptions = [...planagFrameworkOptions, ...battalionFromRegionOptions];
+
   const frameworkNamesWithDepts = rootFrameworks
     .filter(f => getChildren(f.id).length > 0)
     .map(f => f.name);
   const departmentOptions = rootFrameworks
     .flatMap(f => getChildren(f.id))
     .map(d => ({ value: d.name, label: d.name }));
-  const regionOptions = [...new Set(outposts.map(o => o.region).filter(Boolean))]
-    .map(r => ({ value: r as string, label: r as string }));
+  const regionOptions = uniqueRegions.map(r => ({ value: r, label: r }));
   const outpostOptions = outposts.map(o => ({ value: o.name, label: o.name }));
+  const outpostsData = outposts.map(o => ({ name: o.name, region: o.region }));
+
   const [view, setView] = useState<View>("categories");
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
   const [selectedItem, setSelectedItem] = useState<SafetyContent | null>(null);
@@ -435,7 +499,11 @@ export default function SafetyEvents() {
   const openAddDialog = () => {
     if (!selectedCategory) return;
 
-    const initialFormData = createEmptyFormData(getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions));
+    const builtFields = getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData);
+    const initialFormData = {
+      ...createEmptyFormData(builtFields),
+      ...(isBattalionUser && userBattalionName ? { battalion_name: userBattalionName } : {}),
+    };
     writeSafetyEventDraft({ mode: "add", category: selectedCategory, formData: initialFormData, selectedItem: null });
     setAddDraftData(initialFormData);
     setAddDialogOpen(true);
@@ -489,11 +557,19 @@ export default function SafetyEvents() {
     const description = toNullableText(data.description);
     const selectedSoldierId = toNullableText(data.soldier_id);
 
+    // Extract region from battalion framework if applicable
+    const selectedFw = toText(data.framework_type);
+    const isBattalionFw = selectedFw.startsWith("sector:");
+    const resolvedRegion = isBattalionFw
+      ? selectedFw.replace("sector:", "")
+      : toNullableText(data.region);
+    const battalionNameValue = isBattalionFw ? toNullableText(data.battalion_name) : null;
+
     // Required-field validation for sector events (Selects don't honor HTML5 required)
     if (selectedCategory === "sector_events") {
       const missing: string[] = [];
       if (!eventDate) missing.push("תאריך");
-      if (!toNullableText(data.region)) missing.push("גזרה");
+      if (!resolvedRegion) missing.push("גזרה");
       if (!eventType) missing.push("סוג אירוע");
       if (!driverType) missing.push("סוג נהג");
       if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
@@ -526,11 +602,11 @@ export default function SafetyEvents() {
       longitude,
       event_type: eventType,
       driver_type: driverType,
-      framework_type: toNullableText(data.framework_type),
+      framework_type: isBattalionFw ? "battalion" : toNullableText(data.framework_type),
       department: toNullableText(data.department),
-      battalion_name: null,
-      sector: null,
-      region: toNullableText(data.region),
+      battalion_name: battalionNameValue,
+      sector: isBattalionFw ? resolvedRegion : null,
+      region: resolvedRegion,
       outpost: toNullableText(data.outpost),
       soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
       driver_name: driverType !== "security" ? toNullableText(data.driver_name) : null,
@@ -621,6 +697,10 @@ export default function SafetyEvents() {
     const eventDate = toNullableText(data.event_date);
     const description = toNullableText(data.description);
 
+    const editFw = toText(data.framework_type);
+    const isEditBattalionFw = editFw.startsWith("sector:");
+    const editResolvedRegion = isEditBattalionFw ? editFw.replace("sector:", "") : toNullableText(data.region);
+
     const updateData = {
       title,
       description,
@@ -632,11 +712,11 @@ export default function SafetyEvents() {
       longitude,
       event_type: eventType,
       driver_type: driverType,
-      framework_type: toNullableText(data.framework_type),
+      framework_type: isEditBattalionFw ? "battalion" : toNullableText(data.framework_type),
       department: toNullableText(data.department),
-      battalion_name: null,
-      sector: null,
-      region: toNullableText(data.region),
+      battalion_name: isEditBattalionFw ? toNullableText(data.battalion_name) : null,
+      sector: isEditBattalionFw ? editResolvedRegion : null,
+      region: editResolvedRegion,
       outpost: toNullableText(data.outpost),
       soldier_id: driverType === "security" ? toNullableText(data.soldier_id) : null,
       driver_name: driverType !== "security" ? toNullableText(data.driver_name) : null,
@@ -1250,7 +1330,7 @@ export default function SafetyEvents() {
     return null;
   };
 
-  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions) : [];
+  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData) : [];
 
   return (
     <AppLayout>
