@@ -59,7 +59,8 @@
     showPromptButton();
   });
 
-  window.addEventListener("appinstalled", function () { showInstalled(); });
+  // Do NOT listen to appinstalled — it fires spuriously (e.g. on revisit after deletion)
+  // Only mark installed after the user explicitly accepts via prompt
 
   if ($install) {
     $install.addEventListener("click", async function () {
@@ -74,6 +75,7 @@
         if (choice.outcome === "accepted") {
           showInstalled();
         } else {
+          // User dismissed — reset so they can try again later
           $install.textContent = c.installLabel || "התקן את האפליקציה";
           $install.disabled = false;
         }
