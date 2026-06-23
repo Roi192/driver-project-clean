@@ -32,21 +32,34 @@ serve(async (req: Request) => {
     // === ADMIN TEST MODE — send test push to the requesting user's subscriptions ===
     if (body.userTestMode) {
       const { userId } = body;
-      if (!userId) {
-        return new Response(JSON.stringify({ error: "userId required" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400,
-        });
+
+      // Validate env vars
+      if (!vapidPublicKey || !vapidPrivateKey) {
+        console.error("VAPID keys missing from environment");
+        return new Response(
+          JSON.stringify({ success: false, error: "VAPID keys not configured on server" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
       }
 
-      const { data: subscriptions } = await supabase
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "userId required" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+
+      const { data: subscriptions, error: subError } = await supabase
         .from("push_subscriptions")
         .select("*")
         .eq("user_id", userId);
 
+      console.log(`userTestMode: userId=${userId}, found ${subscriptions?.length ?? 0} subs, err=${subError?.message}`);
+
       if (!subscriptions || subscriptions.length === 0) {
         return new Response(
-          JSON.stringify({ error: "אין מנוי להתראות. הפעל התראות תחילה בהגדרות." }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+          JSON.stringify({ success: false, error: "אין מנוי להתראות. הפעל התראות תחילה בהגדרות התראות." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
       }
 
@@ -62,19 +75,35 @@ serve(async (req: Request) => {
       });
 
       let successCount = 0;
+      const errors: string[] = [];
+
       for (const sub of subscriptions) {
-        if (await sendWebPush(sub, testPayload, vapidPublicKey, vapidPrivateKey)) successCount++;
+        try {
+          const ok = await sendWebPush(sub, testPayload, vapidPublicKey, vapidPrivateKey);
+          if (ok) {
+            successCount++;
+          } else {
+            errors.push(`endpoint failed: ${sub.endpoint?.substring(0, 60)}`);
+            // Clean up expired/invalid subscription
+            await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+          }
+        } catch (e) {
+          errors.push(String(e));
+        }
       }
+
+      console.log(`userTestMode result: ${successCount}/${subscriptions.length} sent, errors: ${errors.join("; ")}`);
 
       return new Response(
         JSON.stringify({
           success: successCount > 0,
           message: successCount > 0
             ? `התראת בדיקה נשלחה ל-${successCount} מכשיר/ים!`
-            : "שליחה נכשלה — ה-subscription יתכן שפג תוקפו. נסה להפעיל התראות מחדש.",
+            : "שליחה נכשלה — ה-subscription פג תוקפו. בטל התראות והפעל שוב.",
           count: successCount,
+          debug: errors,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: successCount > 0 ? 200 : 500 }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 

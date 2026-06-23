@@ -9,22 +9,25 @@ const IS_IOS =
 
 export function PWAInstallButton() {
   const { canInstall, isInstalled, installApp } = usePWAInstall();
-  const [showIOSHint, setShowIOSHint] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  // Already installed as PWA — don't show
+  // Hide when already running as installed PWA
   if (isInstalled || dismissed) return null;
 
-  // Android/Desktop: only show when Chrome has a real install prompt ready
-  if (!IS_IOS && !canInstall) return null;
-
   const handleInstall = async () => {
-    if (IS_IOS) {
-      setShowIOSHint(prev => !prev);
+    if (canInstall && !IS_IOS) {
+      // Android/Desktop with native Chrome prompt ready — trigger directly
+      await installApp();
       return;
     }
-    await installApp();
+    // iOS, or Android where prompt isn't ready — show manual hint
+    setShowHint(prev => !prev);
   };
+
+  const hintText = IS_IOS
+    ? 'לחץ על  בתחתית Safari ← "הוסף למסך הבית"'
+    : 'לחץ על ⋮ בדפדפן ← "התקן אפליקציה" / "הוסף למסך הבית"';
 
   return (
     <div className="mt-4 w-full">
@@ -34,7 +37,9 @@ export function PWAInstallButton() {
         </div>
         <div className="flex-1 text-right">
           <p className="text-sm font-bold text-foreground">הוסף למסך הבית</p>
-          <p className="text-xs text-muted-foreground">גישה מהירה בלי דפדפן</p>
+          <p className="text-xs text-muted-foreground">
+            {canInstall && !IS_IOS ? 'לחץ להתקנה מיידית' : 'גישה מהירה בלי דפדפן'}
+          </p>
         </div>
         <Button size="sm" onClick={handleInstall} className="h-8 px-3 text-xs font-bold">
           <Download className="w-3.5 h-3.5 ml-1" />
@@ -49,16 +54,12 @@ export function PWAInstallButton() {
         </button>
       </div>
 
-      {/* iOS only: show share-sheet hint inline */}
-      {showIOSHint && (
+      {showHint && (
         <div className="mt-2 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm font-semibold animate-slide-up">
-          <Share2 className="w-4 h-4 shrink-0 text-blue-600" />
-          <span className="flex-1">
-            לחץ על <Share2 className="inline w-3.5 h-3.5 mx-0.5 text-blue-600" /> בתחתית Safari ←
-            "הוסף למסך הבית"
-          </span>
+          {IS_IOS && <Share2 className="w-4 h-4 shrink-0 text-blue-600" />}
+          <span className="flex-1">{hintText}</span>
           <button
-            onClick={() => setShowIOSHint(false)}
+            onClick={() => setShowHint(false)}
             className="p-0.5 rounded hover:bg-blue-200 transition-colors shrink-0"
             aria-label="סגור"
           >
