@@ -30,7 +30,7 @@ export function PWAInstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [showHint, setShowHint] = useState(false);
+  const [showIOSHint, setShowIOSHint] = useState(false);
 
   useEffect(() => {
     if (wasDismissedRecently()) return;
@@ -42,13 +42,13 @@ export function PWAInstallButton() {
 
     if (ios) return;
 
-    // Pick up any prompt that was captured before React mounted (in index.html)
+    // Pick up prompt captured before React mounted (index.html global script)
     if (window.__pwaInstallPrompt) {
       setDeferredPrompt(window.__pwaInstallPrompt);
       window.__pwaInstallPrompt = null;
     }
 
-    // Also listen for prompts that fire after mount
+    // Also catch prompts that fire after mount
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -59,18 +59,19 @@ export function PWAInstallButton() {
 
   const handleInstall = async () => {
     if (isIOS) {
-      setShowHint(true);
+      setShowIOSHint(true);
       return;
     }
     if (deferredPrompt) {
+      // Android — trigger native install dialog directly
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === "accepted") setVisible(false);
       setDeferredPrompt(null);
       return;
     }
-    // Prompt not available — browser may have throttled it or app is already installed
-    setShowHint(true);
+    // No native prompt yet — redirect to dedicated install page which waits for the event
+    window.location.href = "/install/drivers/";
   };
 
   const handleDismiss = () => {
@@ -103,19 +104,11 @@ export function PWAInstallButton() {
         </button>
       </div>
 
-      {showHint && (
+      {showIOSHint && (
         <div className="mt-2 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm font-semibold">
-          {isIOS ? (
-            <span className="flex items-center gap-1 flex-1">
-              <Share2 className="w-4 h-4 shrink-0 text-blue-600" />
-              לחץ על כפתור השיתוף ← "הוסף למסך הבית"
-            </span>
-          ) : (
-            <span className="flex-1">
-              לחץ על ⋮ בדפדפן ← "הוסף למסך הבית" / "התקן אפליקציה"
-            </span>
-          )}
-          <button onClick={() => setShowHint(false)} className="p-0.5 rounded hover:bg-blue-200 transition-colors shrink-0">
+          <Share2 className="w-4 h-4 shrink-0 text-blue-600" />
+          <span className="flex-1">לחץ <Share2 className="inline w-3.5 h-3.5 mx-0.5" /> ← "הוסף למסך הבית"</span>
+          <button onClick={() => setShowIOSHint(false)} className="p-0.5 rounded hover:bg-blue-200 transition-colors shrink-0">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
