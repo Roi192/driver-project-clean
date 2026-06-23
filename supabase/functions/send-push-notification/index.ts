@@ -29,7 +29,56 @@ serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
 
-    // === TEST MODE ===
+    // === ADMIN TEST MODE — send test push to the requesting user's subscriptions ===
+    if (body.userTestMode) {
+      const { userId } = body;
+      if (!userId) {
+        return new Response(JSON.stringify({ error: "userId required" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400,
+        });
+      }
+
+      const { data: subscriptions } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("user_id", userId);
+
+      if (!subscriptions || subscriptions.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "אין מנוי להתראות. הפעל התראות תחילה בהגדרות." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        );
+      }
+
+      const testPayload = JSON.stringify({
+        title: "התראת בדיקה 🔔",
+        body: "מערכת ההתראות פעילה ועובדת! ההתראות ישלחו אוטומטית לפי לוח הזמנים.",
+        icon: "/pwa-192x192.png",
+        badge: "/pwa-192x192.png",
+        tag: "admin-test",
+        dir: "rtl",
+        lang: "he",
+        requireInteraction: false,
+      });
+
+      let successCount = 0;
+      for (const sub of subscriptions) {
+        if (await sendWebPush(sub, testPayload, vapidPublicKey, vapidPrivateKey)) successCount++;
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: successCount > 0,
+          message: successCount > 0
+            ? `התראת בדיקה נשלחה ל-${successCount} מכשיר/ים!`
+            : "שליחה נכשלה — ה-subscription יתכן שפג תוקפו. נסה להפעיל התראות מחדש.",
+          count: successCount,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: successCount > 0 ? 200 : 500 }
+      );
+    }
+
+    // === SOLDIER TEST MODE ===
     if (body.testMode) {
       const { soldierId, soldierName, outpost, shiftType } = body;
 

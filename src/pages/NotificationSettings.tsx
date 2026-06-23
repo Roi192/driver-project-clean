@@ -1,10 +1,14 @@
 import { useState, useEffect } from "react";
-import { Bell, BellOff, Shield } from "lucide-react";
+import { Bell, BellOff, Shield, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { PushNotificationSetup } from "@/components/push/PushNotificationSetup";
 import { useAuth } from "@/hooks/useAuth";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const NOTIF_PREFS_KEY = "admin_notification_preferences";
 
@@ -35,6 +39,7 @@ const NOTIF_LABELS: { key: keyof NotifPrefs; label: string; description: string 
 export default function NotificationSettings() {
   const { isAdmin, isPlatoonCommander, isSuperAdmin, isBattalionAdmin } = useAuth();
   const isAdminUser = isAdmin || isPlatoonCommander || isSuperAdmin || isBattalionAdmin;
+  const { isSubscribed } = usePushNotifications();
 
   const [prefs, setPrefs] = useState<NotifPrefs>(() => {
     try {
@@ -44,6 +49,8 @@ export default function NotificationSettings() {
     return defaultPrefs;
   });
 
+  const [testLoading, setTestLoading] = useState(false);
+
   useEffect(() => {
     try {
       localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(prefs));
@@ -52,6 +59,28 @@ export default function NotificationSettings() {
 
   const toggle = (key: keyof NotifPrefs) => {
     setPrefs(p => ({ ...p, [key]: !p[key] }));
+  };
+
+  const sendTestPush = async () => {
+    setTestLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast.error("לא מחובר"); return; }
+
+      const { data, error } = await supabase.functions.invoke("send-push-notification", {
+        body: { userTestMode: true, userId: user.id },
+      });
+
+      if (error || !data?.success) {
+        toast.error(data?.error ?? error?.message ?? "שליחה נכשלה");
+      } else {
+        toast.success(data.message ?? "התראת בדיקה נשלחה!");
+      }
+    } catch (e: unknown) {
+      toast.error("שגיאה בשליחת התראה");
+    } finally {
+      setTestLoading(false);
+    }
   };
 
   return (
@@ -68,6 +97,35 @@ export default function NotificationSettings() {
 
       {/* Push subscription card */}
       <PushNotificationSetup />
+
+      {/* Test push button — only when subscribed */}
+      {isSubscribed && (
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Send className="w-4 h-4 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">שלח התראת בדיקה</p>
+                <p className="text-xs text-muted-foreground">וודא שההתראות מגיעות לטלפון</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={sendTestPush}
+              disabled={testLoading}
+              className="shrink-0"
+            >
+              {testLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin ml-1" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5 ml-1" />
+              )}
+              בדוק
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Admin-only: per-type notification toggles */}
       {isAdminUser && (

@@ -1,85 +1,30 @@
-import { useState, useEffect } from "react";
-import { Download, Share2, Smartphone, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState } from 'react';
+import { Download, Share2, Smartphone, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
-declare global {
-  interface Window {
-    __pwaInstallPrompt: BeforeInstallPromptEvent | null;
-  }
-}
-
-const DISMISS_KEY = "pwa-install-btn-dismissed";
-const DISMISS_DAYS = 7;
-
-function wasDismissedRecently(): boolean {
-  try {
-    const ts = localStorage.getItem(DISMISS_KEY);
-    if (!ts) return false;
-    return (Date.now() - parseInt(ts)) / (1000 * 60 * 60 * 24) < DISMISS_DAYS;
-  } catch {
-    return false;
-  }
-}
+const IS_IOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+  !(window as Window & { MSStream?: unknown }).MSStream;
 
 export function PWAInstallButton() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIOS, setIsIOS] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const { canInstall, isInstalled, installApp } = usePWAInstall();
   const [showIOSHint, setShowIOSHint] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    if (wasDismissedRecently()) return;
-    if (window.matchMedia("(display-mode: standalone)").matches) return;
+  // Already installed as PWA — don't show
+  if (isInstalled || dismissed) return null;
 
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as Window & { MSStream?: unknown }).MSStream;
-    setIsIOS(ios);
-    setVisible(true);
-
-    if (ios) return;
-
-    // Pick up prompt captured before React mounted (index.html global script)
-    if (window.__pwaInstallPrompt) {
-      setDeferredPrompt(window.__pwaInstallPrompt);
-      window.__pwaInstallPrompt = null;
-    }
-
-    // Also catch prompts that fire after mount
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+  // Android/Desktop: only show when Chrome has a real install prompt ready
+  if (!IS_IOS && !canInstall) return null;
 
   const handleInstall = async () => {
-    if (isIOS) {
-      setShowIOSHint(true);
+    if (IS_IOS) {
+      setShowIOSHint(prev => !prev);
       return;
     }
-    if (deferredPrompt) {
-      // Android — trigger native install dialog directly
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") setVisible(false);
-      setDeferredPrompt(null);
-      return;
-    }
-    // No native prompt yet — redirect to dedicated install page which waits for the event
-    window.location.href = "/install/drivers/";
+    await installApp();
   };
-
-  const handleDismiss = () => {
-    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch { /* ignore */ }
-    setVisible(false);
-  };
-
-  if (!visible) return null;
 
   return (
     <div className="mt-4 w-full">
@@ -96,7 +41,7 @@ export function PWAInstallButton() {
           התקן
         </Button>
         <button
-          onClick={handleDismiss}
+          onClick={() => setDismissed(true)}
           className="p-1 rounded-full hover:bg-muted/60 transition-colors"
           aria-label="סגור"
         >
@@ -104,11 +49,19 @@ export function PWAInstallButton() {
         </button>
       </div>
 
+      {/* iOS only: show share-sheet hint inline */}
       {showIOSHint && (
-        <div className="mt-2 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm font-semibold">
+        <div className="mt-2 flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm font-semibold animate-slide-up">
           <Share2 className="w-4 h-4 shrink-0 text-blue-600" />
-          <span className="flex-1">לחץ <Share2 className="inline w-3.5 h-3.5 mx-0.5" /> ← "הוסף למסך הבית"</span>
-          <button onClick={() => setShowIOSHint(false)} className="p-0.5 rounded hover:bg-blue-200 transition-colors shrink-0">
+          <span className="flex-1">
+            לחץ על <Share2 className="inline w-3.5 h-3.5 mx-0.5 text-blue-600" /> בתחתית Safari ←
+            "הוסף למסך הבית"
+          </span>
+          <button
+            onClick={() => setShowIOSHint(false)}
+            className="p-0.5 rounded hover:bg-blue-200 transition-colors shrink-0"
+            aria-label="סגור"
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
