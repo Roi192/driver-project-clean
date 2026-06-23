@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sun, Sunset, Moon, ChevronLeft, MapPin, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
-import { OUTPOSTS } from '@/lib/constants';
 
 interface ShiftReport {
   id: string;
@@ -16,6 +15,7 @@ interface ShiftReport {
 
 interface ShiftStatsCardProps {
   reports: ShiftReport[];
+  outposts: string[];
 }
 
 const shiftConfig = {
@@ -24,7 +24,7 @@ const shiftConfig = {
   evening: { label: 'ערב', icon: Moon, color: 'text-indigo-500', bgColor: 'from-indigo-400 to-purple-500', lightBg: 'bg-indigo-50' },
 };
 
-export function ShiftStatsCard({ reports }: ShiftStatsCardProps) {
+export function ShiftStatsCard({ reports, outposts }: ShiftStatsCardProps) {
   const [selectedShift, setSelectedShift] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -53,12 +53,12 @@ export function ShiftStatsCard({ reports }: ShiftStatsCardProps) {
 
   const getMissingOutposts = (shiftType: string) => {
     const reportedOutposts = shiftStats[shiftType as keyof typeof shiftStats]?.outposts || new Set();
-    return OUTPOSTS.filter((outpost) => !reportedOutposts.has(outpost));
+    return outposts.filter((outpost) => !reportedOutposts.has(outpost));
   };
 
   const getReportedOutposts = (shiftType: string) => {
     const reportedOutposts = shiftStats[shiftType as keyof typeof shiftStats]?.outposts || new Set();
-    return OUTPOSTS.filter((outpost) => reportedOutposts.has(outpost));
+    return outposts.filter((outpost) => reportedOutposts.has(outpost));
   };
 
   const handleShiftClick = (shiftType: string) => {
