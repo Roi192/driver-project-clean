@@ -19,6 +19,12 @@
         installLabel: "התקן הגמ״ר",
       };
       document.documentElement.style.setProperty("--department-primary", "160 84% 39%");
+      window.__installDeferred = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__installDeferred = e;
+        window.dispatchEvent(new CustomEvent('__promptReady'));
+      });
     </script>
     <script defer src="/install/install.js"></script>
   </head>

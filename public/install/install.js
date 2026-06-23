@@ -13,7 +13,6 @@
   var $features = document.getElementById("features-section");
   var $installed= document.getElementById("installed-banner");
 
-  var deferred = null;
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   var isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 
@@ -32,37 +31,56 @@
     }
   }
 
+  function showPromptButton() {
+    if ($install)  { $install.hidden = false; $install.classList.add("pulse"); }
+    if ($manual)   $manual.hidden = true;
+    if ($status)   $status.textContent = "";
+  }
+
   if (isStandalone) {
-    // Already installed & running as app → redirect to auth
     window.location.replace(c.authPath);
     return;
   }
 
   if (isIOS) {
-    if ($ios) $ios.hidden = false;
+    if ($ios)    $ios.hidden = false;
     if ($manual) $manual.hidden = true;
     if ($status) $status.textContent = "עקוב אחר ההוראות למטה להתקנה.";
+    return;
   }
 
-  window.addEventListener("beforeinstallprompt", function (e) {
-    e.preventDefault();
-    deferred = e;
-    if ($install) { $install.hidden = false; $install.classList.add("pulse"); }
-    if ($manual) $manual.hidden = true;
-    if ($status) $status.textContent = "";
+  // Check if prompt was already captured by the inline script before defer ran
+  if (window.__installDeferred) {
+    showPromptButton();
+  }
+
+  // Also listen for prompt that fires after this script runs
+  window.addEventListener('__promptReady', function() {
+    showPromptButton();
   });
 
   window.addEventListener("appinstalled", function () { showInstalled(); });
 
   if ($install) {
     $install.addEventListener("click", async function () {
+      var deferred = window.__installDeferred;
       if (!deferred) return;
       $install.textContent = "מתקין…";
-      await deferred.prompt();
-      var choice = await deferred.userChoice;
-      deferred = null;
-      if (choice.outcome === "accepted") showInstalled();
-      else $install.textContent = c.installLabel || "התקן את האפליקציה";
+      $install.disabled = true;
+      try {
+        await deferred.prompt();
+        var choice = await deferred.userChoice;
+        window.__installDeferred = null;
+        if (choice.outcome === "accepted") {
+          showInstalled();
+        } else {
+          $install.textContent = c.installLabel || "התקן את האפליקציה";
+          $install.disabled = false;
+        }
+      } catch (err) {
+        $install.textContent = c.installLabel || "התקן את האפליקציה";
+        $install.disabled = false;
+      }
     });
   }
 })();

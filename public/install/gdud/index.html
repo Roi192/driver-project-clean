@@ -19,6 +19,12 @@
         installLabel: "התקן גדוד תע״ם",
       };
       document.documentElement.style.setProperty("--department-primary", "217 91% 60%");
+      window.__installDeferred = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__installDeferred = e;
+        window.dispatchEvent(new CustomEvent('__promptReady'));
+      });
     </script>
     <script defer src="/install/install.js"></script>
   </head>

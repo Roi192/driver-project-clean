@@ -19,6 +19,14 @@
         installLabel: "התקן נהגי בט״ש",
       };
       document.documentElement.style.setProperty("--department-primary", "221 83% 53%");
+      // Capture beforeinstallprompt immediately — before any deferred script runs
+      window.__installDeferred = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__installDeferred = e;
+        // Notify install.js if it's already running
+        window.dispatchEvent(new CustomEvent('__promptReady'));
+      });
     </script>
     <script defer src="/install/install.js"></script>
   </head>
