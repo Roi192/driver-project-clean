@@ -1,0 +1,58 @@
+name: Push Notifications Scheduler
+
+on:
+  schedule:
+    # All times UTC. Israel = UTC+3 (summer/IDT) | UTC+2 (winter/IST)
+    # Two variants per trigger: summer (UTC+3) and winter (UTC+2)
+
+    # ── Morning shift reminder → 05:45 IL (15 min before 06:00 shift) ──
+    - cron: '45 2 * * *'   # 05:45 IDT (summer)
+    - cron: '45 3 * * *'   # 05:45 IST (winter)
+
+    # ── Missing morning form + Admin daily summary → 07:00 & 08:00 IL ──
+    - cron: '0 4 * * *'    # 07:00 IDT (summer)
+    - cron: '0 5 * * *'    # 07:00 IST / 08:00 IDT overlap
+    - cron: '0 6 * * *'    # 08:00 IST (winter)
+
+    # ── Afternoon shift reminder → 13:45 IL (15 min before 14:00 shift) ──
+    - cron: '45 10 * * *'  # 13:45 IDT (summer)
+    - cron: '45 11 * * *'  # 13:45 IST (winter)
+
+    # ── Missing afternoon form → 15:00 IL ──
+    - cron: '0 12 * * *'   # 15:00 IDT (summer)
+    - cron: '0 13 * * *'   # 15:00 IST (winter)
+
+    # ── Evening shift reminder → 21:45 IL (15 min before 22:00 shift) ──
+    - cron: '45 18 * * *'  # 21:45 IDT (summer)
+    - cron: '45 19 * * *'  # 21:45 IST (winter)
+
+    # ── Missing evening form → 23:00 IL ──
+    - cron: '0 20 * * *'   # 23:00 IDT (summer)
+    - cron: '0 21 * * *'   # 23:00 IST (winter)
+
+  # Manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger scheduled push notifications
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/send-push-notification" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          echo "Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Edge Function returned HTTP $http_code"
+            exit 1
+          fi
