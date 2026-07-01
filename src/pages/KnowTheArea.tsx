@@ -625,7 +625,10 @@ const KnowTheArea = () => {
         placeholder: "בחר חומרה"
       },
       { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט..." },
-      { name: "image_url", label: "תמונה", type: "image" },
+      { name: "image_url", label: "תמונה", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
+      { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
+      { name: "video_url", label: "סרטון (קובץ / YouTube)", type: "media", mediaTypes: ["video", "youtube"] },
+      { name: "get_location", label: "מיקום נוכחי", type: "location", latField: "latitude", lngField: "longitude" },
       { name: "map_picker", label: "דקירה במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
     ];
   };
@@ -1002,6 +1005,8 @@ const KnowTheArea = () => {
         event_type: data.event_type || null,
         driver_type: data.driver_type || null,
         image_url: data.image_url || null,
+        file_url: data.file_url || null,
+        video_url: data.video_url || null,
         soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
         driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
@@ -1164,6 +1169,8 @@ const KnowTheArea = () => {
         event_type: data.event_type || null,
         driver_type: data.driver_type || null,
         image_url: data.image_url || null,
+        file_url: data.file_url || null,
+        video_url: data.video_url || null,
         soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
         driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,

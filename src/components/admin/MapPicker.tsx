@@ -3,10 +3,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Crosshair, Loader2, Map } from "lucide-react";
+import { MapPin, Crosshair, Loader2, Map, Satellite } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+const TILE_LAYERS = {
+  map: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP",
+  },
+};
 
 // Fix leaflet default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -64,6 +75,7 @@ export function MapPicker({ latitude, longitude, onLocationSelect }: MapPickerPr
   const [dialogOpen, setDialogOpen] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [position, setPosition] = useState<[number, number] | null>(null);
+  const [isSatellite, setIsSatellite] = useState(false);
   
   // Default center for Israel region
   const defaultCenter: [number, number] = [31.9, 35.2];
@@ -109,21 +121,30 @@ export function MapPicker({ latitude, longitude, onLocationSelect }: MapPickerPr
 
   return (
     <div className="space-y-2">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => setDialogOpen(true)}
-        className="w-full h-12 rounded-xl border-2 border-dashed border-primary/50 hover:border-primary hover:bg-primary/10 gap-2 font-bold"
-      >
-        <Map className="w-5 h-5" />
-        {hasLocation ? "שינוי מיקום במפה" : "דקירה במפה"}
-      </Button>
-      
-      {hasLocation && (
-        <div className="text-xs text-muted-foreground text-center p-2 bg-muted/50 rounded-lg">
-          <MapPin className="w-3 h-3 inline-block mr-1" />
-          {displayLat}, {displayLng}
+      {hasLocation ? (
+        <div
+          onClick={() => setDialogOpen(true)}
+          className="flex items-center gap-3 p-3 rounded-xl border-2 border-green-500/40 bg-green-50 dark:bg-green-950/20 cursor-pointer hover:border-green-500/70 transition-colors"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
+            <MapPin className="w-5 h-5 text-green-600" />
+          </div>
+          <div className="flex-1 text-right">
+            <p className="text-sm font-bold text-green-700 dark:text-green-400">מיקום נבחר ✓</p>
+            <p className="text-xs font-mono text-muted-foreground">{displayLat}, {displayLng}</p>
+          </div>
+          <Map className="w-4 h-4 text-muted-foreground shrink-0" />
         </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setDialogOpen(true)}
+          className="w-full h-12 rounded-xl border-2 border-dashed border-primary/50 hover:border-primary hover:bg-primary/10 gap-2 font-bold"
+        >
+          <Map className="w-5 h-5" />
+          דקירה במפה
+        </Button>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -136,22 +157,34 @@ export function MapPicker({ latitude, longitude, onLocationSelect }: MapPickerPr
           </DialogHeader>
           
           <div className="px-4 space-y-3">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="w-full gap-2"
-              onClick={getCurrentLocation}
-              disabled={gettingLocation}
-            >
-              {gettingLocation ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Crosshair className="w-4 h-4" />
-              )}
-              {gettingLocation ? "מקבל מיקום..." : "המיקום הנוכחי שלי"}
-            </Button>
-            
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="flex-1 gap-2"
+                onClick={getCurrentLocation}
+                disabled={gettingLocation}
+              >
+                {gettingLocation ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Crosshair className="w-4 h-4" />
+                )}
+                {gettingLocation ? "מקבל מיקום..." : "מיקום נוכחי"}
+              </Button>
+              <Button
+                type="button"
+                variant={isSatellite ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5 shrink-0"
+                onClick={() => setIsSatellite(v => !v)}
+              >
+                {isSatellite ? <Map className="w-4 h-4" /> : <Satellite className="w-4 h-4" />}
+                {isSatellite ? "מפה" : "לווין"}
+              </Button>
+            </div>
+
             <p className="text-sm text-muted-foreground text-center">
               לחץ על המפה לבחירת מיקום
             </p>
@@ -169,8 +202,8 @@ export function MapPicker({ latitude, longitude, onLocationSelect }: MapPickerPr
               minZoom={8}
             >
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution={TILE_LAYERS[isSatellite ? "satellite" : "map"].attribution}
+                url={TILE_LAYERS[isSatellite ? "satellite" : "map"].url}
               />
               <LocationMarker position={position} setPosition={setPosition} />
               <FlyToPosition position={position} />
