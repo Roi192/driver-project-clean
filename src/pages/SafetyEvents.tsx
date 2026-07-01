@@ -199,6 +199,7 @@ const getFields = (
   outpostsData: { name: string; region: string | null; brigade?: string }[] = [],
   allFrameworks: import("@/hooks/useFrameworks").Framework[] = [],
   myBrigade = "",
+  isBattalionUser = false,
 ): FieldConfig[] => {
   const brigadeField: FieldConfig = {
     name: "brigade",
@@ -235,6 +236,7 @@ const getFields = (
         name: "framework_type",
         label: "מסגרת",
         type: "select",
+        required: !isBattalionUser,
         // Dynamic options: filter planag frameworks by selected brigade, plus auto-generate battalion/sector options
         dynamicOptions: (formData) => {
           const selectedBrigade = String(formData.brigade || myBrigade || "");
@@ -368,7 +370,7 @@ const getFields = (
         placeholder: "בחר חומרה",
         required: true
       },
-      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט...", required: true },
+      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט...", required: !isBattalionUser },
       { name: "image_url", label: "תמונה", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
       { name: "video_url", label: "סרטון (קובץ / YouTube)", type: "media", mediaTypes: ["video", "youtube"] },
@@ -530,7 +532,7 @@ export default function SafetyEvents() {
   const openAddDialog = () => {
     if (!selectedCategory) return;
 
-    const builtFields = getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData, allFrameworks, myBrigade);
+    const builtFields = getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData, allFrameworks, myBrigade, isBattalionUser);
     const initialFormData = {
       ...createEmptyFormData(builtFields),
       ...(isBattalionUser && userBattalionName ? { battalion_name: userBattalionName } : {}),
@@ -596,16 +598,21 @@ export default function SafetyEvents() {
       : toNullableText(data.region);
     const battalionNameValue = isBattalionFw ? toNullableText(data.battalion_name) : null;
 
-    // Required-field validation for sector events (Selects don't honor HTML5 required)
+    // Required-field validation for sector events
     if (selectedCategory === "sector_events") {
       const missing: string[] = [];
       if (!eventDate) missing.push("תאריך");
-      if (!resolvedRegion) missing.push("גזרה");
       if (!eventType) missing.push("סוג אירוע");
       if (!driverType) missing.push("סוג נהג");
       if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
       if (!toNullableText(data.severity)) missing.push("חומרת אירוע");
-      if (!description) missing.push("תיאור");
+      // Location required for all users
+      if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
+      // Planag/brigade admin must fill in all fields
+      if (!isBattalionUser) {
+        if (!toNullableText(data.framework_type)) missing.push("מסגרת");
+        if (!description) missing.push("תיאור");
+      }
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
         setIsSubmitting(false);
@@ -1361,7 +1368,7 @@ export default function SafetyEvents() {
     return null;
   };
 
-  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData, allFrameworks, myBrigade) : [];
+  const fields = selectedCategory ? getFields(selectedCategory, soldiers, showBrigadeSelector, includeDivisionOption, frameworkOptions, frameworkNamesWithDepts, departmentOptions, regionOptions, outpostOptions, battalionFrameworkValues, outpostsData, allFrameworks, myBrigade, isBattalionUser) : [];
 
   return (
     <AppLayout>

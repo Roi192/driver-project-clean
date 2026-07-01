@@ -616,6 +616,7 @@ const KnowTheArea = () => {
         name: "framework_type",
         label: "מסגרת",
         type: "select",
+        required: !isBattalionUser,
         dynamicOptions: (formData) => {
           const selectedBrigade = String(formData.brigade || myBrigade || "");
           const planagFws = allFrameworks.filter(f =>
@@ -748,7 +749,7 @@ const KnowTheArea = () => {
         placeholder: "בחר חומרה",
         required: true,
       },
-      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט...", required: true },
+      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט...", required: !isBattalionUser },
       { name: "image_url", label: "תמונה", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
       { name: "video_url", label: "סרטון (קובץ / YouTube)", type: "media", mediaTypes: ["video", "youtube"] },
@@ -1280,22 +1281,36 @@ const KnowTheArea = () => {
       await handleUpdateEvent(data);
       return;
     }
-    
-    if (!data.title?.trim()) {
-      toast.error("יש למלא את כותרת האירוע");
-      return;
-    }
 
     setIsSubmittingEvent(true);
-    
+
     let latitude = data.latitude ? parseFloat(data.latitude) : null;
     let longitude = data.longitude ? parseFloat(data.longitude) : null;
-    
+
     if (latitude !== null && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
       latitude = null;
     }
     if (longitude !== null && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
       longitude = null;
+    }
+
+    const missing: string[] = [];
+    if (!data.title?.trim()) missing.push("כותרת");
+    if (!data.event_type) missing.push("סוג אירוע");
+    if (!data.driver_type) missing.push("סוג נהג");
+    if (!data.vehicle_number?.trim()) missing.push("מספר רכב");
+    if (!data.severity) missing.push("חומרת אירוע");
+    // Location required for all users
+    if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
+    // Planag/brigade admin must fill in all fields
+    if (!isBattalionUser) {
+      if (!data.framework_type) missing.push("מסגרת");
+      if (!data.description?.trim()) missing.push("תיאור");
+    }
+    if (missing.length) {
+      toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
+      setIsSubmittingEvent(false);
+      return;
     }
 
     const targetBrigade = showBrigadeSelector
