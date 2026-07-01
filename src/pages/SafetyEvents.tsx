@@ -374,8 +374,6 @@ const getFields = (
       { name: "video_url", label: "סרטון (קובץ / YouTube)", type: "media", mediaTypes: ["video", "youtube"] },
       { name: "get_location", label: "מיקום נוכחי", type: "location", latField: "latitude", lngField: "longitude" },
       { name: "map_picker", label: "דקירה במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
-      { name: "latitude", label: "קו רוחב", type: "text", placeholder: "31.9" },
-      { name: "longitude", label: "קו אורך", type: "text", placeholder: "35.2" },
     ];
     return sectorFields;
   }

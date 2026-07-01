@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
+import { useFrameworks } from "@/hooks/useFrameworks";
+import { BRIGADES, BRIGADE_CODES, DIVISION_BRIGADE_CODE, DIVISION_LABEL } from "@/lib/brigades";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -259,6 +261,17 @@ interface SafetyEvent {
   event_type: string | null;
   driver_type: string | null;
   image_url: string | null;
+  file_url: string | null;
+  video_url: string | null;
+  vehicle_number: string | null;
+  severity: string | null;
+  soldier_id: string | null;
+  driver_name: string | null;
+  framework_type: string | null;
+  department: string | null;
+  battalion_name: string | null;
+  sector: string | null;
+  brigade: string | null;
 }
 
 interface DangerousRoute {
@@ -459,9 +472,14 @@ const parseRoutePoints = (points: any): Array<{ lat: number; lng: number }> => {
 
 const KnowTheArea = () => {
   const navigate = useNavigate();
-  const { user, brigade, isDivisionAdmin } = useAuth();
+  const { user, brigade, isDivisionAdmin, userType, isBattalion, realIsDivisionAdmin } = useAuth() as any;
   const { isAdmin, canEdit, canDelete, isBattalionAdmin } = useUserRole();
-  const { outposts: brigadeOutposts } = useBrigadeOutposts();
+  const isBattalionUser = userType === 'battalion' || isBattalion;
+  const myBrigade = brigade || '';
+  const showBrigadeSelector = isBattalionUser || !!realIsDivisionAdmin;
+  const includeDivisionOption = !!realIsDivisionAdmin;
+  const { outposts: brigadeOutposts } = useBrigadeOutposts(null, showBrigadeSelector);
+  const { frameworks: allFrameworks } = useFrameworks(showBrigadeSelector ? undefined : myBrigade);
   const mapRef = useRef<L.Map | null>(null);
   
   // Data states
@@ -547,19 +565,28 @@ const KnowTheArea = () => {
     () => Array.from(new Set(brigadeOutposts.map((o) => o.region).filter(Boolean) as string[])).sort(),
     [brigadeOutposts]
   );
-  const outpostOptions = useMemo(() => brigadeOutposts.map((o) => o.name), [brigadeOutposts]);
 
-  // Event types for the form
+
   const EVENT_TYPES = [
     { value: "accident", label: "תאונה" },
     { value: "stuck", label: "התחפרות" },
+    { value: "rollover", label: "התהפכות" },
     { value: "other", label: "אחר" },
   ];
 
   const DRIVER_TYPES = [
     { value: "security", label: 'נהג בט"ש' },
     { value: "combat", label: "נהג גדוד" },
+    { value: "vehicle_officer", label: "נהג קצין רכב" },
+    { value: "general", label: "נהג אגפי" },
+    { value: "other", label: "אחר" },
+  ];
+
+  const DRIVER_TYPES_BATTALION = [
+    { value: "fighter", label: "נהג לוחם" },
+    { value: "palsar", label: 'נהג פלס"ם' },
     { value: "general", label: "נהג כללי" },
+    { value: "security", label: 'נהג בט"ש' },
   ];
 
   const SEVERITY_TYPES = [
@@ -568,63 +595,160 @@ const KnowTheArea = () => {
     { value: "severe", label: "חמור" },
   ];
 
-  // Field configuration for event form - matches SafetyEvents
   const getEventFields = (): FieldConfig[] => {
+    const brigadeField: FieldConfig = {
+      name: "brigade",
+      label: "חטיבה (החטיבה שבה התרחש האירוע)",
+      type: "select",
+      options: [
+        ...(includeDivisionOption ? [{ value: DIVISION_BRIGADE_CODE, label: DIVISION_LABEL }] : []),
+        ...BRIGADE_CODES.map((c) => ({ value: c, label: BRIGADES[c].name })),
+      ],
+      placeholder: "בחר חטיבה",
+      required: true,
+    };
+
     return [
       { name: "title", label: "כותרת", type: "text", required: true, placeholder: "הזן כותרת..." },
-      { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך" },
-      { 
-        name: "region", 
-        label: "גזרה", 
+      ...(showBrigadeSelector ? [brigadeField] : []),
+      { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך", required: true },
+      {
+        name: "framework_type",
+        label: "מסגרת",
         type: "select",
-        options: regionOptions.map(r => ({ value: r, label: r })),
-        placeholder: "בחר גזרה"
+        dynamicOptions: (formData) => {
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const planagFws = allFrameworks.filter(f =>
+            !f.parent_id && f.is_active &&
+            (!selectedBrigade || f.brigade === selectedBrigade)
+          );
+          const planagOpts = planagFws.map(f => ({ value: f.name, label: f.name }));
+          const bOutposts = selectedBrigade
+            ? brigadeOutposts.filter(o => o.brigade === selectedBrigade)
+            : brigadeOutposts;
+          const regions = [...new Set(bOutposts.map(o => o.region).filter(Boolean))] as string[];
+          const battalionOpts = regions.map(r => ({ value: `sector:${r}`, label: `גדוד ${r}` }));
+          const combined = [...planagOpts, ...battalionOpts];
+          return combined.length > 0 ? combined : [{ value: "other", label: "אחר" }];
+        },
+        placeholder: "בחר מסגרת",
       },
-      { 
-        name: "outpost", 
-        label: "מוצב", 
+      {
+        name: "department",
+        label: "אגף",
         type: "select",
-        options: outpostOptions.map(o => ({ value: o, label: o })),
-        placeholder: "בחר מוצב"
+        dynamicOptions: (formData) => {
+          const fw = String(formData.framework_type || "");
+          if (!fw || fw.startsWith("sector:")) return [];
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const parent = allFrameworks.find(f =>
+            f.name === fw && !f.parent_id && f.is_active &&
+            (!selectedBrigade || f.brigade === selectedBrigade)
+          );
+          if (!parent) return [];
+          return allFrameworks
+            .filter(f => f.parent_id === parent.id && f.is_active)
+            .map(c => ({ value: c.name, label: c.name }));
+        },
+        placeholder: "בחר אגף",
+        condition: (formData) => {
+          const fw = String(formData.framework_type || "");
+          if (!fw || fw.startsWith("sector:")) return false;
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const parent = allFrameworks.find(f =>
+            f.name === fw && !f.parent_id && f.is_active &&
+            (!selectedBrigade || f.brigade === selectedBrigade)
+          );
+          if (!parent) return false;
+          return allFrameworks.some(f => f.parent_id === parent.id && f.is_active);
+        },
       },
-      { 
-        name: "event_type", 
-        label: "סוג אירוע", 
+      {
+        name: "battalion_name",
+        label: "שם הגדוד",
+        type: "text",
+        placeholder: "הזן שם גדוד...",
+        condition: (formData) => String(formData.framework_type || "").startsWith("sector:"),
+      },
+      {
+        name: "driver_type",
+        label: "סוג נהג",
         type: "select",
-        options: EVENT_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר סוג אירוע"
+        dynamicOptions: (formData) =>
+          String(formData.framework_type || "").startsWith("sector:")
+            ? [...DRIVER_TYPES_BATTALION]
+            : [...DRIVER_TYPES],
+        placeholder: "בחר סוג נהג",
+        required: true,
       },
-      { 
-        name: "driver_type", 
-        label: "סוג נהג", 
-        type: "select",
-        options: DRIVER_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר סוג נהג"
-      },
-      { 
-        name: "soldier_id", 
-        label: "בחר חייל", 
+      {
+        name: "soldier_id",
+        label: "בחר חייל",
         type: "select",
         options: soldiers.map(s => ({ value: s.id, label: `${s.full_name} (${s.personal_number})` })),
         placeholder: "בחר חייל מהרשימה",
-        dependsOn: { field: "driver_type", value: "security" }
+        dependsOn: { field: "driver_type", value: "security" },
       },
-      { 
-        name: "driver_name", 
-        label: "שם הנהג", 
+      {
+        name: "driver_name",
+        label: "שם הנהג",
         type: "text",
         placeholder: "הזן שם נהג...",
-        dependsOn: { field: "driver_type", value: ["combat", "general"] }
+        dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "fighter", "palsar", "general", "other"] },
       },
-      { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב..." },
-      { 
-        name: "severity", 
-        label: "חומרת האירוע", 
+      {
+        name: "region",
+        label: "גזרה",
+        type: "select",
+        dynamicOptions: (formData) => {
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const bOutposts = selectedBrigade
+            ? brigadeOutposts.filter(o => o.brigade === selectedBrigade)
+            : brigadeOutposts;
+          const regions = [...new Set(bOutposts.map(o => o.region).filter(Boolean))] as string[];
+          return regions.length > 0 ? regions.map(r => ({ value: r, label: r })) : [{ value: "other", label: "אחר" }];
+        },
+        placeholder: "בחר גזרה",
+        condition: (formData) => String(formData.framework_type || "").startsWith("sector:"),
+      },
+      {
+        name: "outpost",
+        label: "מוצב",
+        type: "select",
+        dynamicOptions: (formData) => {
+          const fw = String(formData.framework_type || "");
+          const selectedBrigade = String(formData.brigade || myBrigade || "");
+          const isBattalionFw = fw.startsWith("sector:");
+          const region = isBattalionFw ? fw.replace("sector:", "") : String(formData.region || "");
+          const bOutposts = selectedBrigade
+            ? brigadeOutposts.filter(o => o.brigade === selectedBrigade)
+            : brigadeOutposts;
+          const filtered = region ? bOutposts.filter(o => o.region === region) : bOutposts;
+          const outpostOpts = filtered.map(o => ({ value: o.name, label: o.name }));
+          if (isBattalionFw) outpostOpts.unshift({ value: 'מפג"ד', label: 'מפג"ד' });
+          return outpostOpts.length > 0 ? outpostOpts : [{ value: "other", label: "אחר" }];
+        },
+        condition: (formData) => String(formData.framework_type || "").startsWith("sector:"),
+        placeholder: "בחר מוצב",
+      },
+      {
+        name: "event_type",
+        label: "סוג אירוע",
+        type: "select",
+        options: EVENT_TYPES.map(t => ({ value: t.value, label: t.label })),
+        placeholder: "בחר סוג אירוע",
+        required: true,
+      },
+      { name: "vehicle_number", label: "מספר רכב צבאי", type: "text", placeholder: "הזן מספר רכב...", required: true },
+      {
+        name: "severity",
+        label: "חומרת האירוע",
         type: "select",
         options: SEVERITY_TYPES.map(t => ({ value: t.value, label: t.label })),
-        placeholder: "בחר חומרה"
+        placeholder: "בחר חומרה",
+        required: true,
       },
-      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט..." },
+      { name: "description", label: "תיאור", type: "textarea", placeholder: "תיאור מפורט...", required: true },
       { name: "image_url", label: "תמונה", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
       { name: "video_url", label: "סרטון (קובץ / YouTube)", type: "media", mediaTypes: ["video", "youtube"] },
@@ -975,6 +1099,16 @@ const KnowTheArea = () => {
       event_type: event.event_type || "",
       driver_type: event.driver_type || "",
       image_url: event.image_url || "",
+      file_url: event.file_url || "",
+      video_url: event.video_url || "",
+      vehicle_number: event.vehicle_number || "",
+      severity: event.severity || "",
+      soldier_id: event.soldier_id || "",
+      driver_name: event.driver_name || "",
+      framework_type: event.framework_type || "",
+      department: event.department || "",
+      battalion_name: event.battalion_name || "",
+      brigade: event.brigade || myBrigade,
     });
     setShowAddEventDialog(true);
   };
@@ -993,6 +1127,10 @@ const KnowTheArea = () => {
       longitude = null;
     }
     
+    const updFw = String(data.framework_type || "");
+    const isUpdBattalionFw = updFw.startsWith("sector:");
+    const updRegion = isUpdBattalionFw ? updFw.replace("sector:", "") : (data.region || null);
+
     try {
       const { error } = await supabase.from("safety_content").update({
         title: data.title,
@@ -1000,15 +1138,19 @@ const KnowTheArea = () => {
         event_date: data.event_date || null,
         latitude,
         longitude,
-        region: data.region || null,
+        region: updRegion,
         outpost: data.outpost || null,
         event_type: data.event_type || null,
         driver_type: data.driver_type || null,
+        framework_type: isUpdBattalionFw ? "battalion" : (data.framework_type || null),
+        department: data.department || null,
+        battalion_name: isUpdBattalionFw ? (data.battalion_name || null) : null,
+        sector: isUpdBattalionFw ? updRegion : null,
         image_url: data.image_url || null,
         file_url: data.file_url || null,
         video_url: data.video_url || null,
         soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
-        driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
+        driver_name: data.driver_type !== "security" ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
         severity: data.severity || 'minor',
       }).eq("id", editingEvent.id);
@@ -1156,26 +1298,39 @@ const KnowTheArea = () => {
       longitude = null;
     }
 
+    const targetBrigade = showBrigadeSelector
+      ? (data.brigade || (realIsDivisionAdmin ? DIVISION_BRIGADE_CODE : myBrigade))
+      : myBrigade;
+    const selectedFw = String(data.framework_type || "");
+    const isBattalionFw = selectedFw.startsWith("sector:");
+    const resolvedRegion = isBattalionFw
+      ? selectedFw.replace("sector:", "")
+      : (data.region || null);
+
     try {
       const { error } = await supabase.from("safety_content").insert([{
         title: data.title,
         description: data.description || null,
-        category: "sector_events", // Always save as sector_events for map display
+        category: "sector_events",
         event_date: data.event_date || null,
         latitude,
         longitude,
-        region: data.region || null,
+        region: resolvedRegion,
         outpost: data.outpost || null,
         event_type: data.event_type || null,
         driver_type: data.driver_type || null,
+        framework_type: isBattalionFw ? "battalion" : (data.framework_type || null),
+        department: data.department || null,
+        battalion_name: isBattalionFw ? (data.battalion_name || null) : null,
+        sector: isBattalionFw ? resolvedRegion : null,
         image_url: data.image_url || null,
         file_url: data.file_url || null,
         video_url: data.video_url || null,
         soldier_id: data.driver_type === "security" ? (data.soldier_id || null) : null,
-        driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
+        driver_name: data.driver_type !== "security" ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
         severity: data.severity || 'minor',
-        brigade: brigade,
+        brigade: targetBrigade,
       }]);
 
       if (error) throw error;
