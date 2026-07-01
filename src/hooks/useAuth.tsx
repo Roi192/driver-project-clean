@@ -282,7 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Otherwise, use their profile brigade (or null for "all brigades" view).
   const brigade = realIsDivisionAdmin
     ? (brigadeOverride || null)
-    : (isBattalion ? (brigadeOverride || null) : profileBrigade);
+    : (isBattalion ? (brigadeOverride || profileBrigade) : profileBrigade);
   // isDivisionAdmin becomes false when a specific brigade is selected,
   // so existing brigade-scoped filters automatically apply.
   const isDivisionAdmin = realIsDivisionAdmin && !brigadeOverride;

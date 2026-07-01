@@ -887,7 +887,7 @@ const KnowTheArea = () => {
         danger_type: routeFormData.danger_type,
         is_active: true,
         created_by: user?.id,
-        brigade: brigade || "binyamin",
+        brigade: brigade,
       }]);
 
       if (error) throw error;
@@ -1039,7 +1039,7 @@ const KnowTheArea = () => {
         severity: formData.point_type === "danger_zone" ? formData.severity : null,
         is_active: true,
         created_by: user?.id,
-        brigade: brigade || "binyamin",
+        brigade: brigade,
       });
 
       if (error) throw error;
@@ -1100,7 +1100,7 @@ const KnowTheArea = () => {
         color: boundaryFormData.color,
         is_active: true,
         created_by: user?.id,
-        brigade: brigade || "binyamin",
+        brigade: brigade,
       }]);
 
       if (error) throw error;
@@ -1168,7 +1168,7 @@ const KnowTheArea = () => {
         driver_name: data.driver_type === "combat" ? (data.driver_name || null) : null,
         vehicle_number: data.vehicle_number || null,
         severity: data.severity || 'minor',
-        brigade: brigade || "binyamin",
+        brigade: brigade,
       }]);
 
       if (error) throw error;
