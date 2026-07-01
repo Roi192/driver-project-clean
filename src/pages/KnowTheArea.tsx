@@ -616,7 +616,7 @@ const KnowTheArea = () => {
         name: "framework_type",
         label: "מסגרת",
         type: "select",
-        required: !isBattalionUser,
+        required: true,
         dynamicOptions: (formData) => {
           const selectedBrigade = String(formData.brigade || myBrigade || "");
           const planagFws = allFrameworks.filter(f =>
@@ -1302,11 +1302,10 @@ const KnowTheArea = () => {
     if (!data.severity) missing.push("חומרת אירוע");
     // Location required for all users
     if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
-    // Planag/brigade admin must fill in all fields
-    if (!isBattalionUser) {
-      if (!data.framework_type) missing.push("מסגרת");
-      if (!data.description?.trim()) missing.push("תיאור");
-    }
+    // Framework required for all users
+    if (!data.framework_type) missing.push("מסגרת");
+    // Planag/brigade admin must also fill description
+    if (!isBattalionUser && !data.description?.trim()) missing.push("תיאור");
     if (missing.length) {
       toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
       setIsSubmittingEvent(false);

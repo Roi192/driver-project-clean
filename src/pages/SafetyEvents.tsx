@@ -236,7 +236,7 @@ const getFields = (
         name: "framework_type",
         label: "מסגרת",
         type: "select",
-        required: !isBattalionUser,
+        required: true,
         // Dynamic options: filter planag frameworks by selected brigade, plus auto-generate battalion/sector options
         dynamicOptions: (formData) => {
           const selectedBrigade = String(formData.brigade || myBrigade || "");
@@ -608,11 +608,10 @@ export default function SafetyEvents() {
       if (!toNullableText(data.severity)) missing.push("חומרת אירוע");
       // Location required for all users
       if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
-      // Planag/brigade admin must fill in all fields
-      if (!isBattalionUser) {
-        if (!toNullableText(data.framework_type)) missing.push("מסגרת");
-        if (!description) missing.push("תיאור");
-      }
+      // Framework required for all users
+      if (!toNullableText(data.framework_type)) missing.push("מסגרת");
+      // Planag/brigade admin must also fill description
+      if (!isBattalionUser && !description) missing.push("תיאור");
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
         setIsSubmitting(false);
