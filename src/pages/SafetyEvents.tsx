@@ -602,15 +602,13 @@ export default function SafetyEvents() {
     if (selectedCategory === "sector_events") {
       const missing: string[] = [];
       if (!eventDate) missing.push("תאריך");
+      if (showBrigadeSelector && !toNullableText(data.brigade)) missing.push("חטיבה");
       if (!eventType) missing.push("סוג אירוע");
       if (!driverType) missing.push("סוג נהג");
       if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
       if (!toNullableText(data.severity)) missing.push("חומרת אירוע");
-      // Location required for all users
       if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
-      // Framework required for all users
       if (!toNullableText(data.framework_type)) missing.push("מסגרת");
-      // Planag/brigade admin must also fill description
       if (!isBattalionUser && !description) missing.push("תיאור");
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
@@ -655,8 +653,10 @@ export default function SafetyEvents() {
     const { error } = await supabase.from("safety_content").insert([insertData]);
 
     if (error) {
-      toast.error("שגיאה בהוספת התוכן");
-      console.error(error);
+      console.error("Error adding safety content:", error);
+      const e = error as { message?: string; details?: string; hint?: string };
+      const msg = e?.message || e?.details || e?.hint || JSON.stringify(error);
+      toast.error(`שגיאה בהוספת התוכן: ${msg}`);
     } else {
       toast.success("התוכן נוסף בהצלחה");
       clearSafetyEventDraft();
@@ -775,8 +775,9 @@ export default function SafetyEvents() {
       .eq("id", selectedItem.id);
 
     if (error) {
-      toast.error("שגיאה בעדכון התוכן");
-      console.error(error);
+      console.error("Error updating safety content:", error);
+      const eu = error as { message?: string; details?: string; hint?: string };
+      toast.error(`שגיאה בעדכון התוכן: ${eu?.message || eu?.details || eu?.hint || JSON.stringify(error)}`);
     } else {
       toast.success("התוכן עודכן בהצלחה");
       clearSafetyEventDraft();

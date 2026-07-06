@@ -1163,9 +1163,10 @@ const KnowTheArea = () => {
       setEditingEvent(null);
       setEventFormData({});
       fetchData();
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error("שגיאה בעדכון");
+    } catch (error: any) {
+      console.error("Error updating safety event:", error);
+      const msg = error?.message || error?.details || error?.hint || JSON.stringify(error);
+      toast.error(`שגיאה בעדכון האירוע: ${msg}`);
     } finally {
       setIsSubmittingEvent(false);
     }
@@ -1296,15 +1297,13 @@ const KnowTheArea = () => {
 
     const missing: string[] = [];
     if (!data.title?.trim()) missing.push("כותרת");
+    if (showBrigadeSelector && !data.brigade?.trim()) missing.push("חטיבה");
     if (!data.event_type) missing.push("סוג אירוע");
     if (!data.driver_type) missing.push("סוג נהג");
     if (!data.vehicle_number?.trim()) missing.push("מספר רכב");
     if (!data.severity) missing.push("חומרת אירוע");
-    // Location required for all users
     if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
-    // Framework required for all users
     if (!data.framework_type) missing.push("מסגרת");
-    // Planag/brigade admin must also fill description
     if (!isBattalionUser && !data.description?.trim()) missing.push("תיאור");
     if (missing.length) {
       toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
@@ -1313,7 +1312,7 @@ const KnowTheArea = () => {
     }
 
     const targetBrigade = showBrigadeSelector
-      ? (data.brigade || (realIsDivisionAdmin ? DIVISION_BRIGADE_CODE : myBrigade))
+      ? (data.brigade?.trim() || (realIsDivisionAdmin ? DIVISION_BRIGADE_CODE : myBrigade))
       : myBrigade;
     const selectedFw = String(data.framework_type || "");
     const isBattalionFw = selectedFw.startsWith("sector:");
@@ -1353,9 +1352,10 @@ const KnowTheArea = () => {
       setShowAddEventDialog(false);
       setEventFormData({});
       fetchData();
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error("שגיאה בהוספת האירוע");
+    } catch (error: any) {
+      console.error("Error adding safety event:", error);
+      const msg = error?.message || error?.details || error?.hint || JSON.stringify(error);
+      toast.error(`שגיאה בהוספת האירוע: ${msg}`);
     } finally {
       setIsSubmittingEvent(false);
     }
@@ -2539,6 +2539,7 @@ const KnowTheArea = () => {
           event_date: new Date().toISOString().split('T')[0],
           latitude: clickPosition?.lat?.toFixed(6) || "",
           longitude: clickPosition?.lng?.toFixed(6) || "",
+          brigade: myBrigade || "",
         }}
         onSubmit={handleAddSafetyEvent}
         isLoading={isSubmittingEvent}
