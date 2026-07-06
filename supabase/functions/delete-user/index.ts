@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       .select('role')
       .eq('user_id', callerUser.id)
 
-    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin']
+    const allowedRoles = ['admin', 'super_admin']
     const hasPermission = roles?.some(r => allowedRoles.includes(r.role))
     if (!hasPermission) {
       throw new Error('Only admins can delete users')

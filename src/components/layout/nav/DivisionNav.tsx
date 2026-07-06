@@ -13,9 +13,8 @@ export function DivisionNav({ onClose }: Props) {
   const { realIsDivisionAdmin, activeBrigade } = useAuth() as any;
   const location = useLocation();
 
-  const isInHagmar = location.pathname.startsWith('/hagmar');
   const isOnDepartmentSelector = location.pathname === '/department-selector';
-  const isInDivisionView = isDivisionUser && !activeBrigade && !isInHagmar && !isOnDepartmentSelector;
+  const isInDivisionView = isDivisionUser && !activeBrigade && !isOnDepartmentSelector;
 
   if (!isInDivisionView) return null;
 

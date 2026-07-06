@@ -9,7 +9,6 @@ export function useUserRole() {
   const isDriver = role === 'driver';
   const isPlatoonCommander = role === 'platoon_commander';
   const isBattalionAdmin = role === 'battalion_admin';
-  const isHagmarAdmin = role === 'hagmar_admin' || role === 'super_admin';
 
   // Permission helpers
   const canDelete = role === 'admin' || role === 'super_admin' || isDivisionBrigadePeek;
@@ -19,7 +18,7 @@ export function useUserRole() {
   const canEditSafetyEvents = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin';
   const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
-  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'hagmar_admin' || role === 'division_admin' || isDivisionBrigadePeek;
+  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessBomReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessAnnualWorkPlan = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessSoldiersControl = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
@@ -44,7 +43,6 @@ export function useUserRole() {
     isDriver,
     isPlatoonCommander,
     isBattalionAdmin,
-    isHagmarAdmin,
     isLoading: loading,
     canDelete,
     canEdit,

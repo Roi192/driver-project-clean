@@ -14,7 +14,6 @@ import { AdminNav } from "./nav/AdminNav";
 import { BattalionNav } from "./nav/BattalionNav";
 import { DivisionNav } from "./nav/DivisionNav";
 import { DriverNav } from "./nav/DriverNav";
-import { HagmarNav } from "./nav/HagmarNav";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,22 +22,19 @@ export function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { signOut, isSuperAdmin, isBattalionAdmin, isHagmarAdmin, isDivisionUser, user, brigade, role } = useAuth();
+  const { signOut, isSuperAdmin, isBattalionAdmin, isDivisionUser, user, brigade, role } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { realIsDivisionAdmin, activeBrigade, isBattalion } = useAuth() as any;
 
   const close = () => setIsOpen(false);
 
-  const isInHagmar = location.pathname.startsWith('/hagmar');
   const isOnDepartmentSelector = location.pathname === '/department-selector';
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
-  const isHagmarFighter = userDepartment === 'hagmar' && !isHagmarAdmin && !isSuperAdmin && role !== 'ravshatz';
 
   const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי'
-    : (isInHagmar || isHagmarFighter) ? 'הגמ"ר'
     : isInBattalionContext ? 'גדוד תע"ם'
-    : (isDivisionUser && !activeBrigade && !isInHagmar) ? getBrigadeLabel('division')
+    : (isDivisionUser && !activeBrigade) ? getBrigadeLabel('division')
     : getBrigade(brigade).shortLabel;
 
   useEffect(() => {
@@ -170,8 +166,8 @@ export function MobileNav() {
             </NavLink>
           )}
 
-          {/* Switch brigade button — division admin or battalion, not in hagmar, not on dept selector */}
-          {(realIsDivisionAdmin || isBattalion) && !isInHagmar && !isOnDepartmentSelector && (
+          {/* Switch brigade button — division admin or battalion, not on dept selector */}
+          {(realIsDivisionAdmin || isBattalion) && !isOnDepartmentSelector && (
             <NavLink
               to="/brigade-context"
               onClick={close}
@@ -196,7 +192,6 @@ export function MobileNav() {
 
           <DivisionNav onClose={close} />
           <BattalionNav onClose={close} />
-          <HagmarNav onClose={close} userDepartment={userDepartment} />
           <AdminNav onClose={close} />
           <DriverNav onClose={close} userDepartment={userDepartment} />
         </div>

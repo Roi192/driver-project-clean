@@ -35,19 +35,17 @@ interface Props {
 }
 
 export function DriverNav({ onClose, userDepartment }: Props) {
-  const { userType, isBattalionAdmin, isSuperAdmin, isDivisionUser, isHagmarAdmin, role } = useAuth();
+  const { userType, isBattalionAdmin, isSuperAdmin, isDivisionUser } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { activeBrigade } = useAuth() as any;
   const location = useLocation();
 
-  const isInHagmar = location.pathname.startsWith('/hagmar');
   const isOnDepartmentSelector = location.pathname === '/department-selector';
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
-  const isHagmarFighter = userDepartment === 'hagmar' && !isHagmarAdmin && !isSuperAdmin && role !== 'ravshatz';
-  const isInDivisionView = isDivisionUser && !activeBrigade && !isInHagmar && !isOnDepartmentSelector;
+  const isInDivisionView = isDivisionUser && !activeBrigade && !isOnDepartmentSelector;
   const showDriverNavItems =
-    !isInHagmar && !isHagmarFighter && !isInBattalionContext &&
+    !isInBattalionContext &&
     !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView &&
     (!isDivisionUser || !!activeBrigade);
 

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Car, Shield, Building2, ChevronLeft } from "lucide-react";
+import { Car, Shield, ChevronLeft } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import unitLogo from "@/assets/unit-logo.png";
 
@@ -19,18 +19,6 @@ const DepartmentSelector = () => {
       hoverBorder: "hover:border-primary",
       glowColor: "from-primary/30",
       route: "/brigade-context",
-    },
-    {
-      id: "hagmar",
-      title: 'הגמ"ר',
-      subtitle: "הגנת המרחב",
-      description: "ניהול הגנת היישוב והקשר עם ההתיישבות",
-      icon: Building2,
-      gradient: "from-amber-500 via-orange-500 to-amber-600",
-      borderColor: "border-amber-500/40",
-      hoverBorder: "hover:border-amber-500",
-      glowColor: "from-amber-500/30",
-      route: "/hagmar",
     },
     {
       id: "battalion",

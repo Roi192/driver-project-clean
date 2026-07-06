@@ -6,7 +6,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-type DeptKey = "drivers" | "gdud" | "hagmar";
+type DeptKey = "drivers" | "gdud";
 
 interface Props {
   department: DeptKey;
@@ -50,21 +50,6 @@ const DEPT_CONFIG: Record<DeptKey, {
       { icon: "🔔", text: "התראות ניהול" },
       { icon: "📱", text: "חווית אפליקציה" },
       { icon: "📊", text: "דשבורד גדודי" },
-    ],
-  },
-  hagmar: {
-    title: "התקן את האפליקציה",
-    badge: "הגמ״ר",
-    badgeEmoji: "🛡️",
-    subtitle: "הורד את אפליקציית הגמ״ר לטלפון כדי לקבל גישה מהירה, דיווחים והתראות.",
-    authPath: "/auth/hagmar",
-    manifestHref: "/manifest-hagmar.json",
-    primaryHsl: "160 84% 39%",
-    features: [
-      { icon: "⚡", text: "גישה ישירה" },
-      { icon: "🔔", text: "התראות פוש" },
-      { icon: "📱", text: "חווית אפליקציה" },
-      { icon: "🛡️", text: "הגנת מרחב" },
     ],
   },
 };

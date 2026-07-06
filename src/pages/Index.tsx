@@ -27,10 +27,6 @@ const Index = () => {
         navigate('/auth/gdud', { replace: true });
         return;
       }
-      if (dept === "hagmar") {
-        navigate('/auth/hagmar', { replace: true });
-        return;
-      }
       if (dept === "drivers") {
         navigate('/auth', { replace: true });
         return;
@@ -64,12 +60,6 @@ const Index = () => {
         }
         // otherwise fall through and render the dashboard
       }
-      if (role === 'hagmar_admin' || role === 'ravshatz') {
-        setIsRedirecting(true);
-        navigate('/hagmar', { replace: true });
-        return;
-      }
-
       // Battalion users must pick a brigade context before seeing the dashboard
       if (isBattalion && !activeBrigade) {
         setIsRedirecting(true);
@@ -82,12 +72,6 @@ const Index = () => {
         .select('department')
         .eq('user_id', user.id)
         .maybeSingle();
-      
-      if (data?.department === 'hagmar') {
-        setIsRedirecting(true);
-        navigate('/hagmar', { replace: true });
-        return;
-      }
       
       setDepartmentChecked(true);
     };

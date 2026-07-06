@@ -1,4 +1,4 @@
-import { Truck, Shield, Users } from "lucide-react";
+import { Truck, Shield } from "lucide-react";
 import unitLogo from "@/assets/unit-logo.png";
 
 const departments = [
@@ -16,21 +16,11 @@ const departments = [
     key: "battalion",
     title: "גדוד תע״ם",
     subtitle: "חטיבת בנימין",
-    icon: <Users className="w-7 h-7" />,
+    icon: <Shield className="w-7 h-7" />,
     href: "/install/gdud",
     gradient: "from-indigo-600 to-indigo-400",
     glow: "shadow-indigo-500/30",
     emoji: "🎖️",
-  },
-  {
-    key: "hagmar",
-    title: "הגמ״ר",
-    subtitle: "הגנת המרחב - חטיבת בנימין",
-    icon: <Shield className="w-7 h-7" />,
-    href: "/install/hagmar",
-    gradient: "from-emerald-600 to-emerald-400",
-    glow: "shadow-emerald-500/30",
-    emoji: "🛡️",
   },
 ];
 

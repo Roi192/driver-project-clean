@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       .eq('user_id', callerUser.id)
       .single()
 
-    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin', 'ravshatz', 'division_admin']
+    const allowedRoles = ['admin', 'super_admin', 'ravshatz', 'division_admin']
     if (!roleData || !allowedRoles.includes(roleData.role)) {
       throw new Error('Only admins can update users')
     }
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       throw new Error('displayName must be a string up to 200 characters')
     }
     const ALLOWED_ROLES = [
-      'driver','admin','super_admin','hagmar_admin','battalion_admin',
+      'driver','admin','super_admin','battalion_admin',
       'platoon_commander','division_admin','division_user','ravshatz','company_commander'
     ]
     if (newRole !== undefined && (typeof newRole !== 'string' || !ALLOWED_ROLES.includes(newRole))) {

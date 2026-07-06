@@ -25,14 +25,13 @@ export function AdminNav({ onClose }: Props) {
   const { realIsDivisionAdmin, activeBrigade } = useAuth() as any;
   const location = useLocation();
 
-  const isInHagmar = location.pathname.startsWith('/hagmar');
   const isOnDepartmentSelector = location.pathname === '/department-selector';
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
-  const isInDivisionView = isDivisionUser && !activeBrigade && !isInHagmar && !isOnDepartmentSelector;
+  const isInDivisionView = isDivisionUser && !activeBrigade && !isOnDepartmentSelector;
   const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin || (realIsDivisionAdmin && !!activeBrigade);
   // Battalion admins who have selected a specific brigade should see the brigade admin menu
-  const showPlanagMenu = !isInHagmar && (!isInBattalionContext || (isBattalionAdmin && !!activeBrigade)) && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
+  const showPlanagMenu = (!isInBattalionContext || (isBattalionAdmin && !!activeBrigade)) && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
   const showSuperAdminSelector = isSuperAdmin && isOnDepartmentSelector;
 
   if (!showSuperAdminSelector && (!hasAdminAccess || !showPlanagMenu)) return null;
@@ -61,7 +60,7 @@ export function AdminNav({ onClose }: Props) {
       {canAccessSafetyScores && <NavMenuItem to="/safety-scores" label="ציוני בטיחות" icon={Gauge} iconBg="from-sky-500 to-sky-600" theme="gold" onClose={onClose} />}
       {canAccessAccidents && <NavMenuItem to="/accidents-tracking" label="מעקב תאונות" icon={Car} iconBg="from-orange-500 to-orange-600" theme="gold" onClose={onClose} />}
       <NavMenuItem to="/know-the-area" label="הכר את הגזרה" icon={Map} iconBg="from-cyan-500 to-cyan-600" theme="gold" onClose={onClose} />
-      {canAccessUsersManagement && role !== 'hagmar_admin' && <NavMenuItem to="/users-management" label="ניהול משתמשים" icon={UserCog} iconBg="from-pink-500 to-pink-600" theme="gold" onClose={onClose} />}
+      {canAccessUsersManagement && <NavMenuItem to="/users-management" label="ניהול משתמשים" icon={UserCog} iconBg="from-pink-500 to-pink-600" theme="gold" onClose={onClose} />}
       {(isAdmin || isPlatoonCommander || isSuperAdmin || realIsDivisionAdmin) && <NavMenuItem to="/brigade-outposts" label="ניהול מוצבי החטיבה" icon={Building} iconBg="from-emerald-500 to-teal-600" theme="gold" onClose={onClose} />}
       {canAccessCleaningManagement && <NavMenuItem to="/cleaning-parades-admin" label="ניהול מסדרי ניקיון" icon={Sparkles} iconBg="from-purple-500 to-pink-500" theme="gold" onClose={onClose} />}
       {canAccessCourses && <NavMenuItem to="/courses-management" label="ניהול קורסים" icon={GraduationCap} iconBg="from-indigo-500 to-violet-600" theme="gold" onClose={onClose} />}

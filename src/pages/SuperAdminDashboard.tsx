@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Car, Shield, AlertTriangle, FileSearch, Gavel, UserCheck, ClipboardCheck } from "lucide-react";
+import { Users, Car, AlertTriangle, FileSearch, Gavel } from "lucide-react";
 
 const SuperAdminDashboard = () => {
   const { isSuperAdmin, loading } = useAuth();
@@ -64,18 +64,9 @@ const SuperAdminDashboard = () => {
     },
   });
 
-  const { data: hagmarUsersCount } = useQuery({
-    queryKey: ["super-admin-hagmar-users"],
-    queryFn: async () => {
-      const { count } = await supabase.from("profiles").select("*", { count: "exact", head: true }).eq("department", "hagmar");
-      return count || 0;
-    },
-  });
-
   const stats = [
     { label: "נהגים רשומים", value: soldiersCount ?? "—", icon: Car, gradient: "from-primary to-teal", description: "מחלקת נהגים" },
     { label: "משתמשים רשומים", value: profilesCount ?? "—", icon: Users, gradient: "from-blue-500 to-blue-600", description: "כלל המערכת" },
-    { label: "משתמשי הגמ\"ר", value: hagmarUsersCount ?? "—", icon: Shield, gradient: "from-amber-500 to-orange-500", description: "מחלקת הגמ\"ר" },
     { label: "תאונות פתוחות", value: accidentsCount ?? "—", icon: AlertTriangle, gradient: "from-red-500 to-red-600", description: "דורשות טיפול" },
     { label: "ביקורות החודש", value: inspectionsCount ?? "—", icon: FileSearch, gradient: "from-indigo-500 to-indigo-600", description: "חודש נוכחי" },
     { label: "עונשים החודש", value: punishmentsCount ?? "—", icon: Gavel, gradient: "from-rose-500 to-rose-600", description: "חודש נוכחי" },
@@ -137,19 +128,6 @@ const SuperAdminDashboard = () => {
               <div className="text-right">
                 <div className="font-bold text-foreground text-sm">פלנ"ג</div>
                 <div className="text-xs text-muted-foreground">מחלקת נהגים</div>
-              </div>
-            </button>
-
-            <button
-              onClick={() => navigate("/hagmar")}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/30 hover:border-amber-500/60 transition-all group"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-right">
-                <div className="font-bold text-foreground text-sm">הגמ"ר</div>
-                <div className="text-xs text-muted-foreground">הגנת המרחב</div>
               </div>
             </button>
           </CardContent>

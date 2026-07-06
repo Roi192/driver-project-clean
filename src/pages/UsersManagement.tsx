@@ -85,7 +85,6 @@ const ROLE_LABELS: Record<AppRole, string> = {
   admin: "מנהל מ\"פ נהגים",
   platoon_commander: "מנהל מ\"מ נהגים",
   battalion_admin: "מנהל גדוד תע\"ם",
-  hagmar_admin: "מנהל הגמ\"ר",
   ravshatz: 'רבש"צ',
   driver: "נהג",
 };
@@ -210,7 +209,7 @@ const UsersManagement = () => {
               const dept = u.user_metadata?.department;
               const utype = u.user_metadata?.user_type;
               if (utype === "battalion") return false;
-              if (dept === "hagmar" || dept === "battalion") return false;
+              if (dept === "battalion") return false;
               // Brigade scoping for orphan auth users
               if (effectiveBrigadeFilter) {
                 const userBrigade = u.user_metadata?.brigade || 'binyamin';
@@ -746,7 +745,6 @@ const UsersManagement = () => {
                   <SelectContent className="bg-popover border-border z-[10000]">
                     <SelectItem value="planag">פלנ"ג</SelectItem>
                     <SelectItem value="battalion">גדוד</SelectItem>
-                    <SelectItem value="hagmar">הגמ"ר</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">

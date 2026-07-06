@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       .eq('user_id', callerUser.id)
       .single()
 
-    const allowedRoles = ['admin', 'super_admin', 'hagmar_admin']
+    const allowedRoles = ['admin', 'super_admin']
     if (!roleData || !allowedRoles.includes(roleData.role)) {
       throw new Error('Only admins can view user emails')
     }
