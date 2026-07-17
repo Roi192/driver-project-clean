@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,6 +128,7 @@ interface ExcellenceCandidate {
 export default function SafetyScoresManagement() {
   const { role, canAccessSafetyScores, loading: authLoading, user, brigade, isDivisionAdmin } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [soldiers, setSoldiers] = useState<Soldier[]>([]);
   const [safetyScores, setSafetyScores] = useState<SafetyScore[]>([]);
   const [allScores, setAllScores] = useState<SafetyScore[]>([]);
@@ -477,6 +479,8 @@ export default function SafetyScoresManagement() {
         toast.success("הציון עודכן בהצלחה");
         await updateSoldierSafetyStatus(soldierId);
         fetchData();
+        queryClient.invalidateQueries({ queryKey: ["yearly-summary"] });
+        queryClient.invalidateQueries({ queryKey: ["soldier-safety-scores"] });
       }
     } else {
       const { error } = await supabase
@@ -493,6 +497,8 @@ export default function SafetyScoresManagement() {
         toast.success("הציון נוסף בהצלחה");
         await updateSoldierSafetyStatus(soldierId);
         fetchData();
+        queryClient.invalidateQueries({ queryKey: ["yearly-summary"] });
+        queryClient.invalidateQueries({ queryKey: ["soldier-safety-scores"] });
       }
     }
 
@@ -510,11 +516,17 @@ export default function SafetyScoresManagement() {
       .order("score_month", { ascending: false })
       .limit(3);
 
-    if (!recentScores || recentScores.length === 0) return;
+    if (!recentScores || recentScores.length === 0) {
+      await supabase
+        .from("soldiers")
+        .update({ current_safety_score: null, consecutive_low_months: 0, safety_status: 'ok' })
+        .eq("id", soldierId);
+      return;
+    }
 
     const latestScore = recentScores[0].safety_score;
     const lowScoreMonths = recentScores.filter(s => s.safety_score < 75).length;
-    
+
     let safetyStatus = 'ok';
     if (lowScoreMonths >= 3) {
       safetyStatus = 'suspended';
@@ -548,6 +560,8 @@ export default function SafetyScoresManagement() {
       toast.success("הציון נמחק בהצלחה");
       await updateSoldierSafetyStatus(scoreToDelete.soldier_id);
       fetchData();
+      queryClient.invalidateQueries({ queryKey: ["yearly-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["soldier-safety-scores"] });
     }
     setDeleteConfirmOpen(false);
     setScoreToDelete(null);
