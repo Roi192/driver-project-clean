@@ -221,6 +221,13 @@ export default function SoldiersControl() {
   const [ineligibilityDialogOpen, setIneligibilityDialogOpen] = useState(false);
   const [ineligibilityTargetSoldier, setIneligibilityTargetSoldier] = useState<Soldier | null>(null);
   const [selectedIneligibilityReason, setSelectedIneligibilityReason] = useState("");
+  const [quickEdit, setQuickEdit] = useState<{
+    soldier: Soldier;
+    field: string;
+    label: string;
+    type: 'date' | 'toggle' | 'license_type' | 'rotation' | 'permits';
+    value: string | boolean | string[];
+  } | null>(null);
 
   // Filters
   const [militaryLicenseFilter, setMilitaryLicenseFilter] =
@@ -332,6 +339,43 @@ export default function SoldiersControl() {
     } else {
       toast.success(`${soldier.full_name} הוחזר לכשירות`);
       fetchSoldiers();
+    }
+  };
+
+  const openQuickEdit = (
+    soldier: Soldier,
+    field: string,
+    label: string,
+    type: 'date' | 'toggle' | 'license_type' | 'rotation' | 'permits',
+    currentValue?: string | boolean | string[] | null
+  ) => {
+    if (!isAdmin) return;
+    const defaultValue = type === 'toggle' ? false : type === 'permits' ? [] : '';
+    setQuickEdit({ soldier, field, label, type, value: currentValue ?? defaultValue });
+  };
+
+  const handleQuickSave = async () => {
+    if (!quickEdit) return;
+    let valueToSave: string | boolean | string[] | null;
+    if (quickEdit.type === 'toggle') {
+      valueToSave = quickEdit.value as boolean;
+    } else if (quickEdit.type === 'permits') {
+      const arr = quickEdit.value as string[];
+      valueToSave = arr.length > 0 ? arr : null;
+    } else {
+      valueToSave = (quickEdit.value as string) || null;
+    }
+    const { error } = await supabase
+      .from("soldiers")
+      .update({ [quickEdit.field]: valueToSave })
+      .eq("id", quickEdit.soldier.id);
+    if (error) {
+      toast.error("שגיאה בעדכון");
+      console.error(error);
+    } else {
+      toast.success(`${quickEdit.label} עודכן`);
+      fetchSoldiers();
+      setQuickEdit(null);
     }
   };
 
@@ -1760,15 +1804,12 @@ export default function SoldiersControl() {
                                     צבאי:
                                   </span>
                                   <Badge
-                                    className={`${militaryStatus.color} text-white text-xs`}
+                                    className={`${militaryStatus.color} text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                    onClick={() => openQuickEdit(soldier, 'military_license_expiry', 'תוקף רשיון צבאי', 'date', soldier.military_license_expiry || '')}
+                                    title={isAdmin ? 'לחץ לעריכה' : undefined}
                                   >
                                     {soldier.military_license_expiry
-                                      ? format(
-                                          parseISO(
-                                            soldier.military_license_expiry,
-                                          ),
-                                          "dd/MM/yy",
-                                        )
+                                      ? format(parseISO(soldier.military_license_expiry), "dd/MM/yy")
                                       : "לא הוזן"}
                                   </Badge>
                                 </div>
@@ -1778,49 +1819,52 @@ export default function SoldiersControl() {
                                     אזרחי:
                                   </span>
                                   <Badge
-                                    className={`${civilianStatus.color} text-white text-xs`}
+                                    className={`${civilianStatus.color} text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                    onClick={() => openQuickEdit(soldier, 'civilian_license_expiry', 'תוקף רשיון אזרחי', 'date', soldier.civilian_license_expiry || '')}
+                                    title={isAdmin ? 'לחץ לעריכה' : undefined}
                                   >
                                     {soldier.civilian_license_expiry
-                                      ? format(
-                                          parseISO(
-                                            soldier.civilian_license_expiry,
-                                          ),
-                                          "dd/MM/yy",
-                                        )
+                                      ? format(parseISO(soldier.civilian_license_expiry), "dd/MM/yy")
                                       : "לא הוזן"}
                                   </Badge>
                                 </div>
                               </div>
 
                               {soldier.qualified_date && (
-                                <div className="flex items-center gap-1 mt-2">
+                                <div
+                                  className={`flex items-center gap-1 mt-2 ${isAdmin ? 'cursor-pointer hover:opacity-75 transition-opacity' : ''}`}
+                                  onClick={() => openQuickEdit(soldier, 'qualified_date', 'תאריך נהג מוכשר', 'date', soldier.qualified_date || '')}
+                                  title={isAdmin ? 'לחץ לעריכה' : undefined}
+                                >
                                   <CheckCircle className="w-3 h-3 text-emerald-500" />
                                   <span className="text-xs text-emerald-600 font-medium">
                                     מוכשר מ:{" "}
-                                    {format(
-                                      parseISO(soldier.qualified_date),
-                                      "dd/MM/yyyy",
-                                    )}
+                                    {format(parseISO(soldier.qualified_date), "dd/MM/yyyy")}
                                   </span>
                                 </div>
                               )}
 
                               {soldier.release_date && (
-                                <div className="flex items-center gap-1 mt-2">
+                                <div
+                                  className={`flex items-center gap-1 mt-2 ${isAdmin ? 'cursor-pointer hover:opacity-75 transition-opacity' : ''}`}
+                                  onClick={() => openQuickEdit(soldier, 'release_date', 'תאריך שחרור', 'date', soldier.release_date || '')}
+                                  title={isAdmin ? 'לחץ לעריכה' : undefined}
+                                >
                                   <Calendar className="w-3 h-3 text-slate-400" />
                                   <span className="text-xs text-slate-500">
                                     שחרור:{" "}
-                                    {format(
-                                      parseISO(soldier.release_date),
-                                      "dd/MM/yyyy",
-                                    )}
+                                    {format(parseISO(soldier.release_date), "dd/MM/yyyy")}
                                   </span>
                                 </div>
                               )}
 
                               {soldier.defensive_driving_passed && (
                                 <div className="flex items-center gap-1 mt-2">
-                                  <Badge className="bg-blue-500 text-white text-xs gap-1">
+                                  <Badge
+                                    className={`bg-blue-500 text-white text-xs gap-1 ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                    onClick={() => openQuickEdit(soldier, 'defensive_driving_passed', 'נהיגה מונעת', 'toggle', soldier.defensive_driving_passed)}
+                                    title={isAdmin ? 'לחץ לעריכה' : undefined}
+                                  >
                                     <Car className="w-3 h-3" />
                                     עבר נהיגה מונעת
                                   </Badge>
@@ -1834,15 +1878,12 @@ export default function SoldiersControl() {
                                   נהיגה נכונה בשירות:
                                 </span>
                                 <Badge
-                                  className={`${getCorrectDrivingStatus(soldier).color} text-white text-xs`}
+                                  className={`${getCorrectDrivingStatus(soldier).color} text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                  onClick={() => openQuickEdit(soldier, 'correct_driving_in_service_date', 'נהיגה נכונה בשירות', 'date', soldier.correct_driving_in_service_date || '')}
+                                  title={isAdmin ? 'לחץ לעריכה' : undefined}
                                 >
                                   {soldier.correct_driving_in_service_date
-                                    ? format(
-                                        parseISO(
-                                          soldier.correct_driving_in_service_date,
-                                        ),
-                                        "dd/MM/yy",
-                                      )
+                                    ? format(parseISO(soldier.correct_driving_in_service_date), "dd/MM/yy")
                                     : "לא הוזן"}
                                 </Badge>
                               </div>
@@ -1854,15 +1895,12 @@ export default function SoldiersControl() {
                                   מטווח אחרון:
                                 </span>
                                 <Badge
-                                  className={`${getShootingRangeStatus(soldier).color} text-white text-xs`}
+                                  className={`${getShootingRangeStatus(soldier).color} text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                  onClick={() => openQuickEdit(soldier, 'last_shooting_range_date', 'תאריך מטווח אחרון', 'date', soldier.last_shooting_range_date || '')}
+                                  title={isAdmin ? 'לחץ לעריכה' : undefined}
                                 >
                                   {soldier.last_shooting_range_date
-                                    ? format(
-                                        parseISO(
-                                          soldier.last_shooting_range_date,
-                                        ),
-                                        "dd/MM/yy",
-                                      )
+                                    ? format(parseISO(soldier.last_shooting_range_date), "dd/MM/yy")
                                     : "לא הוזן"}
                                 </Badge>
                               </div>
@@ -1874,7 +1912,11 @@ export default function SoldiersControl() {
                                     <span className="text-xs text-slate-500">
                                       סוג רשיון:
                                     </span>
-                                    <Badge className="bg-indigo-500 text-white text-xs">
+                                    <Badge
+                                      className={`bg-indigo-500 text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                      onClick={() => openQuickEdit(soldier, 'license_type', 'סוג רשיון', 'license_type', soldier.license_type || '')}
+                                      title={isAdmin ? 'לחץ לעריכה' : undefined}
+                                    >
                                       {soldier.license_type}
                                     </Badge>
                                   </div>
@@ -1883,33 +1925,35 @@ export default function SoldiersControl() {
                                 {/* Rotation Group Badge */}
                                 {(soldier as any).rotation_group && (
                                   <div className="flex items-center gap-1 mt-2">
-                                    <Badge className="bg-violet-500 text-white text-xs">
+                                    <Badge
+                                      className={`bg-violet-500 text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                      onClick={() => openQuickEdit(soldier, 'rotation_group', 'סבב שבוע-שבוע', 'rotation', (soldier as any).rotation_group || '')}
+                                      title={isAdmin ? 'לחץ לעריכה' : undefined}
+                                    >
                                       🔄{" "}
-                                      {ROTATION_GROUPS.find(
-                                        (r) =>
-                                          r.value ===
-                                          (soldier as any).rotation_group,
-                                      )?.label ||
-                                        (soldier as any).rotation_group}
+                                      {ROTATION_GROUPS.find((r) => r.value === (soldier as any).rotation_group)?.label || (soldier as any).rotation_group}
                                     </Badge>
                                   </div>
                                 )}
-                                {soldier.permits &&
-                                  soldier.permits.length > 0 && (
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-xs text-slate-500">
-                                        היתרים:
-                                      </span>
-                                      {soldier.permits.map((permit) => (
-                                        <Badge
-                                          key={permit}
-                                          className="bg-teal-500 text-white text-xs"
-                                        >
-                                          {permit}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  )}
+                                {soldier.permits && soldier.permits.length > 0 && (
+                                  <div
+                                    className={`flex items-center gap-1 ${isAdmin ? 'cursor-pointer' : ''}`}
+                                    onClick={() => openQuickEdit(soldier, 'permits', 'היתרים', 'permits', soldier.permits || [])}
+                                    title={isAdmin ? 'לחץ לעריכה' : undefined}
+                                  >
+                                    <span className="text-xs text-slate-500">
+                                      היתרים:
+                                    </span>
+                                    {soldier.permits.map((permit) => (
+                                      <Badge
+                                        key={permit}
+                                        className={`bg-teal-500 text-white text-xs ${isAdmin ? 'hover:opacity-75 active:scale-95 transition-all' : ''}`}
+                                      >
+                                        {permit}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -2309,6 +2353,114 @@ export default function SoldiersControl() {
               </Button>
               <Button variant="destructive" onClick={handleDelete}>
                 הסר
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quick Edit Field Dialog */}
+        <Dialog open={!!quickEdit} onOpenChange={(open) => !open && setQuickEdit(null)}>
+          <DialogContent dir="rtl" className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Edit className="w-4 h-4 text-primary" />
+                {quickEdit?.label}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground font-medium">{quickEdit?.soldier.full_name}</p>
+            </DialogHeader>
+
+            <div className="py-1">
+              {quickEdit?.type === 'date' && (
+                <Input
+                  type="date"
+                  value={quickEdit.value as string}
+                  onChange={(e) => setQuickEdit((q) => q ? { ...q, value: e.target.value } : null)}
+                  className="text-left"
+                  dir="ltr"
+                  autoFocus
+                />
+              )}
+
+              {quickEdit?.type === 'toggle' && (
+                <div
+                  className="flex items-center gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 cursor-pointer"
+                  onClick={() => setQuickEdit((q) => q ? { ...q, value: !q.value } : null)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={quickEdit.value as boolean}
+                    onChange={(e) => setQuickEdit((q) => q ? { ...q, value: e.target.checked } : null)}
+                    className="w-5 h-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="font-bold text-blue-700">{quickEdit.label}</span>
+                </div>
+              )}
+
+              {quickEdit?.type === 'license_type' && (
+                <Select
+                  value={quickEdit.value as string}
+                  onValueChange={(v) => setQuickEdit((q) => q ? { ...q, value: v } : null)}
+                >
+                  <SelectTrigger className="bg-white text-slate-800">
+                    <SelectValue placeholder="בחר סוג רשיון" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LICENSE_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {quickEdit?.type === 'rotation' && (
+                <Select
+                  value={(quickEdit.value as string) || 'none'}
+                  onValueChange={(v) => setQuickEdit((q) => q ? { ...q, value: v === 'none' ? '' : v } : null)}
+                >
+                  <SelectTrigger className="bg-white text-slate-800">
+                    <SelectValue placeholder="בחר סבב" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">לא הוגדר</SelectItem>
+                    {ROTATION_GROUPS.map((g) => (
+                      <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {quickEdit?.type === 'permits' && (
+                <div className="space-y-2">
+                  {PERMITS_LIST.map((permit) => (
+                    <div
+                      key={permit}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer"
+                      onClick={() => {
+                        const curr = quickEdit.value as string[];
+                        const next = curr.includes(permit)
+                          ? curr.filter((p) => p !== permit)
+                          : [...curr, permit];
+                        setQuickEdit((q) => q ? { ...q, value: next } : null);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(quickEdit.value as string[]).includes(permit)}
+                        readOnly
+                        className="w-4 h-4 rounded border-slate-300 text-primary pointer-events-none"
+                      />
+                      <Label className="cursor-pointer">{permit}</Label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setQuickEdit(null)}>ביטול</Button>
+              <Button size="sm" onClick={handleQuickSave} className="gap-1">
+                <CheckCircle className="w-4 h-4" />
+                שמור
               </Button>
             </DialogFooter>
           </DialogContent>
