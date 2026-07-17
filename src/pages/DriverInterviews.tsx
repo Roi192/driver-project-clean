@@ -498,6 +498,11 @@ export default function DriverInterviews() {
   };
 
   const handleSubmit = async () => {
+    if (!brigade) {
+      toast.error("יש לבחור חטיבה פעילה לפני הגשת ראיון — לחץ על 'החלפת חטיבה'");
+      return;
+    }
+
     if (!formData.interviewer_name) {
       toast.error("יש להזין את שם הסמ\"פ המראיין");
       return;
@@ -530,7 +535,7 @@ export default function DriverInterviews() {
       additional_notes: formData.additional_notes || null,
       interviewer_summary: formData.interviewer_summary || null,
       interviewer_name: formData.interviewer_name,
-      brigade: brigade || "binyamin",
+      brigade: brigade,
     };
 
     let error;
@@ -562,8 +567,10 @@ export default function DriverInterviews() {
     setSaving(false);
 
     if (error) {
-      toast.error(editingInterviewId ? "שגיאה בעדכון הראיון" : "שגיאה בשמירת הראיון");
-      console.error(error);
+      console.error("Interview save error:", error);
+      const e = error as { message?: string; details?: string; hint?: string };
+      const msg = e?.message || e?.details || e?.hint || JSON.stringify(error);
+      toast.error(`${editingInterviewId ? "שגיאה בעדכון" : "שגיאה בשמירת"} הראיון: ${msg}`);
     } else {
       toast.success(editingInterviewId ? "הראיון עודכן בהצלחה" : "הראיון נשמר בהצלחה");
       setDialogOpen(false);
