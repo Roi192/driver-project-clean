@@ -363,8 +363,9 @@ export default function SoldiersControl() {
       })
       .eq("id", statusDialog.id);
     if (error) {
-      toast.error("שגיאה בעדכון הסטטוס");
-      console.error(error);
+      const msg = (error as { message?: string })?.message || JSON.stringify(error);
+      toast.error(`שגיאה בעדכון הסטטוס: ${msg}`);
+      console.error("Status update error:", error);
     } else {
       const label = MANUAL_STATUS_OPTIONS.find(o => o.value === newStatusValue)?.label || 'כשיר';
       toast.success(`${statusDialog.full_name} — סטטוס: ${label}`);
