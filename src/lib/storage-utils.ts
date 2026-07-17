@@ -4,6 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 const signedUrlCache = new Map<string, { url: string; expires: number }>();
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour cache
 
+// Buckets configured as public in Supabase — getPublicUrl works for everyone, no auth needed
+const PUBLIC_BUCKETS = new Set(['shift-photos']);
+
 /**
  * Extract the file path from various URL formats:
  * - Full signed URL: https://xxx.supabase.co/storage/v1/object/sign/bucket/path?token=xxx
@@ -48,49 +51,67 @@ export function extractFilePath(urlOrPath: string, bucket: string): string | nul
  * Handles both raw paths and existing URLs
  */
 export async function getSignedUrl(
-  urlOrPath: string | null | undefined, 
+  urlOrPath: string | null | undefined,
   bucket: string = "content-images"
 ): Promise<string | null> {
   if (!urlOrPath) return null;
-  
+
   // Extract the path from whatever format we received
   const filePath = extractFilePath(urlOrPath, bucket);
-  
+
   // If we couldn't extract a path, maybe it's an external URL or different bucket
   // In that case, return the original URL
   if (!filePath) {
     return urlOrPath;
   }
-  
+
   const cacheKey = `${bucket}:${filePath}`;
-  
+
   // Check cache
   const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {
     return cached.url;
   }
-  
+
+  // Public buckets don't need auth — getPublicUrl works for all roles
+  if (PUBLIC_BUCKETS.has(bucket)) {
+    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    signedUrlCache.set(cacheKey, { url: data.publicUrl, expires: Date.now() + CACHE_DURATION });
+    return data.publicUrl;
+  }
+
   try {
     const { data, error } = await supabase.storage
       .from(bucket)
       .createSignedUrl(filePath, 60 * 60 * 24); // 24 hour validity
-    
+
     if (error || !data?.signedUrl) {
       console.error("Failed to create signed URL:", error);
       return urlOrPath; // Return original as fallback
     }
-    
+
     // Cache the URL
     signedUrlCache.set(cacheKey, {
       url: data.signedUrl,
       expires: Date.now() + CACHE_DURATION
     });
-    
+
     return data.signedUrl;
   } catch (error) {
     console.error("Error creating signed URL:", error);
     return urlOrPath; // Return original as fallback
   }
+}
+
+/**
+ * Synchronously compute the public CDN URL for a file in a public bucket.
+ * Only works for buckets that are configured as public in Supabase Storage.
+ */
+export function getPublicStorageUrl(urlOrPath: string, bucket: string): string | null {
+  const filePath = extractFilePath(urlOrPath, bucket);
+  if (!filePath) return urlOrPath;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+  return data.publicUrl;
 }
 
 /**

@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StorageImage } from '@/components/shared/StorageImage';
-import { Truck, ArrowLeft, Calendar, MapPin, User, Camera, ChevronLeft, Sparkles } from 'lucide-react';
+import { getSignedUrl } from '@/lib/storage-utils';
+import { Truck, ArrowLeft, Calendar, MapPin, User, Camera, ChevronLeft, Sparkles, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 
@@ -56,6 +57,25 @@ export function VehicleReportsCard({ reports }: VehicleReportsCardProps) {
     .sort((a, b) => b.count - a.count);
 
   const selectedVehicleReports = selectedVehicle ? vehicleGroups[selectedVehicle] : [];
+
+  const handleDownload = async (photoUrl: string, label: string) => {
+    const resolvedUrl = await getSignedUrl(photoUrl, 'shift-photos');
+    if (!resolvedUrl) return;
+    try {
+      const response = await fetch(resolvedUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `תמונת_רכב_${label}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(resolvedUrl, '_blank');
+    }
+  };
 
   const getPhotos = (report: ShiftReport) => {
     const photos: { label: string; url: string }[] = [];
@@ -174,9 +194,9 @@ export function VehicleReportsCard({ reports }: VehicleReportsCardProps) {
                           </div>
                           <div className="grid grid-cols-5 gap-2">
                             {getPhotos(report).map((photo, idx) => (
-                              <div 
-                                key={idx} 
-                                className="relative aspect-square rounded-xl overflow-hidden cursor-pointer hover:ring-2 ring-primary transition-all hover:scale-105"
+                              <div
+                                key={idx}
+                                className="relative aspect-square rounded-xl overflow-hidden cursor-pointer hover:ring-2 ring-primary transition-all hover:scale-105 group/photo"
                                 onClick={() => setSelectedPhoto(photo.url)}
                               >
                                 <StorageImage
@@ -189,6 +209,14 @@ export function VehicleReportsCard({ reports }: VehicleReportsCardProps) {
                                 <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-center py-1 text-white font-bold">
                                   {photo.label}
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleDownload(photo.url, photo.label); }}
+                                  className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-md opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center hover:bg-black/80"
+                                  title="הורד תמונה"
+                                >
+                                  <Download className="w-3 h-3 text-white" />
+                                </button>
                               </div>
                             ))}
                           </div>
@@ -242,12 +270,22 @@ export function VehicleReportsCard({ reports }: VehicleReportsCardProps) {
       <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
         <DialogContent className="max-w-2xl p-2 rounded-3xl">
           {selectedPhoto && (
-            <StorageImage
-              src={selectedPhoto}
-              bucket="shift-photos"
-              alt="תמונה מלאה"
-              className="w-full h-auto rounded-2xl"
-            />
+            <>
+              <StorageImage
+                src={selectedPhoto}
+                bucket="shift-photos"
+                alt="תמונה מלאה"
+                className="w-full h-auto rounded-2xl"
+              />
+              <Button
+                variant="outline"
+                className="mt-2 w-full gap-2"
+                onClick={() => handleDownload(selectedPhoto, 'תמונה')}
+              >
+                <Download className="w-4 h-4" />
+                הורד תמונה
+              </Button>
+            </>
           )}
         </DialogContent>
       </Dialog>
