@@ -74,6 +74,7 @@ interface Soldier {
   control_removed_at?: string | null;
   is_manually_ineligible?: boolean | null;
   manual_ineligibility_reason?: string | null;
+  manual_ineligibility_since?: string | null;
 }
 
 interface MonthlyExcellence {
@@ -91,6 +92,37 @@ const ROTATION_GROUPS = [
   { value: "b_sunday", label: "סבב ב' (ראשון-ראשון)" },
   { value: "b_monday", label: "סבב ב' (שני-שני)" },
 ];
+
+const MANUAL_STATUS_OPTIONS = [
+  { value: null as null,           label: 'כשיר',             icon: '✓',  badgeColor: 'bg-emerald-500', cardBg: 'bg-emerald-50', cardBorder: 'border-emerald-300', cardText: 'text-emerald-700' },
+  { value: 'גימלים ממושכים',       label: 'גימלים ממושכים',   icon: '🏥', badgeColor: 'bg-orange-500', cardBg: 'bg-orange-50',  cardBorder: 'border-orange-300',  cardText: 'text-orange-700'  },
+  { value: 'נפקדות',               label: 'נפקדות',            icon: '⚠️', badgeColor: 'bg-amber-600',  cardBg: 'bg-amber-50',   cardBorder: 'border-amber-300',   cardText: 'text-amber-700'   },
+  { value: 'כלא',                  label: 'כלא',               icon: '🔒', badgeColor: 'bg-red-800',    cardBg: 'bg-red-50',     cardBorder: 'border-red-400',     cardText: 'text-red-800'     },
+  { value: 'קורס',                 label: 'קורס',              icon: '📚', badgeColor: 'bg-blue-600',   cardBg: 'bg-blue-50',    cardBorder: 'border-blue-300',    cardText: 'text-blue-700'    },
+  { value: 'מיוחדת',               label: 'מיוחדת',            icon: '⭐', badgeColor: 'bg-purple-500', cardBg: 'bg-purple-50',  cardBorder: 'border-purple-300',  cardText: 'text-purple-700'  },
+];
+
+const getOperationalStatus = (soldier: Soldier) => {
+  if (soldier.is_manually_ineligible && soldier.manual_ineligibility_reason) {
+    const opt = MANUAL_STATUS_OPTIONS.find(o => o.value === soldier.manual_ineligibility_reason);
+    const sinceLabel = soldier.manual_ineligibility_since
+      ? ` מ-${format(parseISO(soldier.manual_ineligibility_since), 'dd/MM')}`
+      : '';
+    return {
+      label: `${opt?.label || soldier.manual_ineligibility_reason}${sinceLabel}`,
+      icon: opt?.icon || '🚫',
+      badgeColor: opt?.badgeColor || 'bg-red-600',
+    };
+  }
+  const today = new Date();
+  const milExp = soldier.military_license_expiry ? parseISO(soldier.military_license_expiry) : null;
+  const civExp = soldier.civilian_license_expiry ? parseISO(soldier.civilian_license_expiry) : null;
+  const milExpired = milExp && differenceInDays(milExp, today) < 0;
+  const civExpired = civExp && differenceInDays(civExp, today) < 0;
+  if (milExpired || civExpired) return { label: 'לא כשיר', icon: '❌', badgeColor: 'bg-red-500' };
+  if (!milExp || !civExp) return { label: 'חסר מידע', icon: '❓', badgeColor: 'bg-slate-400' };
+  return { label: 'כשיר', icon: '✓', badgeColor: 'bg-emerald-500' };
+};
 
 // פונקציית כשירות אוטומטית - נהג כשיר = רשיון צבאי ואזרחי בתוקף (לא קשור לנהיגה מונעת)
 const getFitnessStatus = (soldier: Soldier) => {
@@ -218,9 +250,9 @@ export default function SoldiersControl() {
   const [profileSoldier, setProfileSoldier] = useState<Soldier | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [excellenceData, setExcellenceData] = useState<MonthlyExcellence[]>([]);
-  const [ineligibilityDialogOpen, setIneligibilityDialogOpen] = useState(false);
-  const [ineligibilityTargetSoldier, setIneligibilityTargetSoldier] = useState<Soldier | null>(null);
-  const [selectedIneligibilityReason, setSelectedIneligibilityReason] = useState("");
+  const [statusDialog, setStatusDialog] = useState<Soldier | null>(null);
+  const [newStatusValue, setNewStatusValue] = useState<string | null>(null);
+  const [newStatusSince, setNewStatusSince] = useState("");
   const [quickEdit, setQuickEdit] = useState<{
     soldier: Soldier;
     field: string;
@@ -312,33 +344,32 @@ export default function SoldiersControl() {
     setLoading(false);
   };
 
-  const handleSetIneligibility = async () => {
-    if (!ineligibilityTargetSoldier || !selectedIneligibilityReason) return;
-    const { error } = await supabase
-      .from("soldiers")
-      .update({ is_manually_ineligible: true, manual_ineligibility_reason: selectedIneligibilityReason })
-      .eq("id", ineligibilityTargetSoldier.id);
-    if (error) {
-      toast.error("שגיאה בסימון החייל");
-    } else {
-      toast.success(`${ineligibilityTargetSoldier.full_name} סומן כלא כשיר — ${selectedIneligibilityReason}`);
-      fetchSoldiers();
-    }
-    setIneligibilityDialogOpen(false);
-    setIneligibilityTargetSoldier(null);
-    setSelectedIneligibilityReason("");
+  const openStatusDialog = (soldier: Soldier) => {
+    if (!isAdmin) return;
+    setNewStatusValue(soldier.is_manually_ineligible ? (soldier.manual_ineligibility_reason ?? null) : null);
+    setNewStatusSince(soldier.manual_ineligibility_since || format(new Date(), "yyyy-MM-dd"));
+    setStatusDialog(soldier);
   };
 
-  const handleRemoveIneligibility = async (soldier: Soldier) => {
+  const handleStatusSave = async () => {
+    if (!statusDialog) return;
+    const isManual = newStatusValue !== null;
     const { error } = await supabase
       .from("soldiers")
-      .update({ is_manually_ineligible: false, manual_ineligibility_reason: null })
-      .eq("id", soldier.id);
+      .update({
+        is_manually_ineligible: isManual,
+        manual_ineligibility_reason: isManual ? newStatusValue : null,
+        manual_ineligibility_since: isManual && newStatusSince ? newStatusSince : null,
+      })
+      .eq("id", statusDialog.id);
     if (error) {
-      toast.error("שגיאה בהסרת אי-הכשירות");
+      toast.error("שגיאה בעדכון הסטטוס");
+      console.error(error);
     } else {
-      toast.success(`${soldier.full_name} הוחזר לכשירות`);
+      const label = MANUAL_STATUS_OPTIONS.find(o => o.value === newStatusValue)?.label || 'כשיר';
+      toast.success(`${statusDialog.full_name} — סטטוס: ${label}`);
       fetchSoldiers();
+      setStatusDialog(null);
     }
   };
 
@@ -1775,13 +1806,19 @@ export default function SoldiersControl() {
                                 >
                                   {soldier.personal_number}
                                 </Badge>
-                                {/* Fitness Badge */}
-                                <Badge
-                                  className={`${getFitnessStatus(soldier).color} text-white text-xs`}
-                                >
-                                  {getFitnessStatus(soldier).icon}{" "}
-                                  {getFitnessStatus(soldier).label}
-                                </Badge>
+                                {/* Operational Status Badge — clickable for admins */}
+                                {(() => {
+                                  const op = getOperationalStatus(soldier);
+                                  return (
+                                    <Badge
+                                      className={`${op.badgeColor} text-white text-xs ${isAdmin ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : ''}`}
+                                      onClick={() => openStatusDialog(soldier)}
+                                      title={isAdmin ? 'לחץ לשינוי סטטוס' : undefined}
+                                    >
+                                      {op.icon} {op.label}
+                                    </Badge>
+                                  );
+                                })()}
                                 {/* Safety Score Badge */}
                                 <Badge
                                   className={`${getSafetyScoreStatus(soldier).color} text-white text-xs flex items-center gap-1`}
@@ -1974,25 +2011,6 @@ export default function SoldiersControl() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => {
-                                    if (soldier.is_manually_ineligible) {
-                                      handleRemoveIneligibility(soldier);
-                                    } else {
-                                      setIneligibilityTargetSoldier(soldier);
-                                      setSelectedIneligibilityReason("");
-                                      setIneligibilityDialogOpen(true);
-                                    }
-                                  }}
-                                  className={`rounded-xl ${soldier.is_manually_ineligible ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-red-500 hover:text-red-600 hover:bg-red-50'}`}
-                                  title={soldier.is_manually_ineligible ? 'הסר אי-כשירות' : 'סמן כלא כשיר'}
-                                >
-                                  {soldier.is_manually_ineligible ? <CheckCircle className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
-                                </Button>
-                              )}
-                              {isAdmin && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
                                   onClick={() => openEditDialog(soldier)}
                                   className="rounded-xl"
                                 >
@@ -2020,6 +2038,28 @@ export default function SoldiersControl() {
                   )}
                 </div>
               </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Status Summary */}
+          <Card className="border-0 shadow-lg bg-white/90 backdrop-blur rounded-2xl">
+            <CardContent className="p-4">
+              <p className="text-sm font-bold text-slate-700 mb-3">סיכום סטטוסים</p>
+              <div className="flex flex-wrap gap-2">
+                {MANUAL_STATUS_OPTIONS.map((opt) => {
+                  const count = opt.value === null
+                    ? soldiers.filter(s => !s.is_manually_ineligible).length
+                    : soldiers.filter(s => s.is_manually_ineligible && s.manual_ineligibility_reason === opt.value).length;
+                  if (count === 0) return null;
+                  return (
+                    <div key={opt.value ?? 'fit'} className={`flex items-center gap-2 px-3 py-2 rounded-xl ${opt.cardBg} border ${opt.cardBorder}`}>
+                      <span>{opt.icon}</span>
+                      <span className={`text-xs font-bold ${opt.cardText}`}>{opt.label}:</span>
+                      <span className={`text-base font-black ${opt.cardText}`}>{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -2466,46 +2506,52 @@ export default function SoldiersControl() {
           </DialogContent>
         </Dialog>
 
-        {/* Ineligibility Reason Dialog */}
-        <Dialog open={ineligibilityDialogOpen} onOpenChange={(open) => {
-          setIneligibilityDialogOpen(open);
-          if (!open) { setIneligibilityTargetSoldier(null); setSelectedIneligibilityReason(""); }
-        }}>
-          <DialogContent dir="rtl">
+        {/* Status Dialog */}
+        <Dialog open={!!statusDialog} onOpenChange={(open) => !open && setStatusDialog(null)}>
+          <DialogContent dir="rtl" className="max-w-sm">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Ban className="w-5 h-5 text-red-500" />
-                סמן כלא כשיר
-              </DialogTitle>
+              <DialogTitle className="text-base font-black">סטטוס חייל</DialogTitle>
+              <p className="text-sm text-muted-foreground font-medium">{statusDialog?.full_name}</p>
             </DialogHeader>
-            {ineligibilityTargetSoldier && (
-              <p className="font-bold text-slate-700">{ineligibilityTargetSoldier.full_name}</p>
-            )}
-            <div>
-              <Label className="text-sm font-bold text-slate-600 mb-2 block">סיבת אי-כשירות</Label>
-              <Select value={selectedIneligibilityReason} onValueChange={setSelectedIneligibilityReason}>
-                <SelectTrigger className="bg-white text-slate-800">
-                  <SelectValue placeholder="בחר סיבה..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="נפקדות">נפקדות</SelectItem>
-                  <SelectItem value="גימלים ממושכים">גימלים ממושכים</SelectItem>
-                  <SelectItem value="מיוחדת">מיוחדת</SelectItem>
-                  <SelectItem value="כלא">כלא</SelectItem>
-                  <SelectItem value="קורס">קורס</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-2 gap-2">
+              {MANUAL_STATUS_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value ?? 'fit'}
+                  type="button"
+                  onClick={() => setNewStatusValue(opt.value)}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
+                    newStatusValue === opt.value
+                      ? `${opt.cardBorder} ${opt.cardBg}`
+                      : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="text-xl mb-1">{opt.icon}</div>
+                  <div className={`text-xs font-bold leading-tight ${newStatusValue === opt.value ? opt.cardText : 'text-slate-700'}`}>
+                    {opt.label}
+                  </div>
+                </button>
+              ))}
             </div>
+
+            {newStatusValue !== null && (
+              <div>
+                <Label className="text-sm font-bold text-slate-600 mb-1.5 block">ממתי?</Label>
+                <Input
+                  type="date"
+                  value={newStatusSince}
+                  onChange={(e) => setNewStatusSince(e.target.value)}
+                  dir="ltr"
+                  className="text-left"
+                />
+              </div>
+            )}
+
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setIneligibilityDialogOpen(false)}>ביטול</Button>
-              <Button
-                variant="destructive"
-                onClick={handleSetIneligibility}
-                disabled={!selectedIneligibilityReason}
-                className="gap-2"
-              >
-                <Ban className="w-4 h-4" />
-                סמן כלא כשיר
+              <Button variant="outline" size="sm" onClick={() => setStatusDialog(null)}>ביטול</Button>
+              <Button size="sm" onClick={handleStatusSave} className="gap-1">
+                <CheckCircle className="w-4 h-4" />
+                שמור סטטוס
               </Button>
             </DialogFooter>
           </DialogContent>

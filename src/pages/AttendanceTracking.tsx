@@ -62,7 +62,18 @@ interface Soldier {
   rotation_group: string | null;
   release_date: string | null;
   is_active: boolean | null;
+  is_manually_ineligible?: boolean | null;
+  manual_ineligibility_reason?: string | null;
+  manual_ineligibility_since?: string | null;
 }
+
+const SOLDIER_STATUS_COLORS: Record<string, string> = {
+  'גימלים ממושכים': 'bg-orange-500',
+  'נפקדות': 'bg-amber-600',
+  'כלא': 'bg-red-800',
+  'קורס': 'bg-blue-600',
+  'מיוחדת': 'bg-purple-500',
+};
 
 interface WorkPlanEvent {
   id: string;
@@ -706,7 +717,17 @@ export default function AttendanceTracking() {
                       if (commanderMode && stats.percentage >= 80) return null;
                       return (
                         <TableRow key={soldier.id} className="cursor-pointer hover:bg-slate-50" onClick={() => { setSelectedSoldier(soldier); setDetailDialogOpen(true); }}>
-                          <TableCell className="font-medium text-slate-800 text-sm">{soldier.full_name}</TableCell>
+                          <TableCell className="font-medium text-slate-800 text-sm">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {soldier.full_name}
+                              {soldier.is_manually_ineligible && soldier.manual_ineligibility_reason && (
+                                <Badge className={`${SOLDIER_STATUS_COLORS[soldier.manual_ineligibility_reason] || 'bg-red-600'} text-white text-xs`}>
+                                  {soldier.manual_ineligibility_reason}
+                                  {soldier.manual_ineligibility_since && ` מ-${format(parseISO(soldier.manual_ineligibility_since), 'dd/MM')}`}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Progress value={stats.percentage} className={`w-14 h-2 ${stats.percentage >= 80 ? '[&>div]:bg-emerald-500' : stats.percentage >= 50 ? '[&>div]:bg-amber-500' : '[&>div]:bg-red-500'}`} />
