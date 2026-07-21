@@ -25,6 +25,7 @@ import WeeklyMeeting from "@/pages/WeeklyMeeting";
 import ProcedureSignaturesTracking from "@/pages/ProcedureSignaturesTracking";
 import EquipmentTracking from "@/pages/EquipmentTracking";
 import FrameworksManagement from "@/pages/FrameworksManagement";
+import WhatsAppSettings from "@/pages/WhatsAppSettings";
 
 const protect = (element: ReactNode) => (
   <ProtectedRoute>{element}</ProtectedRoute>
@@ -56,5 +57,6 @@ export const adminRoutes = (
     <Route path="/procedure-signatures-tracking" element={protect(<ProcedureSignaturesTracking />)} />
     <Route path="/equipment-tracking" element={protect(<EquipmentTracking />)} />
     <Route path="/frameworks" element={protect(<FrameworksManagement />)} />
+    <Route path="/whatsapp-settings" element={protect(<WhatsAppSettings />)} />
   </>
 );

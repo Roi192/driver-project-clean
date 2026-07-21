@@ -4,7 +4,7 @@ import { NavMenuItem } from "./NavMenuItem";
 import {
   LayoutDashboard, Calendar, ClipboardCheck, Users, UserCheck, Gavel, DoorOpen,
   ShieldAlert, FileSearch, Gauge, Car, Map, UserCog, Building, Sparkles,
-  GraduationCap, BarChart3, CalendarDays, Crosshair, Home, Bell, Building2,
+  GraduationCap, BarChart3, CalendarDays, Crosshair, Home, Bell, Building2, MessageCircle,
 } from "lucide-react";
 
 interface Props {
@@ -74,6 +74,7 @@ export function AdminNav({ onClose }: Props) {
       {canAccessEquipmentTracking && <NavMenuItem to="/equipment-tracking" label='מעקב צל"ם' icon={Crosshair} iconBg="from-rose-500 to-rose-700" theme="gold" onClose={onClose} />}
       <NavMenuItem to="/frameworks" label="ניהול מסגרות" icon={Building2} iconBg="from-teal-500 to-teal-600" theme="gold" onClose={onClose} />
       <NavMenuItem to="/notification-settings" label="הגדרות התראות" icon={Bell} iconBg="from-sky-500 to-sky-600" theme="gold" onClose={onClose} />
+      {isAdmin && <NavMenuItem to="/whatsapp-settings" label="הפצת WhatsApp" icon={MessageCircle} iconBg="from-green-500 to-emerald-600" theme="gold" onClose={onClose} />}
     </>
   );
 }
