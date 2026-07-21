@@ -280,7 +280,7 @@ export function AddEditDialog({
               ) : (
                 <Input
                   id={field.name}
-                  type={field.type === "number" ? "number" : "text"}
+                  type={field.type === "number" ? "number" : field.type === "time" ? "time" : "text"}
                   placeholder={field.placeholder}
                   value={toInputString(formData[field.name])}
                   onChange={(e) => handleChange(field.name, e.target.value)}
