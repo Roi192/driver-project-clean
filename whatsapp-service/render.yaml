@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: whatsapp-safety-bot
+    env: node
+    region: frankfurt
+    plan: free
+    rootDir: whatsapp-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
