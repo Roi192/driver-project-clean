@@ -362,32 +362,12 @@ const getFields = (
       { name: "description", label: "תיאור האירוע", type: "textarea", placeholder: "תיאור מפורט של האירוע...", required: !isBattalionUser },
       // ── 14. תוצאות האירוע ────────────────────────────────────────────────────
       { name: "event_outcomes", label: "תוצאות האירוע", type: "textarea", placeholder: "פרט את תוצאות האירוע..." },
-      // ── 15-16. הערכת חומרת הפגיעה ───────────────────────────────────────────
+      // ── 15. הערכת חומרת הפגיעה (שדה מלל משולב) ────────────────────────────
       {
         name: "person_injury_severity",
-        label: "חומרת פגיעה באדם",
-        type: "select",
-        options: [
-          { value: "none", label: "ללא פגועים" },
-          { value: "light", label: "קל" },
-          { value: "moderate", label: "בינוני" },
-          { value: "severe", label: "קשה" },
-          { value: "fatal", label: "קטלני" },
-        ],
-        placeholder: "בחר חומרת פגיעה באדם",
-      },
-      {
-        name: "property_damage_severity",
-        label: "חומרת פגיעה ברכוש",
-        type: "select",
-        options: [
-          { value: "none", label: "ללא נזק" },
-          { value: "light", label: "קל" },
-          { value: "moderate", label: "בינוני" },
-          { value: "severe", label: "קשה" },
-          { value: "total_loss", label: "אובדן כולל" },
-        ],
-        placeholder: "בחר חומרת נזק לרכוש",
+        label: "הערכת חומרת הפגיעה באדם ורכוש",
+        type: "textarea",
+        placeholder: "פרט את חומרת הפגיעה באדם וברכוש...",
       },
       // ── 17. סוג הנהג ─────────────────────────────────────────────────────────
       {
@@ -418,45 +398,11 @@ const getFields = (
         dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "fighter", "palsar", "general", "other"] },
       },
       // ── 18. סוג הרכב ─────────────────────────────────────────────────────────
-      {
-        name: "vehicle_type",
-        label: "סוג הרכב",
-        type: "select",
-        options: [
-          { value: "jeep", label: "ג'יפ" },
-          { value: "pickup", label: "טנדר" },
-          { value: "apc", label: 'נגמ"ש' },
-          { value: "hmmwv", label: 'HMMWV / אמר"ח' },
-          { value: "armored", label: "רכב משוריין" },
-          { value: "truck", label: "משאית" },
-          { value: "bus", label: "אוטובוס" },
-          { value: "civilian", label: "רכב פרטי" },
-          { value: "motorcycle", label: "אופנוע" },
-          { value: "other", label: "אחר" },
-        ],
-        placeholder: "בחר סוג רכב",
-      },
+      { name: "vehicle_type", label: "סוג הרכב", type: "text", placeholder: "הזן סוג רכב..." },
       // ── 19. מספר רכב ─────────────────────────────────────────────────────────
       { name: "vehicle_number", label: "מספר רכב", type: "text", placeholder: "הזן מספר רכב..." },
       // ── 20. סוג האירוע (פעילות היחידה) ──────────────────────────────────────
-      {
-        name: "unit_activity_type",
-        label: "סוג האירוע (פעילות היחידה)",
-        type: "select",
-        options: [
-          { value: "patrol", label: "סיור" },
-          { value: "checkpoint", label: "מחסום" },
-          { value: "prisoner_transfer", label: "מסיע אסירים / עצורים" },
-          { value: "training", label: "אימון" },
-          { value: "admin_drive", label: "נסיעה אדמיניסטרטיבית" },
-          { value: "evacuation", label: "פינוי" },
-          { value: "operational", label: "פעולה מבצעית" },
-          { value: "maintenance", label: "תחזוקה / שיפוצים" },
-          { value: "supply", label: "אספקה / לוגיסטיקה" },
-          { value: "other", label: "אחר" },
-        ],
-        placeholder: "בחר סוג פעילות",
-      },
+      { name: "unit_activity_type", label: "סוג האירוע (פעילות היחידה)", type: "text", placeholder: "לדוגמה: סיור, מחסום, אימון..." },
       // ── 21. חומרת האירוע ─────────────────────────────────────────────────────
       {
         name: "severity",

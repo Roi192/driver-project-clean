@@ -29,10 +29,7 @@ function buildMessage(r: Record<string, string>): string {
     ? `https://maps.google.com/?q=${r.latitude},${r.longitude}`
     : "";
 
-  const injurySev = [r.person_injury_severity, r.property_damage_severity].filter(Boolean).join(" | רכוש: ");
-  const injurySevLine = r.person_injury_severity
-    ? `אדם: ${r.person_injury_severity}${r.property_damage_severity ? ` | רכוש: ${r.property_damage_severity}` : ""}`
-    : (r.property_damage_severity ? `רכוש: ${r.property_damage_severity}` : "");
+  const injurySevLine = r.person_injury_severity || "";
 
   const vehicle = [r.vehicle_type, r.vehicle_number ? `מס' ${r.vehicle_number}` : ""].filter(Boolean).join(" ");
   const driverType = DRIVER_LABEL[r.driver_type] || r.driver_type || "";
