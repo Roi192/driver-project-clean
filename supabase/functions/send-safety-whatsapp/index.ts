@@ -25,10 +25,6 @@ function buildMessage(r: Record<string, string>): string {
     ? new Date(r.event_date + "T12:00:00Z").toLocaleDateString("he-IL", { day:"2-digit", month:"2-digit", year:"numeric" })
     : new Date().toLocaleDateString("he-IL");
 
-  const mapLink = (r.latitude && r.longitude)
-    ? `https://maps.google.com/?q=${r.latitude},${r.longitude}`
-    : "";
-
   const injurySevLine = r.person_injury_severity || "";
 
   const vehicle = [r.vehicle_type, r.vehicle_number ? `מס' ${r.vehicle_number}` : ""].filter(Boolean).join(" ");
@@ -40,7 +36,7 @@ function buildMessage(r: Record<string, string>): string {
     `*שם היחידה:* ${unitName(r)}`,
     `*תאריך:* ${dateStr}`,
     `*שעה:* ${r.event_time || ""}`,
-    `*מיקום האירוע:* ${mapLink}`,
+    `*מיקום האירוע:* ${r.location_text || ""}`,
     `*חיילים מעורבים:* ${r.involved_soldiers || ""}`,
     `*תיאור האירוע:* ${r.description || ""}`,
     `*תוצאות האירוע:* ${r.event_outcomes || ""}`,
@@ -50,10 +46,43 @@ function buildMessage(r: Record<string, string>): string {
     `*סיווג האירוע (סוג פעילות היחידה):* ${r.unit_activity_type || ""}`,
     `*חומרת האירוע:* ${SEV_LABEL[r.severity] || r.severity || ""}`,
     `*לקחים ראשונים:* ${r.initial_lessons || ""}`,
-    `*תמונות:* ${r.image_url || ""}`,
   ];
 
   return lines.join("\n");
+}
+
+async function sendToGroup(base: string, token: string, chatId: string, record: Record<string, string>, message: string): Promise<void> {
+  // 1. Send main text message
+  await fetch(`${base}/sendMessage/${token}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatId, message }),
+  });
+
+  // 2. Send image if exists
+  if (record.image_url) {
+    const fileName = record.image_url.split("/").pop() || "image.jpg";
+    await fetch(`${base}/sendFileByUrl/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, urlFile: record.image_url, fileName, caption: "תמונת האירוע" }),
+    });
+  }
+
+  // 3. Send GPS location pin if exists
+  if (record.latitude && record.longitude) {
+    await fetch(`${base}/sendLocation/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chatId,
+        nameLocation: record.title || "מיקום האירוע",
+        address: record.location_text || "",
+        latitude: parseFloat(record.latitude),
+        longitude: parseFloat(record.longitude),
+      }),
+    });
+  }
 }
 
 serve(async (req: Request) => {
@@ -107,18 +136,16 @@ serve(async (req: Request) => {
     const BASE    = `https://api.green-api.com/waInstance${cfg.instance_id}`;
     const TOKEN   = cfg.api_token;
 
-    const results = await Promise.allSettled(
-      recipients.map((g) =>
-        fetch(`${BASE}/sendMessage/${TOKEN}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId: g.wa_id, message }),
-        })
-      )
-    );
-
-    const sent   = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.filter((r) => r.status === "rejected").length;
+    let sent = 0, failed = 0;
+    for (const g of recipients) {
+      try {
+        await sendToGroup(BASE, TOKEN, g.wa_id, record, message);
+        sent++;
+      } catch (e) {
+        console.error(`Failed sending to ${g.name}:`, e);
+        failed++;
+      }
+    }
     console.log(`WhatsApp: sent=${sent} to [${recipients.map(g=>g.name).join(", ")}], failed=${failed}`);
 
     return new Response(JSON.stringify({ sent, failed }), {

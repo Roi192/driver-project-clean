@@ -53,6 +53,7 @@ interface SafetyContent {
   vehicle_type: string | null;
   unit_activity_type: string | null;
   initial_lessons: string | null;
+  location_text: string | null;
 }
 
 const categories = [
@@ -248,7 +249,9 @@ const getFields = (
       { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך", required: true },
       // ── 4. שעה ──────────────────────────────────────────────────────────────
       { name: "event_time", label: "שעה", type: "time", placeholder: "HH:MM" },
-      // ── 5. מסגרת ────────────────────────────────────────────────────────────
+      // ── 5. מיקום האירוע (תיאור מלל) ─────────────────────────────────────────
+      { name: "location_text", label: "מיקום האירוע", type: "text", placeholder: "לדוגמה: כביש 60, צומת בית אל..." },
+      // ── 6. מסגרת ────────────────────────────────────────────────────────────
       {
         name: "framework_type",
         label: "מסגרת",
@@ -353,10 +356,7 @@ const getFields = (
         condition: (formData) => isBattalionFwFn(String(formData.framework_type || "")),
         placeholder: "בחר מוצב",
       },
-      // ── 11. מיקום האירוע ─────────────────────────────────────────────────────
-      { name: "get_location", label: "מיקום נוכחי", type: "location", latField: "latitude", lngField: "longitude" },
-      { name: "map_picker", label: "בחר מיקום במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
-      // ── 12. חיילים מעורבים ───────────────────────────────────────────────────
+      // ── 11. חיילים מעורבים ───────────────────────────────────────────────────
       { name: "involved_soldiers", label: "חיילים מעורבים", type: "textarea", placeholder: "פרט את החיילים המעורבים..." },
       // ── 13. תיאור האירוע ─────────────────────────────────────────────────────
       { name: "description", label: "תיאור האירוע", type: "textarea", placeholder: "תיאור מפורט של האירוע...", required: !isBattalionUser },
@@ -414,7 +414,10 @@ const getFields = (
       },
       // ── 22. לקחים ראשונים ────────────────────────────────────────────────────
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים..." },
-      // ── 23. הוספת תמונות ─────────────────────────────────────────────────────
+      // ── 23. דקירת מיקום במפה ────────────────────────────────────────────────
+      { name: "get_location", label: "מיקום נוכחי (GPS)", type: "location", latField: "latitude", lngField: "longitude" },
+      { name: "map_picker", label: "בחר מיקום במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
+      // ── 24. הוספת תמונות ─────────────────────────────────────────────────────
       { name: "image_url", label: "הוספת תמונות", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
       { name: "video_url", label: "סרטון", type: "media", mediaTypes: ["video", "youtube"] },
@@ -699,6 +702,7 @@ export default function SafetyEvents() {
       vehicle_type: toNullableText(data.vehicle_type),
       unit_activity_type: toNullableText(data.unit_activity_type),
       initial_lessons: toNullableText(data.initial_lessons),
+      location_text: toNullableText(data.location_text),
     };
 
     const { error } = await supabase.from("safety_content").insert([insertData]);
@@ -819,6 +823,7 @@ export default function SafetyEvents() {
       vehicle_type: toNullableText(data.vehicle_type),
       unit_activity_type: toNullableText(data.unit_activity_type),
       initial_lessons: toNullableText(data.initial_lessons),
+      location_text: toNullableText(data.location_text),
     };
 
     const selectedSoldierIdEdit = toNullableText(data.soldier_id);
