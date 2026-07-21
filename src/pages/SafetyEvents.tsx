@@ -403,6 +403,20 @@ const getFields = (
       { name: "vehicle_number", label: "מספר רכב", type: "text", placeholder: "הזן מספר רכב..." },
       // ── 20. סוג האירוע (פעילות היחידה) ──────────────────────────────────────
       { name: "unit_activity_type", label: "סוג האירוע (פעילות היחידה)", type: "text", placeholder: "לדוגמה: סיור, מחסום, אימון..." },
+      // ── 20ב. סוג האירוע (תאונה/התחפרות/התהפכות) ─────────────────────────────
+      {
+        name: "event_type",
+        label: "סוג האירוע",
+        type: "select",
+        required: true,
+        options: [
+          { value: "accident", label: "תאונה" },
+          { value: "stuck", label: "התחפרות" },
+          { value: "rollover", label: "התהפכות" },
+          { value: "other", label: "אחר" },
+        ],
+        placeholder: "בחר סוג אירוע",
+      },
       // ── 21. חומרת האירוע ─────────────────────────────────────────────────────
       {
         name: "severity",
