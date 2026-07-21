@@ -1,82 +1,61 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SEV_EMOJI: Record<string, string> = { minor:"🟡", moderate:"🟠", severe:"🔴" };
+const SEV_LABEL: Record<string, string> = { minor: "קל", moderate: "בינוני", severe: "חמור" };
+const DRIVER_LABEL: Record<string, string> = { security: 'נהג בט"ש', combat: "נהג לוחם" };
 
-const FW_LABEL: Record<string, string> = {
-  planag: 'פלנ"ג',
-  "sector:צפונית": "גזרה צפונית",
-  "sector:דרומית": "גזרה דרומית",
-  battalion: "גדוד",
-};
-
-function fw(r: Record<string, string>): string {
-  const parts: string[] = [];
-  const fwRaw = r.framework_type || "";
-  const fwLabel = FW_LABEL[fwRaw] || fwRaw;
-  if (fwLabel) parts.push(fwLabel);
-  if (r.department) parts.push(r.department);
-  if (r.battalion_name) parts.push(r.battalion_name);
-  if (r.company_name) parts.push(`פלוגה ${r.company_name}`);
-  return parts.join(" | ");
+// Build the unit name line per the reporting format:
+// - planag          → מפח"ט בנימין + department
+// - contains "מגב"  → keep framework name + company_name
+// - battalion/other → battalion_name only + company_name (omit brigade-level label)
+function unitName(r: Record<string, string>): string {
+  const fw = r.framework_type || "";
+  if (fw === "planag") {
+    return ['מפח"ט בנימין', r.department].filter(Boolean).join(" | ");
+  }
+  if (fw.includes("מגב")) {
+    return [fw, r.company_name].filter(Boolean).join(" | ");
+  }
+  // battalion / sector — show only the battalion name and company
+  return [r.battalion_name, r.company_name].filter(Boolean).join(" | ") || fw;
 }
 
 function buildMessage(r: Record<string, string>): string {
-  const sev  = r.severity || "minor";
   const dateStr = r.event_date
     ? new Date(r.event_date + "T12:00:00Z").toLocaleDateString("he-IL", { day:"2-digit", month:"2-digit", year:"numeric" })
     : new Date().toLocaleDateString("he-IL");
-  const timeStr = r.event_time || "";
-  const dateTime = timeStr ? `${dateStr} שעה ${timeStr}` : dateStr;
 
-  const framework = fw(r);
-  const loc = [r.outpost, r.region, r.sector].filter(Boolean).join(" | ");
+  const mapLink = (r.latitude && r.longitude)
+    ? `https://maps.google.com/?q=${r.latitude},${r.longitude}`
+    : "";
+
+  const injurySev = [r.person_injury_severity, r.property_damage_severity].filter(Boolean).join(" | רכוש: ");
+  const injurySevLine = r.person_injury_severity
+    ? `אדם: ${r.person_injury_severity}${r.property_damage_severity ? ` | רכוש: ${r.property_damage_severity}` : ""}`
+    : (r.property_damage_severity ? `רכוש: ${r.property_damage_severity}` : "");
+
+  const vehicle = [r.vehicle_type, r.vehicle_number ? `מס' ${r.vehicle_number}` : ""].filter(Boolean).join(" ");
+  const driverType = DRIVER_LABEL[r.driver_type] || r.driver_type || "";
+  const driver = [driverType, r.driver_name].filter(Boolean).join(" — ");
 
   const lines: string[] = [
-    `${SEV_EMOJI[sev] || "🟡"} *דיווח אירוע בטיחות*`,
-    "",
-    `📅 *תאריך ושעה:* ${dateTime}`,
+    `*דיווח ראשוני:* ${r.title || ""}`,
+    `*שם היחידה:* ${unitName(r)}`,
+    `*תאריך:* ${dateStr}`,
+    `*שעה:* ${r.event_time || ""}`,
+    `*מיקום האירוע:* ${mapLink}`,
+    `*חיילים מעורבים:* ${r.involved_soldiers || ""}`,
+    `*תיאור האירוע:* ${r.description || ""}`,
+    `*תוצאות האירוע:* ${r.event_outcomes || ""}`,
+    `*הערכת מצב חומרת בפגיעה באדם ורכוש:* ${injurySevLine}`,
+    `*סוג הנהג:* ${driver}`,
+    `*סוג הרכב:* ${vehicle}`,
+    `*סיווג האירוע (סוג פעילות היחידה):* ${r.unit_activity_type || ""}`,
+    `*חומרת האירוע:* ${SEV_LABEL[r.severity] || r.severity || ""}`,
+    `*לקחים ראשונים:* ${r.initial_lessons || ""}`,
+    `*תמונות:* ${r.image_url || ""}`,
   ];
 
-  if (framework) lines.push(`🪖 *מסגרת:* ${framework}`);
-  if (loc)        lines.push(`📍 *מיקום:* ${loc}`);
-
-  if (r.involved_soldiers) lines.push(`👥 *חיילים מעורבים:* ${r.involved_soldiers}`);
-
-  lines.push("", `📝 *תיאור האירוע:*`);
-  if (r.title)       lines.push(r.title);
-  if (r.description) lines.push(r.description);
-
-  if (r.event_outcomes) {
-    lines.push("", `📊 *תוצאות האירוע:* ${r.event_outcomes}`);
-  }
-
-  if (r.person_injury_severity) lines.push(`🩺 *חומרת פגיעה באדם:* ${r.person_injury_severity}`);
-  if (r.property_damage_severity) lines.push(`🔧 *חומרת פגיעה ברכוש:* ${r.property_damage_severity}`);
-
-  const vehicleParts: string[] = [];
-  if (r.vehicle_type)   vehicleParts.push(r.vehicle_type);
-  if (r.vehicle_number) vehicleParts.push(`מס' ${r.vehicle_number}`);
-  if (vehicleParts.length) lines.push(`🚘 *רכב:* ${vehicleParts.join(" ")}`);
-
-  const driverParts: string[] = [];
-  if (r.driver_type === "security") {
-    driverParts.push("נהג בט\"ש");
-  } else if (r.driver_type === "combat") {
-    driverParts.push("נהג לוחם");
-  } else if (r.driver_type) {
-    driverParts.push(r.driver_type);
-  }
-  if (r.driver_name) driverParts.push(r.driver_name);
-  if (driverParts.length) lines.push(`👤 *נהג:* ${driverParts.join(" — ")}`);
-
-  if (r.unit_activity_type) lines.push(`🎯 *פעילות היחידה:* ${r.unit_activity_type}`);
-
-  if (r.initial_lessons) {
-    lines.push("", `💡 *לקחים ראשונים:* ${r.initial_lessons}`);
-  }
-
-  lines.push("", "_הוזן דרך מערכת הנהגים_ ✅");
   return lines.join("\n");
 }
 
