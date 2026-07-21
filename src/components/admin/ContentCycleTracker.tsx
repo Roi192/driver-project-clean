@@ -59,6 +59,9 @@ interface Soldier {
   release_date?: string | null;
   control_removed_at?: string | null;
   is_active?: boolean | null;
+  is_manually_ineligible?: boolean | null;
+  manual_ineligibility_reason?: string | null;
+  manual_ineligibility_since?: string | null;
 }
 
 interface ContentCycleOverride {
@@ -228,6 +231,23 @@ export function ContentCycleTracker({
         if (override?.override_type === "absent") {
           missing.push({ ...soldier, absenceReason: override.absence_reason });
           return;
+        }
+
+        if (soldier.is_manually_ineligible && soldier.manual_ineligibility_reason) {
+          const since = soldier.manual_ineligibility_since;
+          const hasRelevantEvent = cycleEvents.some(e => !since || e.event_date.slice(0, 10) >= since);
+          if (hasRelevantEvent) {
+            const reasonMap: Record<string, string> = {
+              'גימלים ממושכים': 'גימלים ממושכים',
+              'נפקדות': 'נפקד',
+              'כלא': 'כלא',
+              'קורס': 'קורס',
+              'מיוחדת': 'מיוחדת',
+            };
+            const mappedReason = reasonMap[soldier.manual_ineligibility_reason] ?? soldier.manual_ineligibility_reason;
+            missing.push({ ...soldier, absenceReason: mappedReason });
+            return;
+          }
         }
 
         const didAttend = cycleEvents.some((event) => {

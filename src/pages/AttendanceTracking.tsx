@@ -317,6 +317,22 @@ export default function AttendanceTracking() {
     const { inCourse } = isSoldierInCourse(soldier.id, event.event_date);
     if (inCourse) return { status: "absent", reason: "קורס", completed: false };
 
+    if (soldier.is_manually_ineligible && soldier.manual_ineligibility_reason) {
+      const eventDateKey = event.event_date.slice(0, 10);
+      const since = soldier.manual_ineligibility_since;
+      if (!since || eventDateKey >= since) {
+        const reasonMap: Record<string, AbsenceReason> = {
+          'גימלים ממושכים': 'גימלים ממושכים',
+          'נפקדות': 'נפקד',
+          'כלא': 'כלא',
+          'קורס': 'קורס',
+          'מיוחדת': 'נעדר',
+        };
+        const mappedReason = reasonMap[soldier.manual_ineligibility_reason] ?? 'נעדר';
+        return { status: 'absent', reason: mappedReason, completed: false };
+      }
+    }
+
     const cycleName = event.content_cycle || event.title;
     const override = overrides.find(o => o.soldier_id === soldier.id && o.content_cycle === cycleName);
     if (override?.override_type === "completed") {

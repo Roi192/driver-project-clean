@@ -102,6 +102,9 @@ interface Soldier {
   control_removed_at?: string | null;
   created_at: string;
   is_active: boolean | null;
+  is_manually_ineligible?: boolean | null;
+  manual_ineligibility_reason?: string | null;
+  manual_ineligibility_since?: string | null;
 }
 
 const ROTATION_GROUPS = [
@@ -391,7 +394,7 @@ export default function AnnualWorkPlan() {
           let query = supabase
             .from("soldiers")
             .select(
-              "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active",
+              "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active, is_manually_ineligible, manual_ineligibility_reason, manual_ineligibility_since",
             )
             .order("full_name");
           if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
