@@ -75,6 +75,7 @@ interface Soldier {
   is_manually_ineligible?: boolean | null;
   manual_ineligibility_reason?: string | null;
   manual_ineligibility_since?: string | null;
+  manual_ineligibility_until?: string | null;
 }
 
 interface MonthlyExcellence {
@@ -108,8 +109,11 @@ const getOperationalStatus = (soldier: Soldier) => {
     const sinceLabel = soldier.manual_ineligibility_since
       ? ` מ-${format(parseISO(soldier.manual_ineligibility_since), 'dd/MM')}`
       : '';
+    const untilLabel = soldier.manual_ineligibility_until
+      ? ` עד ${format(parseISO(soldier.manual_ineligibility_until), 'dd/MM')}`
+      : '';
     return {
-      label: `${opt?.label || soldier.manual_ineligibility_reason}${sinceLabel}`,
+      label: `${opt?.label || soldier.manual_ineligibility_reason}${sinceLabel}${untilLabel}`,
       icon: opt?.icon || '🚫',
       badgeColor: opt?.badgeColor || 'bg-red-600',
     };
@@ -253,6 +257,7 @@ export default function SoldiersControl() {
   const [statusDialog, setStatusDialog] = useState<Soldier | null>(null);
   const [newStatusValue, setNewStatusValue] = useState<string | null>(null);
   const [newStatusSince, setNewStatusSince] = useState("");
+  const [newStatusUntil, setNewStatusUntil] = useState("");
   const [quickEdit, setQuickEdit] = useState<{
     soldier: Soldier;
     field: string;
@@ -348,6 +353,7 @@ export default function SoldiersControl() {
     if (!isAdmin) return;
     setNewStatusValue(soldier.is_manually_ineligible ? (soldier.manual_ineligibility_reason ?? null) : null);
     setNewStatusSince(soldier.manual_ineligibility_since || format(new Date(), "yyyy-MM-dd"));
+    setNewStatusUntil(soldier.manual_ineligibility_until || "");
     setStatusDialog(soldier);
   };
 
@@ -360,6 +366,7 @@ export default function SoldiersControl() {
         is_manually_ineligible: isManual,
         manual_ineligibility_reason: isManual ? newStatusValue : null,
         manual_ineligibility_since: isManual && newStatusSince ? newStatusSince : null,
+        manual_ineligibility_until: isManual && newStatusUntil ? newStatusUntil : null,
       })
       .eq("id", statusDialog.id);
     if (error) {
@@ -2536,15 +2543,30 @@ export default function SoldiersControl() {
             </div>
 
             {newStatusValue !== null && (
-              <div>
-                <Label className="text-sm font-bold text-slate-600 mb-1.5 block">ממתי?</Label>
-                <Input
-                  type="date"
-                  value={newStatusSince}
-                  onChange={(e) => setNewStatusSince(e.target.value)}
-                  dir="ltr"
-                  className="text-left"
-                />
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-sm font-bold text-slate-600 mb-1.5 block">ממתי?</Label>
+                  <Input
+                    type="date"
+                    value={newStatusSince}
+                    onChange={(e) => setNewStatusSince(e.target.value)}
+                    dir="ltr"
+                    className="text-left"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-bold text-slate-600 mb-1.5 block">
+                    עד מתי? <span className="font-normal text-slate-400">(אופציונלי)</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={newStatusUntil}
+                    onChange={(e) => setNewStatusUntil(e.target.value)}
+                    dir="ltr"
+                    className="text-left"
+                    placeholder="ללא תאריך סיום"
+                  />
+                </div>
               </div>
             )}
 

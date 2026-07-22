@@ -105,6 +105,7 @@ interface Soldier {
   is_manually_ineligible?: boolean | null;
   manual_ineligibility_reason?: string | null;
   manual_ineligibility_since?: string | null;
+  manual_ineligibility_until?: string | null;
 }
 
 const ROTATION_GROUPS = [
@@ -298,7 +299,7 @@ export default function AnnualWorkPlan() {
     useState<string>("expected");
   const [manualAddSoldierId, setManualAddSoldierId] = useState<string>("");
   const [detailAttendanceView, setDetailAttendanceView] =
-    useState<AttendanceStatus | null>(null);
+    useState<AttendanceStatus | "ineligible" | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -394,7 +395,7 @@ export default function AnnualWorkPlan() {
           let query = supabase
             .from("soldiers")
             .select(
-              "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active, is_manually_ineligible, manual_ineligibility_reason, manual_ineligibility_since",
+              "id, full_name, personal_number, rotation_group, qualified_date, release_date, control_removed_at, created_at, is_active, is_manually_ineligible, manual_ineligibility_reason, manual_ineligibility_since, manual_ineligibility_until",
             )
             .order("full_name");
           if (!isDivisionAdmin && brigade) query = query.eq("brigade", brigade);
@@ -944,44 +945,63 @@ export default function AnnualWorkPlan() {
       });
   };
 
+  // חייל נחשב "לא כשיר" באירוע מסוים אם is_manually_ineligible=true
+  // ותאריך האירוע נמצא בין manual_ineligibility_since ל-manual_ineligibility_until
+  const isSoldierIneligibleOnDate = (soldier: Soldier, eventDate: string): boolean => {
+    if (!soldier.is_manually_ineligible) return false;
+    if (soldier.manual_ineligibility_since && soldier.manual_ineligibility_since > eventDate) return false;
+    if (soldier.manual_ineligibility_until && soldier.manual_ineligibility_until < eventDate) return false;
+    return true;
+  };
+
   const getEventAttendanceStats = (eventId: string) => {
+    const event = events.find((e) => e.id === eventId);
+    const eventDate = event?.event_date || format(new Date(), "yyyy-MM-dd");
     const eventAttendance = getRelevantEventAttendance(eventId);
-    const attended = eventAttendance.filter(
+
+    // מפרידים חיילים לא כשירים — הם לא נספרים אך מופיעים בפירוט
+    const ineligibleIds = new Set(
+      eventAttendance
+        .filter((a) => {
+          const s = soldiers.find((sol) => sol.id === a.soldier_id);
+          return s ? isSoldierIneligibleOnDate(s, eventDate) : false;
+        })
+        .map((a) => a.soldier_id)
+    );
+
+    const countableAttendance = eventAttendance.filter(
+      (a) => !ineligibleIds.has(a.soldier_id)
+    );
+
+    const attended = countableAttendance.filter(
       (a) => a.status === "attended" || a.completed,
     ).length;
 
-    // נעדרים שמשפיעים על אחוז הנוכחות (רק גימלים ונעדר ללא סיבה)
-    const countableAbsent = eventAttendance.filter(
+    const countableAbsent = countableAttendance.filter(
       (a) =>
         a.status === "absent" &&
         !a.completed &&
-        !NON_COUNTABLE_ABSENCE_REASONS.includes(
-          a.absence_reason as AbsenceReason,
-        ),
+        !NON_COUNTABLE_ABSENCE_REASONS.includes(a.absence_reason as AbsenceReason),
     ).length;
 
-    // נעדרים שלא משפיעים על אחוז הנוכחות (קורס, גימלים ממושכים, נפקד, כלא)
-    const nonCountableAbsent = eventAttendance.filter(
+    const nonCountableAbsent = countableAttendance.filter(
       (a) =>
         a.status === "absent" &&
         !a.completed &&
-        NON_COUNTABLE_ABSENCE_REASONS.includes(
-          a.absence_reason as AbsenceReason,
-        ),
+        NON_COUNTABLE_ABSENCE_REASONS.includes(a.absence_reason as AbsenceReason),
     ).length;
 
-    const notInRotation = eventAttendance.filter(
+    const notInRotation = countableAttendance.filter(
       (a) => a.status === "not_in_rotation",
     ).length;
-    const notUpdated = eventAttendance.filter(
+    const notUpdated = countableAttendance.filter(
       (a) => a.status === "not_updated",
     ).length;
-    const rosterTotal = eventAttendance.length;
-    const total = eventAttendance.filter(
+    const rosterTotal = countableAttendance.length;
+    const total = countableAttendance.filter(
       (a) => a.status !== "not_in_rotation" && a.status !== "not_updated",
     ).length;
 
-    // אחוז נוכחות - רק מחושב מאלו שהיו יכולים להגיע
     const totalCountable = attended + countableAbsent;
     const attendancePercent =
       totalCountable > 0 ? Math.round((attended / totalCountable) * 100) : 0;
@@ -995,7 +1015,23 @@ export default function AnnualWorkPlan() {
       rosterTotal,
       total,
       attendancePercent,
+      ineligibleCount: ineligibleIds.size,
+      totalWithIneligible: eventAttendance.length,
     };
+  };
+
+  const getIneligibleSoldiersForEvent = (eventId: string) => {
+    const event = events.find((e) => e.id === eventId);
+    const eventDate = event?.event_date || format(new Date(), "yyyy-MM-dd");
+    return getRelevantEventAttendance(eventId)
+      .filter((a) => {
+        const s = soldiers.find((sol) => sol.id === a.soldier_id);
+        return s ? isSoldierIneligibleOnDate(s, eventDate) : false;
+      })
+      .map((a) => ({
+        ...a,
+        soldier: soldiers.find((s) => s.id === a.soldier_id),
+      }));
   };
 
   // Select all expected or toggle
@@ -1756,7 +1792,7 @@ export default function AnnualWorkPlan() {
                     const eventAttendance = getRelevantEventAttendance(
                       selectedEvent.id,
                     );
-                    if (stats.rosterTotal > 0) {
+                    if (stats.rosterTotal > 0 || stats.ineligibleCount > 0) {
                       const attendedSoldiers = eventAttendance.filter(
                         (a) => a.status === "attended" || a.completed,
                       );
@@ -1769,12 +1805,19 @@ export default function AnnualWorkPlan() {
                       const notUpdatedSoldiers = eventAttendance.filter(
                         (a) => a.status === "not_updated",
                       );
+                      const ineligibleSoldiers = getIneligibleSoldiersForEvent(selectedEvent.id);
 
                       return (
                         <div className="p-3 bg-slate-50 rounded-xl space-y-2">
-                          <p className="font-medium text-slate-700">
-                            סיכום נוכחות:
-                          </p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-medium text-slate-700">סיכום נוכחות:</p>
+                            <p className="text-sm font-bold text-emerald-700">
+                              {stats.attended}/{stats.attended + stats.absent} נכחו
+                              {stats.ineligibleCount > 0 && (
+                                <span className="text-slate-400 font-normal"> (מתוך {stats.totalWithIneligible} סה"כ)</span>
+                              )}
+                            </p>
+                          </div>
                           <div className="grid grid-cols-4 gap-2">
                             <div
                               className="text-center p-2 rounded-lg bg-emerald-100 cursor-pointer hover:bg-emerald-200 transition-colors"
@@ -1831,6 +1874,22 @@ export default function AnnualWorkPlan() {
                               <p className="text-xs text-slate-600">לא עודכן</p>
                             </div>
                           </div>
+
+                          {/* לא כשיר — מחוץ לספירה */}
+                          {stats.ineligibleCount > 0 && (
+                            <div
+                              className="text-center p-2 rounded-lg bg-purple-100 cursor-pointer hover:bg-purple-200 transition-colors border border-purple-200"
+                              onClick={() =>
+                                setDetailAttendanceView((prev) =>
+                                  prev === "ineligible" ? null : "ineligible",
+                                )
+                              }
+                            >
+                              <p className="text-sm font-bold text-purple-700">
+                                🚫 לא כשיר ({stats.ineligibleCount}) — לא נספר בנוכחות
+                              </p>
+                            </div>
+                          )}
 
                           {/* Expandable soldier lists */}
                           {detailAttendanceView === "attended" &&
@@ -1952,6 +2011,37 @@ export default function AnnualWorkPlan() {
                                       </div>
                                     ) : null;
                                   })}
+                                </div>
+                              </div>
+                            )}
+
+                          {/* רשימת לא כשירים */}
+                          {detailAttendanceView === "ineligible" &&
+                            ineligibleSoldiers.length > 0 && (
+                              <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-200">
+                                <p className="text-xs font-bold text-purple-700 mb-1.5">
+                                  לא כשיר — מחוץ לספירה ({ineligibleSoldiers.length}):
+                                </p>
+                                <div className="space-y-1 max-h-40 overflow-y-auto">
+                                  {ineligibleSoldiers.map((a) => (
+                                    a.soldier ? (
+                                      <div
+                                        key={a.soldier.id}
+                                        className="flex items-center justify-between py-1 px-2 rounded bg-white text-sm"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span>🚫</span>
+                                          <span className="text-slate-800">{a.soldier.full_name}</span>
+                                        </div>
+                                        <span className="text-xs text-purple-600 font-medium">
+                                          {a.soldier.manual_ineligibility_reason || "לא כשיר"}
+                                          {a.soldier.manual_ineligibility_until && (
+                                            <> עד {format(parseISO(a.soldier.manual_ineligibility_until), "dd/MM")}</>
+                                          )}
+                                        </span>
+                                      </div>
+                                    ) : null
+                                  ))}
                                 </div>
                               </div>
                             )}
