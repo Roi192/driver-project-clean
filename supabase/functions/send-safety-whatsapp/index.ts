@@ -62,7 +62,7 @@ function buildMessage(r: Record<string, string>): string {
     `🚘 *סוג הרכב:* ${vehicle}`,
     `🎯 *סיווג האירוע (סוג פעילות היחידה):* ${r.unit_activity_type || ""}`,
     `⚡ *חומרת האירוע:* ${SEV_LABEL[sev] || sev}`,
-    `⚖️ *סיכות האשמה:* ${r.culpability || ""}`,
+    `⚖️ *סיווג האשמה:* ${r.culpability || ""}`,
     `💥 *נזק ונפגעים:* ${r.damage_and_casualties || ""}`,
     `💡 *לקחים ראשונים:* ${r.initial_lessons || ""}`,
     "",
