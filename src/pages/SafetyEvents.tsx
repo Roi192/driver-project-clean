@@ -306,12 +306,12 @@ const getFields = (
         placeholder: "הזן שם גדוד...",
         condition: (formData) => isBattalionFwFn(String(formData.framework_type || "")),
       },
-      // ── 8. פלוגה (conditional: גדוד גזרתי OR מגב) ──────────────────────────
+      // ── 8. פלוגה / מסגרת / אגף (conditional: גדוד גזרתי OR מגב) ───────────
       {
         name: "company_name",
-        label: "פלוגה",
+        label: "פלוגה / מסגרת / אגף",
         type: "text",
-        placeholder: "הזן שם פלוגה (אופציונלי)...",
+        placeholder: "הזן שם פלוגה / מסגרת / אגף...",
         condition: (formData) => {
           const fw = String(formData.framework_type || "");
           return isBattalionFwFn(fw) || isMagavFwFn(fw);

@@ -22,7 +22,10 @@ function unitName(r: Record<string, string>): string {
   if (fw.includes("מגב")) {
     return [fw, r.company_name].filter(Boolean).join(" | ");
   }
-  return [r.battalion_name, r.company_name].filter(Boolean).join(" | ") || fw;
+  // גדוד [שם הגדוד] | פלוגה [שם הפלוגה]
+  const batPart = r.battalion_name ? `גדוד ${r.battalion_name}` : "";
+  const compPart = r.company_name ? `פלוגה ${r.company_name}` : "";
+  return [batPart, compPart].filter(Boolean).join(" | ") || fw;
 }
 
 function buildMessage(r: Record<string, string>): string {
