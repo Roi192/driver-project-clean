@@ -243,7 +243,7 @@ const getFields = (
 
   if (category === "sector_events" || category === "neighbor_events") {
     const isBattalionFwFn = (fw: string) => fw.startsWith("sector:");
-    const isMagavFwFn    = (fw: string) => fw.includes("מגב");
+    const isMagavFwFn    = (fw: string) => /מג.?ב/.test(fw); // matches מגב and מג"ב (with geresh)
 
     const sectorFields: FieldConfig[] = [
       // ── 0. קטגוריית בטיחות ──────────────────────────────────────────────────

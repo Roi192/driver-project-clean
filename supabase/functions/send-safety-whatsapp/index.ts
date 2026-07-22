@@ -20,8 +20,8 @@ function unitName(r: Record<string, string>): string {
   if (fw === "planag") {
     return ['מפח"ט בנימין', r.department].filter(Boolean).join(" | ");
   }
-  // מגב: stored as "sector:מגב רמה" or similar
-  if (fw.includes("מגב") || region.includes("מגב")) {
+  // מגב: stored as "sector:מגב רמה" or "sector:מג"ב רמה" (with geresh)
+  if (/מג.?ב/.test(fw) || /מג.?ב/.test(region)) {
     const magavName = fw.startsWith("sector:") ? `גדוד ${fw.replace("sector:", "")}` : fw;
     return [magavName, r.company_name].filter(Boolean).join(" | ");
   }
