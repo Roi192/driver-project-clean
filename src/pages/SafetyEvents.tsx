@@ -27,6 +27,7 @@ interface SafetyContent {
   description: string | null;
   category: ContentCategory;
   image_url: string | null;
+  image_urls: string | null;
   video_url: string | null;
   file_url: string | null;
   event_date: string | null;
@@ -521,8 +522,7 @@ const getFields = (
       { name: "get_location", label: "מיקום נוכחי (GPS)", type: "location", latField: "latitude", lngField: "longitude" },
       { name: "map_picker", label: "בחר מיקום במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
       // ── 24. הוספת תמונות ─────────────────────────────────────────────────────
-      { name: "image_url", label: "הוספת תמונות", type: "image", imagePickerMode: "file", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
-      { name: "file_url", label: "קובץ PDF", type: "media", mediaTypes: ["pdf", "file"] },
+      { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "video_url", label: "סרטון", type: "media", mediaTypes: ["video", "youtube"] },
     ];
     return sectorFields;
@@ -779,6 +779,7 @@ export default function SafetyEvents() {
       description,
       event_date: eventDate,
       image_url: toNullableText(data.image_url),
+      image_urls: toNullableText(data.image_urls),
       video_url: toNullableText(data.video_url),
       file_url: toNullableText(data.file_url),
       latitude,
@@ -906,6 +907,7 @@ export default function SafetyEvents() {
       description,
       event_date: eventDate,
       image_url: toNullableText(data.image_url),
+      image_urls: toNullableText(data.image_urls),
       video_url: toNullableText(data.video_url),
       file_url: toNullableText(data.file_url),
       latitude,

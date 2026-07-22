@@ -78,7 +78,7 @@ async function sendToGroup(
   chatId: string,
   record: Record<string, string>,
   message: string,
-  imageSignedUrl: string | null,
+  imageSignedUrls: string[],
 ): Promise<void> {
   // 1. Main text message
   await fetch(`${base}/sendMessage/${token}`, {
@@ -87,16 +87,18 @@ async function sendToGroup(
     body: JSON.stringify({ chatId, message }),
   });
 
-  // 2. Image (use signed URL so Green API can access private storage)
-  if (imageSignedUrl) {
-    const fileName = (record.image_url || "image").split("/").pop() || "image.jpg";
+  // 2. Images (send each one individually)
+  for (let i = 0; i < imageSignedUrls.length; i++) {
+    const url = imageSignedUrls[i];
+    const fileName = `image_${i + 1}.jpg`;
+    const caption = imageSignedUrls.length > 1 ? `תמונה ${i + 1} מתוך ${imageSignedUrls.length}` : "תמונת האירוע";
     const imgRes = await fetch(`${base}/sendFileByUrl/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatId, urlFile: imageSignedUrl, fileName, caption: "תמונת האירוע" }),
+      body: JSON.stringify({ chatId, urlFile: url, fileName, caption }),
     });
     const imgBody = await imgRes.text();
-    console.log(`sendFileByUrl status=${imgRes.status} body=${imgBody}`);
+    console.log(`sendFileByUrl [${i + 1}] status=${imgRes.status} body=${imgBody}`);
   }
 
   // 3. GPS location pin
@@ -158,19 +160,31 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ skipped: true }), { status: 200 });
     }
 
-    // Generate a signed URL for the image (1 hour) so Green API can access private storage
-    let imageSignedUrl: string | null = null;
-    if (record.image_url) {
-      if (record.image_url.startsWith("http")) {
-        imageSignedUrl = record.image_url;
+    // Build list of image paths — prefer image_urls (JSON array), fallback to legacy image_url
+    const rawImagePaths: string[] = [];
+    if (record.image_urls) {
+      try {
+        const parsed = JSON.parse(record.image_urls);
+        if (Array.isArray(parsed)) rawImagePaths.push(...parsed.filter(Boolean));
+      } catch { /* not JSON */ }
+    }
+    if (rawImagePaths.length === 0 && record.image_url) {
+      rawImagePaths.push(record.image_url);
+    }
+
+    // Generate signed URLs (1 hour) for all images so Green API can access private storage
+    const imageSignedUrls: string[] = [];
+    for (const path of rawImagePaths) {
+      if (path.startsWith("http")) {
+        imageSignedUrls.push(path);
       } else {
         const { data: signed } = await supabase.storage
           .from("content-images")
-          .createSignedUrl(record.image_url, 3600);
-        imageSignedUrl = signed?.signedUrl ?? null;
+          .createSignedUrl(path, 3600);
+        if (signed?.signedUrl) imageSignedUrls.push(signed.signedUrl);
       }
-      console.log("image_url path:", record.image_url, "→ signed:", imageSignedUrl);
     }
+    console.log(`Images: ${rawImagePaths.length} paths → ${imageSignedUrls.length} signed URLs`);
 
     const message = buildMessage(record);
     const BASE = `https://api.green-api.com/waInstance${cfg.instance_id}`;
@@ -179,7 +193,7 @@ serve(async (req: Request) => {
     let sent = 0, failed = 0;
     for (const g of recipients) {
       try {
-        await sendToGroup(BASE, TOKEN, g.wa_id, record, message, imageSignedUrl);
+        await sendToGroup(BASE, TOKEN, g.wa_id, record, message, imageSignedUrls);
         sent++;
       } catch (e) {
         console.error(`Failed sending to ${g.name}:`, e);

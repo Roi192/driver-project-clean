@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Sparkles, Crosshair } from "lucide-react";
 import { ImageUpload } from "./ImageUpload";
+import { MultiImageUpload } from "./MultiImageUpload";
 import { VideoUpload } from "./VideoUpload";
 import { MediaUpload } from "./MediaUpload";
 import { MapPicker } from "./MapPicker";
@@ -38,7 +39,7 @@ const toInputString = (value: unknown): string => {
 export interface FieldConfig {
   name: string;
   label: string;
-  type: "text" | "textarea" | "url" | "select" | "number" | "image" | "video" | "media" | "location" | "date" | "map_picker";
+  type: "text" | "textarea" | "url" | "select" | "number" | "image" | "multi_image" | "video" | "media" | "location" | "date" | "map_picker";
   placeholder?: string;
   required?: boolean;
   options?: { value: string; label: string }[];
@@ -232,6 +233,15 @@ export function AddEditDialog({
                     onAfterFileUploadChange?.();
                   }}
                   pickerMode={field.imagePickerMode}
+                  accept={field.imageAccept}
+                />
+              ) : field.type === "multi_image" ? (
+                <MultiImageUpload
+                  value={toInputString(formData[field.name])}
+                  onChange={(val) => {
+                    handleChange(field.name, val);
+                    onAfterFileUploadChange?.();
+                  }}
                   accept={field.imageAccept}
                 />
               ) : field.type === "video" ? (
