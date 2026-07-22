@@ -6,7 +6,7 @@ const SEV_EMOJI: Record<string, string> = { minor: "🟡", moderate: "🟠", sev
 
 const DRIVER_LABEL: Record<string, string> = {
   security:       'נהג בט"ש',
-  combat:         "נהג גדוד",
+  combat:         "נהג לוחם",
   vehicle_officer:"נהג קצין רכב",
   general:        "נהג כללי",
   fighter:        "נהג לוחם",
@@ -37,7 +37,8 @@ function buildMessage(r: Record<string, string>): string {
     ? new Date(r.event_date + "T12:00:00Z").toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" })
     : new Date().toLocaleDateString("he-IL");
 
-  const vehicle = [r.vehicle_type, r.vehicle_number ? `מס' ${r.vehicle_number}` : ""].filter(Boolean).join(" ");
+  const vehicleParts = [r.vehicle_type, r.vehicle_model, r.vehicle_number ? `מס' ${r.vehicle_number}` : ""].filter(Boolean);
+  const vehicle = vehicleParts.join(" ");
   const driverLabel = DRIVER_LABEL[r.driver_type] || r.driver_type || "";
 
   const header = r.safety_category
@@ -57,9 +58,12 @@ function buildMessage(r: Record<string, string>): string {
     `📊 *תוצאות האירוע:* ${r.event_outcomes || ""}`,
     `🩺 *הערכת מצב חומרת בפגיעה באדם ורכוש:* ${r.person_injury_severity || ""}`,
     `👤 *סוג הנהג:* ${driverLabel}`,
+    `🫂 *סוג אוכלוסייה:* ${r.population_type || ""}`,
     `🚘 *סוג הרכב:* ${vehicle}`,
     `🎯 *סיווג האירוע (סוג פעילות היחידה):* ${r.unit_activity_type || ""}`,
     `⚡ *חומרת האירוע:* ${SEV_LABEL[sev] || sev}`,
+    `⚖️ *סיכות האשמה:* ${r.culpability || ""}`,
+    `💥 *נזק ונפגעים:* ${r.damage_and_casualties || ""}`,
     `💡 *לקחים ראשונים:* ${r.initial_lessons || ""}`,
     "",
     "_הוזן דרך מערכת נהגים_ ✅",

@@ -51,10 +51,14 @@ interface SafetyContent {
   person_injury_severity: string | null;
   property_damage_severity: string | null;
   vehicle_type: string | null;
+  vehicle_model: string | null;
   unit_activity_type: string | null;
   initial_lessons: string | null;
   location_text: string | null;
   safety_category: string | null;
+  population_type: string | null;
+  culpability: string | null;
+  damage_and_casualties: string | null;
 }
 
 const categories = [
@@ -104,7 +108,7 @@ const EVENT_TYPES = [
 
 const DRIVER_TYPES = [
   { value: "security", label: 'נהג בט"ש' },
-  { value: "combat", label: "נהג גדוד" },
+  { value: "combat", label: "נהג לוחם" },
   { value: "vehicle_officer", label: "נהג קצין רכב" },
   { value: "general", label: "נהג אגפי" },
   { value: "other", label: "אחר" },
@@ -251,12 +255,14 @@ const getFields = (
         placeholder: "בחר קטגוריית בטיחות",
         options: [
           { value: "בטיחות בדרכים",           label: "בטיחות בדרכים" },
-          { value: "בטיחות בעבודה",            label: "בטיחות בעבודה" },
-          { value: "בטיחות בפעילות מבצעית",   label: "בטיחות בפעילות מבצעית" },
-          { value: "בטיחות באש",              label: "בטיחות באש" },
-          { value: 'בטיחות בחומ"ס',           label: 'בטיחות בחומ"ס' },
+          { value: "בטיחות בנשק",             label: "בטיחות בנשק" },
+          { value: 'בטיחות בפע"ם',            label: 'בטיחות בפע"ם' },
           { value: "בטיחות בשגרה",            label: "בטיחות בשגרה" },
-          { value: "בטיחות בנשק/אמל\"ח",      label: "בטיחות בנשק/אמל\"ח" },
+          { value: "בטיחות באש",              label: "בטיחות באש" },
+          { value: 'בטיחות באלפ"ה ותחמושת',  label: 'בטיחות באלפ"ה ותחמושת' },
+          { value: 'כמעט דו"צ',               label: 'כמעט דו"צ' },
+          { value: "בטיחות בעבודה",            label: "בטיחות בעבודה" },
+          { value: "בטיחות בחופשה",           label: "בטיחות בחופשה" },
         ],
       },
       // ── 1. כותרת ────────────────────────────────────────────────────────────
@@ -419,9 +425,48 @@ const getFields = (
         dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "fighter", "palsar", "general", "other"] },
       },
       // ── 18. סוג הרכב ─────────────────────────────────────────────────────────
-      { name: "vehicle_type", label: "סוג הרכב", type: "text", placeholder: "הזן סוג רכב..." },
+      {
+        name: "vehicle_type",
+        label: "סוג הרכב",
+        type: "select",
+        placeholder: "בחר סוג רכב",
+        options: [
+          { value: "דויד",         label: "דויד" },
+          { value: "סוואנה",       label: "סוואנה" },
+          { value: "טיגריס",       label: "טיגריס" },
+          { value: "פנתר",         label: "פנתר" },
+          { value: "סיור קל",      label: "סיור קל" },
+          { value: "מנהלה",        label: "מנהלה" },
+          { value: "שופל",         label: "שופל" },
+          { value: "אזרחי",        label: "אזרחי" },
+          { value: "רכב אורגני",   label: "רכב אורגני" },
+          { value: "אחר",          label: "אחר" },
+        ],
+      },
+      // ── 18ב. דגם הרכב (conditional: סיור קל / מנהלה / אזרחי / רכב אורגני / אחר) ─
+      {
+        name: "vehicle_model",
+        label: "דגם הרכב",
+        type: "text",
+        placeholder: "לדוגמה: הילקס, דימקס, ספארי...",
+        condition: (formData) =>
+          ["סיור קל", "מנהלה", "אזרחי", "רכב אורגני", "אחר"].includes(String(formData.vehicle_type || "")),
+      },
       // ── 19. מספר רכב ─────────────────────────────────────────────────────────
       { name: "vehicle_number", label: "מספר רכב", type: "text", placeholder: "הזן מספר רכב..." },
+      // ── 19ב. סוג אוכלוסייה ───────────────────────────────────────────────────
+      {
+        name: "population_type",
+        label: "סוג אוכלוסייה",
+        type: "select",
+        placeholder: "בחר סוג אוכלוסייה",
+        options: [
+          { value: "קבע",     label: "קבע" },
+          { value: "סדיר",    label: "סדיר" },
+          { value: "מילואים", label: "מילואים" },
+          { value: "אזרח",    label: "אזרח" },
+        ],
+      },
       // ── 20. סוג האירוע (פעילות היחידה) ──────────────────────────────────────
       { name: "unit_activity_type", label: "סוג האירוע (פעילות היחידה)", type: "text", placeholder: "לדוגמה: סיור, מחסום, אימון..." },
       // ── 20ב. סוג האירוע (תאונה/התחפרות/התהפכות) ─────────────────────────────
@@ -446,6 +491,29 @@ const getFields = (
         options: SEVERITY_TYPES.map(t => ({ value: t.value, label: t.label })),
         placeholder: "בחר חומרה",
         required: true,
+      },
+      // ── 21ב. סיכות האשמה ─────────────────────────────────────────────────────
+      {
+        name: "culpability",
+        label: "סיכות האשמה",
+        type: "select",
+        placeholder: "בחר סיכות אשמה",
+        options: [
+          { value: "אשם",    label: "אשם" },
+          { value: "לא אשם", label: "לא אשם" },
+        ],
+      },
+      // ── 21ג. נזק ונפגעים ─────────────────────────────────────────────────────
+      {
+        name: "damage_and_casualties",
+        label: "נזק ונפגעים",
+        type: "select",
+        placeholder: "בחר סיווג נזק ונפגעים",
+        options: [
+          { value: "יש נזק אין נפגעים",  label: "יש נזק אין נפגעים" },
+          { value: "יש נזק יש נפגעים",   label: "יש נזק יש נפגעים" },
+          { value: "אין נזק אין נפגעים", label: "אין נזק אין נפגעים" },
+        ],
       },
       // ── 22. לקחים ראשונים ────────────────────────────────────────────────────
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים..." },
@@ -735,10 +803,14 @@ export default function SafetyEvents() {
       person_injury_severity: toNullableText(data.person_injury_severity),
       property_damage_severity: toNullableText(data.property_damage_severity),
       vehicle_type: toNullableText(data.vehicle_type),
+      vehicle_model: toNullableText(data.vehicle_model),
       unit_activity_type: toNullableText(data.unit_activity_type),
       initial_lessons: toNullableText(data.initial_lessons),
       location_text: toNullableText(data.location_text),
       safety_category: toNullableText(data.safety_category),
+      population_type: toNullableText(data.population_type),
+      culpability: toNullableText(data.culpability),
+      damage_and_casualties: toNullableText(data.damage_and_casualties),
     };
 
     const { error } = await supabase.from("safety_content").insert([insertData]);
@@ -857,10 +929,14 @@ export default function SafetyEvents() {
       person_injury_severity: toNullableText(data.person_injury_severity),
       property_damage_severity: toNullableText(data.property_damage_severity),
       vehicle_type: toNullableText(data.vehicle_type),
+      vehicle_model: toNullableText(data.vehicle_model),
       unit_activity_type: toNullableText(data.unit_activity_type),
       initial_lessons: toNullableText(data.initial_lessons),
       location_text: toNullableText(data.location_text),
       safety_category: toNullableText(data.safety_category),
+      population_type: toNullableText(data.population_type),
+      culpability: toNullableText(data.culpability),
+      damage_and_casualties: toNullableText(data.damage_and_casualties),
     };
 
     const selectedSoldierIdEdit = toNullableText(data.soldier_id);
