@@ -322,7 +322,10 @@ const getFields = (
         label: "שם הגדוד",
         type: "text",
         placeholder: "הזן שם גדוד...",
-        condition: (formData) => isBattalionFwFn(String(formData.framework_type || "")),
+        condition: (formData) => {
+          const fw = String(formData.framework_type || "");
+          return isBattalionFwFn(fw) && !isMagavFwFn(fw);
+        },
       },
       // ── 8. פלוגה / מסגרת / אגף (conditional: גדוד גזרתי OR מגב) ───────────
       {

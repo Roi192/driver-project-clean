@@ -16,11 +16,14 @@ const DRIVER_LABEL: Record<string, string> = {
 
 function unitName(r: Record<string, string>): string {
   const fw = r.framework_type || "";
+  const region = r.region || "";
   if (fw === "planag") {
     return ['מפח"ט בנימין', r.department].filter(Boolean).join(" | ");
   }
-  if (fw.includes("מגב")) {
-    return [fw, r.company_name].filter(Boolean).join(" | ");
+  // מגב: stored as "sector:מגב רמה" or similar
+  if (fw.includes("מגב") || region.includes("מגב")) {
+    const magavName = fw.startsWith("sector:") ? `גדוד ${fw.replace("sector:", "")}` : fw;
+    return [magavName, r.company_name].filter(Boolean).join(" | ");
   }
   // גדוד [שם הגדוד] | פלוגה [שם הפלוגה]
   const batPart = r.battalion_name ? `גדוד ${r.battalion_name}` : "";
