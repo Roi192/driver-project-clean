@@ -37,8 +37,12 @@ function buildMessage(r: Record<string, string>): string {
   const vehicle = [r.vehicle_type, r.vehicle_number ? `מס' ${r.vehicle_number}` : ""].filter(Boolean).join(" ");
   const driverLabel = DRIVER_LABEL[r.driver_type] || r.driver_type || "";
 
+  const header = r.safety_category
+    ? `${SEV_EMOJI[sev] || "🚨"} *אירוע בטיחות חדש — ${r.safety_category}*`
+    : `${SEV_EMOJI[sev] || "🚨"} *אירוע בטיחות חדש*`;
+
   const lines: string[] = [
-    `${SEV_EMOJI[sev] || "🚨"} *אירוע בטיחות חדש*`,
+    header,
     "",
     `📋 *דיווח ראשוני:* ${r.title || ""}`,
     `🪖 *שם היחידה:* ${unitName(r)}`,

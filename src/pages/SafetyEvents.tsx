@@ -54,6 +54,7 @@ interface SafetyContent {
   unit_activity_type: string | null;
   initial_lessons: string | null;
   location_text: string | null;
+  safety_category: string | null;
 }
 
 const categories = [
@@ -241,6 +242,23 @@ const getFields = (
     const isMagavFwFn    = (fw: string) => fw.includes("מגב");
 
     const sectorFields: FieldConfig[] = [
+      // ── 0. קטגוריית בטיחות ──────────────────────────────────────────────────
+      {
+        name: "safety_category",
+        label: "קטגוריה",
+        type: "select",
+        required: true,
+        placeholder: "בחר קטגוריית בטיחות",
+        options: [
+          { value: "בטיחות בדרכים",           label: "בטיחות בדרכים" },
+          { value: "בטיחות בעבודה",            label: "בטיחות בעבודה" },
+          { value: "בטיחות בפעילות מבצעית",   label: "בטיחות בפעילות מבצעית" },
+          { value: "בטיחות באש",              label: "בטיחות באש" },
+          { value: 'בטיחות בחומ"ס',           label: 'בטיחות בחומ"ס' },
+          { value: "בטיחות בשגרה",            label: "בטיחות בשגרה" },
+          { value: "בטיחות בנשק/אמל\"ח",      label: "בטיחות בנשק/אמל\"ח" },
+        ],
+      },
       // ── 1. כותרת ────────────────────────────────────────────────────────────
       { name: "title", label: "כותרת", type: "text", required: true, placeholder: "הזן כותרת..." },
       // ── 2. חטיבה (conditional) ───────────────────────────────────────────────
@@ -717,6 +735,7 @@ export default function SafetyEvents() {
       unit_activity_type: toNullableText(data.unit_activity_type),
       initial_lessons: toNullableText(data.initial_lessons),
       location_text: toNullableText(data.location_text),
+      safety_category: toNullableText(data.safety_category),
     };
 
     const { error } = await supabase.from("safety_content").insert([insertData]);
@@ -838,6 +857,7 @@ export default function SafetyEvents() {
       unit_activity_type: toNullableText(data.unit_activity_type),
       initial_lessons: toNullableText(data.initial_lessons),
       location_text: toNullableText(data.location_text),
+      safety_category: toNullableText(data.safety_category),
     };
 
     const selectedSoldierIdEdit = toNullableText(data.soldier_id);
