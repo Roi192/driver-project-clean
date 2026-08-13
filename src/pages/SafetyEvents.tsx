@@ -17,6 +17,7 @@ import monthlySummaryThumbnail from "@/assets/monthly-summary-thumbnail.png";
 import { BRIGADES, BRIGADE_CODES, getBrigade, DIVISION_BRIGADE_CODE, DIVISION_LABEL } from "@/lib/brigades";
 import { useFrameworks } from "@/hooks/useFrameworks";
 import { useBrigadeOutposts } from "@/hooks/useBrigadeOutposts";
+import { withCategoryGate } from "@/lib/with-category-gate";
 
 type View = "categories" | "items" | "itemDetail";
 type ContentCategory = "flag_investigations" | "sector_events" | "neighbor_events" | "monthly_summaries";
@@ -539,12 +540,20 @@ const getFields = (
       },
       // ── 22. לקחים ראשונים ────────────────────────────────────────────────────
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים...", required: true },
-      // ── 23. דקירת מיקום במפה (GPS button removed — map pin only) ────────────
-      { name: "map_picker", label: "📍 דקור מיקום האירוע במפה", type: "map_picker", latField: "latitude", lngField: "longitude", required: true },
-      // ── 24. הוספת תמונות ─────────────────────────────────────────────────────
-      { name: "image_urls", label: "תמונות האירוע", type: "multi_image", required: true, imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
+      // ── 23. דקירת מיקום במפה — בטיחות בדרכים בלבד ───────────────────────────
+      {
+        name: "map_picker",
+        label: "📍 דקור מיקום האירוע במפה",
+        type: "map_picker",
+        latField: "latitude",
+        lngField: "longitude",
+        required: true,
+        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
+      },
+      // ── 24. הוספת תמונות — חובה לבטיחות בדרכים, אופציונלי לשאר ──────────────
+      { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
     ];
-    return sectorFields;
+    return withCategoryGate(sectorFields);
   }
 
   if (category === "monthly_summaries") {
@@ -793,8 +802,8 @@ export default function SafetyEvents() {
       if (!toNullableText(data.culpability)) missing.push("סיווג האשמה");
       if (!toNullableText(data.damage_and_casualties)) missing.push("נזק ונפגעים");
       if (!toNullableText(data.initial_lessons)) missing.push("לקחים ראשונים");
-      if (!latitude || !longitude) missing.push("מיקום במפה (דקור נקודה)");
-      if (!toNullableText(data.image_urls)) missing.push("תמונות האירוע (חובה להעלות לפחות תמונה אחת)");
+      if (isRoadSafety && (!latitude || !longitude)) missing.push("מיקום במפה (דקור נקודה)");
+      if (isRoadSafety && !toNullableText(data.image_urls)) missing.push("תמונות האירוע (חובה להעלות לפחות תמונה אחת)");
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
         setIsSubmitting(false);
@@ -851,7 +860,8 @@ export default function SafetyEvents() {
       damage_and_casualties: toNullableText(data.damage_and_casualties),
     };
 
-    const { error } = await supabase.from("safety_content").insert([insertData]);
+    const { data: insertedRows, error } = await supabase.from("safety_content").insert([insertData]).select("id");
+    const insertedId = (insertedRows?.[0] as { id?: string } | undefined)?.id;
 
     if (error) {
       console.error("Error adding safety content:", error);
@@ -881,8 +891,9 @@ export default function SafetyEvents() {
         }]);
       }
 
-      // Sync to accidents table (טבלת שליטה) for any sector/neighbor event
-      if (selectedCategory === "sector_events") {
+      // Sync to accidents table (טבלת שליטה) — only for road safety events
+      const isRoadSafetyForSync = toNullableText(data.safety_category) === "בטיחות בדרכים";
+      if (selectedCategory === "sector_events" && isRoadSafetyForSync) {
         const accidentPayload = {
           accident_date: eventDate || new Date().toISOString().slice(0, 10),
           driver_type: driverType === "combat" ? "combat" : "security",
@@ -893,6 +904,7 @@ export default function SafetyEvents() {
           severity: toText(data.severity) || 'minor',
           location: toNullableText(data.outpost) || toNullableText(data.region),
           description: description || title,
+          safety_content_id: insertedId,
           status: 'open',
           brigade: targetBrigade,
         };
@@ -1088,6 +1100,14 @@ export default function SafetyEvents() {
       toast.error("שגיאה במחיקת התוכן");
       console.error(error);
     } else {
+      // Clean up linked accidents (new: by safety_content_id; old: by description match)
+      await supabase.from("accidents").delete().eq("safety_content_id", selectedItem.id);
+      const matchDesc = selectedItem.description || selectedItem.title;
+      if (matchDesc) {
+        await supabase.from("accidents").delete()
+          .is("safety_content_id", null)
+          .eq("description", matchDesc);
+      }
       toast.success("התוכן נמחק בהצלחה");
       setDeleteDialogOpen(false);
       setView("items");
