@@ -35,7 +35,7 @@ interface Props {
 }
 
 export function DriverNav({ onClose, userDepartment }: Props) {
-  const { userType, isBattalionAdmin, isSuperAdmin, isDivisionUser } = useAuth();
+  const { userType, role, isBattalionAdmin, isSuperAdmin, isDivisionUser } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { activeBrigade } = useAuth() as any;
   const location = useLocation();
@@ -44,8 +44,10 @@ export function DriverNav({ onClose, userDepartment }: Props) {
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
   const isInDivisionView = isDivisionUser && !activeBrigade && !isOnDepartmentSelector;
+  const isMaphatch = role === 'maphatch_user' || role === 'maphatch_admin';
   const showDriverNavItems =
     !isInBattalionContext &&
+    !isMaphatch &&
     !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView &&
     (!isDivisionUser || !!activeBrigade);
 

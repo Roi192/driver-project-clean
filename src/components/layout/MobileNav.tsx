@@ -14,6 +14,7 @@ import { AdminNav } from "./nav/AdminNav";
 import { BattalionNav } from "./nav/BattalionNav";
 import { DivisionNav } from "./nav/DivisionNav";
 import { DriverNav } from "./nav/DriverNav";
+import { MaphatchNav } from "./nav/MaphatchNav";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
@@ -22,7 +23,7 @@ export function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { signOut, isSuperAdmin, isBattalionAdmin, isDivisionUser, user, brigade, role } = useAuth();
+  const { signOut, isSuperAdmin, isBattalionAdmin, isDivisionUser, user, brigade, role, userType } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { realIsDivisionAdmin, activeBrigade, isBattalion } = useAuth() as any;
 
@@ -32,8 +33,10 @@ export function MobileNav() {
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
 
+  const isMaphatch = userType === 'maphatch';
   const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי'
     : isInBattalionContext ? 'גדוד תע"ם'
+    : isMaphatch ? `מפח"ט${userDepartment ? ` - ${userDepartment}` : ''}`
     : (isDivisionUser && !activeBrigade) ? getBrigadeLabel('division')
     : getBrigade(brigade).shortLabel;
 
@@ -193,6 +196,7 @@ export function MobileNav() {
           <DivisionNav onClose={close} />
           <BattalionNav onClose={close} />
           <AdminNav onClose={close} />
+          <MaphatchNav onClose={close} />
           <DriverNav onClose={close} userDepartment={userDepartment} />
         </div>
 

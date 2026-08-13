@@ -13,6 +13,7 @@ import { Shield, Loader2, KeyRound, Building2 } from 'lucide-react';
 import unitLogo from '@/assets/unit-logo.png';
 import bgVehicles from '@/assets/bg-vehicles.png';
 import { supabase } from '@/integrations/supabase/client';
+import { BRIGADES, BrigadeCode } from '@/lib/brigades';
 
 const MAPHATCH_DEPARTMENTS = [
   'לוגיסטיקה',
@@ -37,6 +38,8 @@ export default function AuthMaphatch() {
   const [fullName, setFullName] = useState('');
   const [personalNumber, setPersonalNumber] = useState('');
   const [department, setDepartment] = useState('');
+  const [brigade, setBrigade] = useState<BrigadeCode | ''>('');
+  const [militaryRole, setMilitaryRole] = useState('');
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -77,6 +80,10 @@ export default function AuthMaphatch() {
       toast({ title: 'שגיאה', description: 'נא לבחור אגף', variant: 'destructive' });
       return;
     }
+    if (!brigade) {
+      toast({ title: 'שגיאה', description: 'נא לבחור חטיבה', variant: 'destructive' });
+      return;
+    }
     if (password.length < 8) {
       toast({ title: 'שגיאה', description: 'הסיסמה חייבת להכיל לפחות 8 תווים', variant: 'destructive' });
       return;
@@ -94,10 +101,11 @@ export default function AuthMaphatch() {
       email,
       password,
       fullName,
-      userType: 'driver',
+      userType: 'maphatch',
       personalNumber: personalNumber || undefined,
       department,
-      brigade: 'binyamin',
+      brigade: brigade as BrigadeCode,
+      militaryRole: militaryRole || undefined,
     });
     setIsLoading(false);
 
@@ -202,6 +210,19 @@ export default function AuthMaphatch() {
                   <Input id="signup-personal-number" value={personalNumber} onChange={(e) => setPersonalNumber(e.target.value)} dir="ltr" className="text-right bg-white border-slate-300 text-slate-900 h-12 rounded-xl" />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="signup-brigade" className="text-slate-800 font-semibold">בחר חטיבה *</Label>
+                  <Select value={brigade} onValueChange={(v) => setBrigade(v as BrigadeCode)}>
+                    <SelectTrigger id="signup-brigade" className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl">
+                      <SelectValue placeholder="בחר חטיבה..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.values(BRIGADES) as typeof BRIGADES[BrigadeCode][]).map((b) => (
+                        <SelectItem key={b.code} value={b.code}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="signup-department" className="text-slate-800 font-semibold">בחר אגף *</Label>
                   <Select value={department} onValueChange={setDepartment}>
                     <SelectTrigger id="signup-department" className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl">
@@ -213,6 +234,10 @@ export default function AuthMaphatch() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-role" className="text-slate-800 font-semibold">תפקיד</Label>
+                  <Input id="signup-role" value={militaryRole} onChange={(e) => setMilitaryRole(e.target.value)} placeholder="לדוגמה: קצין לוגיסטיקה" className="bg-white border-slate-300 text-slate-900 h-12 rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email" className="text-slate-800 font-semibold">אימייל *</Label>

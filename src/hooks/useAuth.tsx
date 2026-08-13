@@ -13,13 +13,13 @@ const getAuthRedirectUrl = (path: string): string => {
 };
 
 // Updated roles: super_admin (מנהל ראשי), admin (מ"פ), platoon_commander (מ"מ), battalion_admin (גדוד), driver (נהג)
-export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'ravshatz' | 'division_admin' | 'division_user';
+export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'ravshatz' | 'division_admin' | 'division_user' | 'maphatch_user' | 'maphatch_admin';
 
 interface SignUpData {
   email: string;
   password: string;
   fullName: string;
-  userType: 'driver' | 'battalion';
+  userType: 'driver' | 'battalion' | 'maphatch';
   outpost?: string;
   region?: string;
   militaryRole?: string;
@@ -90,7 +90,9 @@ const ROLE_PRIORITY: AppRole[] = [
   'admin',
   'battalion_admin',
   'platoon_commander',
+  'maphatch_admin',
   'ravshatz',
+  'maphatch_user',
   'driver',
 ];
 
@@ -325,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const canEditDrillLocations = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isDivisionBrigadePeek;
   const canEditSafetyFiles = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isDivisionBrigadePeek;
-  const canEditSafetyEvents = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin';
+  const canEditSafetyEvents = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || role === 'maphatch_admin';
   const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   
