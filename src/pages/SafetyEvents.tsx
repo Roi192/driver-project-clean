@@ -398,7 +398,7 @@ const getFields = (
         placeholder: "פרט את חומרת הפגיעה באדם וברכוש...",
         required: true,
       },
-      // ── 17. סוג הנהג ─────────────────────────────────────────────────────────
+      // ── 17. סוג הנהג (בטיחות בדרכים בלבד) ──────────────────────────────────
       {
         name: "driver_type",
         label: "סוג הנהג",
@@ -411,6 +411,7 @@ const getFields = (
           return [...DRIVER_TYPES];
         },
         placeholder: "בחר סוג נהג",
+        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
       },
       {
         name: "soldier_id",
@@ -418,16 +419,20 @@ const getFields = (
         type: "select",
         options: soldiers.map(s => ({ value: s.id, label: `${s.full_name} (${s.personal_number})` })),
         placeholder: "בחר חייל מהרשימה",
-        dependsOn: { field: "driver_type", value: "security" },
+        condition: (formData) =>
+          String(formData.safety_category || "") === "בטיחות בדרכים" &&
+          String(formData.driver_type || "") === "security",
       },
       {
         name: "driver_name",
         label: "שם הנהג",
         type: "text",
         placeholder: "הזן שם נהג...",
-        dependsOn: { field: "driver_type", value: ["combat", "vehicle_officer", "fighter", "palsar", "general", "other"] },
+        condition: (formData) =>
+          String(formData.safety_category || "") === "בטיחות בדרכים" &&
+          ["combat", "vehicle_officer", "fighter", "palsar", "general", "other"].includes(String(formData.driver_type || "")),
       },
-      // ── 18. סוג הרכב ─────────────────────────────────────────────────────────
+      // ── 18. סוג הרכב (בטיחות בדרכים בלבד) ──────────────────────────────────
       {
         name: "vehicle_type",
         label: "סוג הרכב",
@@ -446,18 +451,27 @@ const getFields = (
           { value: "רכב אורגני",   label: "רכב אורגני" },
           { value: "אחר",          label: "אחר" },
         ],
+        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
       },
-      // ── 18ב. דגם הרכב (conditional: סיור קל / מנהלה / אזרחי / רכב אורגני / אחר) ─
+      // ── 18ב. דגם הרכב (בטיחות בדרכים + סוגי רכב מסוימים) ───────────────────
       {
         name: "vehicle_model",
         label: "דגם הרכב",
         type: "text",
         placeholder: "לדוגמה: הילקס, דימקס, ספארי...",
         condition: (formData) =>
+          String(formData.safety_category || "") === "בטיחות בדרכים" &&
           ["סיור קל", "מנהלה", "אזרחי", "רכב אורגני", "אחר"].includes(String(formData.vehicle_type || "")),
       },
-      // ── 19. מספר רכב ─────────────────────────────────────────────────────────
-      { name: "vehicle_number", label: "מספר רכב", type: "text", placeholder: "הזן מספר רכב...", required: true },
+      // ── 19. מספר רכב (בטיחות בדרכים בלבד) ──────────────────────────────────
+      {
+        name: "vehicle_number",
+        label: "מספר רכב",
+        type: "text",
+        placeholder: "הזן מספר רכב...",
+        required: true,
+        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
+      },
       // ── 19ב. סוג אוכלוסייה ───────────────────────────────────────────────────
       {
         name: "population_type",
@@ -474,7 +488,7 @@ const getFields = (
       },
       // ── 20. סוג האירוע (פעילות היחידה) ──────────────────────────────────────
       { name: "unit_activity_type", label: "סוג האירוע (פעילות היחידה)", type: "text", placeholder: "לדוגמה: סיור, מחסום, אימון...", required: true },
-      // ── 20ב. סוג האירוע (תאונה/התחפרות/התהפכות) ─────────────────────────────
+      // ── 20ב. סוג האירוע (תאונה/התחפרות/התהפכות) — בטיחות בדרכים בלבד ────────
       {
         name: "event_type",
         label: "סוג האירוע",
@@ -487,6 +501,7 @@ const getFields = (
           { value: "other", label: "אחר" },
         ],
         placeholder: "בחר סוג אירוע",
+        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
       },
       // ── 21. חומרת האירוע ─────────────────────────────────────────────────────
       {
@@ -769,7 +784,11 @@ export default function SafetyEvents() {
       if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
       if (!toNullableText(data.population_type)) missing.push("סוג אוכלוסייה");
       if (!toNullableText(data.unit_activity_type)) missing.push("סוג האירוע (פעילות היחידה)");
-      if (!eventType) missing.push("סוג האירוע");
+      const isRoadSafety = toNullableText(data.safety_category) === "בטיחות בדרכים";
+      if (isRoadSafety && !driverType) missing.push("סוג נהג");
+      if (isRoadSafety && !toNullableText(data.vehicle_type)) missing.push("סוג הרכב");
+      if (isRoadSafety && !toNullableText(data.vehicle_number)) missing.push("מספר רכב");
+      if (isRoadSafety && !eventType) missing.push("סוג האירוע");
       if (!toNullableText(data.severity)) missing.push("חומרת האירוע");
       if (!toNullableText(data.culpability)) missing.push("סיווג האשמה");
       if (!toNullableText(data.damage_and_casualties)) missing.push("נזק ונפגעים");
@@ -783,9 +802,9 @@ export default function SafetyEvents() {
       }
     }
 
-    // Validation: if it's a sector/neighbor event with security driver, require soldier selection
-    // so the event can be synced to the soldier's profile (טבלת שליטה)
-    if (selectedCategory === "sector_events" && driverType === "security" && !selectedSoldierId) {
+    // Validation: if it's a sector/neighbor event with security driver (road safety), require soldier selection
+    const isRoadSafetyAdd = toNullableText(data.safety_category) === "בטיחות בדרכים";
+    if (selectedCategory === "sector_events" && isRoadSafetyAdd && driverType === "security" && !selectedSoldierId) {
       toast.error("יש לבחור חייל מהרשימה כדי לסנכרן את האירוע לטבלת השליטה");
       setIsSubmitting(false);
       return;
