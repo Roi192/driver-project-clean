@@ -101,6 +101,17 @@ const categoryLabels: Record<ContentCategory, string> = {
   monthly_summaries: "סיכומי חודש",
 };
 
+const getThumbUrl = (item: { image_url: string | null; image_urls?: string | null }): string | null => {
+  if (item.image_url) return item.image_url;
+  if (item.image_urls) {
+    try {
+      const arr = JSON.parse(item.image_urls);
+      if (Array.isArray(arr) && arr[0]) return arr[0];
+    } catch { /* ignore */ }
+  }
+  return null;
+};
+
 const EVENT_TYPES = [
   { value: "accident", label: "תאונה" },
   { value: "stuck", label: "התחפרות" },
@@ -1350,9 +1361,9 @@ export default function SafetyEvents() {
                 )}
                 
                 <div className="relative">
-                  {item.image_url ? (
+                  {getThumbUrl(item) ? (
                     <StorageImage
-                      src={item.image_url}
+                      src={getThumbUrl(item)!}
                       alt={item.title}
                       className="w-full h-44 object-cover"
                       fallback={<img src={defaultThumbnail} alt={item.title} className="w-full h-44 object-cover" />}
@@ -1405,10 +1416,10 @@ export default function SafetyEvents() {
               onClick={() => handleItemSelect(item)}
             >
               <div className="flex gap-4">
-                {item.image_url ? (
+                {getThumbUrl(item) ? (
                   <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 border border-border/30">
-                    <StorageImage 
-                      src={item.image_url} 
+                    <StorageImage
+                      src={getThumbUrl(item)!}
                       alt={item.title}
                       className="w-full h-full object-cover"
                       fallback={
