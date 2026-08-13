@@ -788,9 +788,6 @@ export default function SafetyEvents() {
       if (!description) missing.push("תיאור האירוע");
       if (!toNullableText(data.event_outcomes)) missing.push("תוצאות האירוע");
       if (!toNullableText(data.person_injury_severity)) missing.push("הערכת חומרת הפגיעה");
-      if (!driverType) missing.push("סוג נהג");
-      if (!toNullableText(data.vehicle_type)) missing.push("סוג הרכב");
-      if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
       if (!toNullableText(data.population_type)) missing.push("סוג אוכלוסייה");
       if (!toNullableText(data.unit_activity_type)) missing.push("סוג האירוע (פעילות היחידה)");
       const isRoadSafety = toNullableText(data.safety_category) === "בטיחות בדרכים";
