@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Car, Shield, ChevronLeft } from "lucide-react";
+import { Car, Shield, ChevronLeft, Building2 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import unitLogo from "@/assets/unit-logo.png";
 
@@ -31,6 +31,18 @@ const DepartmentSelector = () => {
       hoverBorder: "hover:border-indigo-500",
       glowColor: "from-indigo-500/30",
       route: "/battalion-context",
+    },
+    {
+      id: "maphatch",
+      title: 'מפח"ט בנימין',
+      subtitle: "אגפי המפקדה החטיבתית",
+      description: "ניהול אירועי בטיחות והכר את הגזרה לאגפי המפח\"ט",
+      icon: Building2,
+      gradient: "from-emerald-500 via-teal-500 to-emerald-600",
+      borderColor: "border-emerald-500/40",
+      hoverBorder: "hover:border-emerald-500",
+      glowColor: "from-emerald-500/30",
+      route: "/maphatch-dept-selector",
     },
   ];
 
@@ -67,13 +79,18 @@ const DepartmentSelector = () => {
                 onClick={() => {
                   if (dept.id === 'battalion') {
                     sessionStorage.setItem('superAdminDeptContext', 'battalion');
+                    navigate('/planag');
                   } else if (dept.id === 'planag') {
                     sessionStorage.setItem('superAdminDeptContext', 'planag');
                     sessionStorage.removeItem('superAdminBrigadePicked');
+                    navigate(dept.route);
+                  } else if (dept.id === 'maphatch') {
+                    sessionStorage.setItem('superAdminDeptContext', 'maphatch');
+                    navigate(dept.route);
                   } else {
                     sessionStorage.setItem('superAdminDeptContext', dept.id);
+                    navigate(dept.route);
                   }
-                  navigate(dept.id === 'battalion' ? '/planag' : dept.route);
                 }}
                 className={`group relative p-8 rounded-3xl border-2 ${dept.borderColor} ${dept.hoverBorder} bg-slate-800/60 backdrop-blur-xl transition-all duration-500 hover:scale-[1.03] hover:shadow-2xl text-right overflow-hidden`}
               >

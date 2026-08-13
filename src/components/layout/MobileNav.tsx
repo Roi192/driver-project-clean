@@ -34,9 +34,12 @@ export function MobileNav() {
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
 
   const isMaphatch = userType === 'maphatch';
+  const superAdminMaphatchContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'maphatch';
+  const maphatchDept = sessionStorage.getItem('maphatchDeptContext') || '';
+  const effectiveMaphatchDept = userDepartment || maphatchDept;
   const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי'
     : isInBattalionContext ? 'גדוד תע"ם'
-    : isMaphatch ? `מפח"ט${userDepartment ? ` - ${userDepartment}` : ''}`
+    : (isMaphatch || superAdminMaphatchContext) ? `מפח"ט${effectiveMaphatchDept ? ` - ${effectiveMaphatchDept}` : ''}`
     : (isDivisionUser && !activeBrigade) ? getBrigadeLabel('division')
     : getBrigade(brigade).shortLabel;
 

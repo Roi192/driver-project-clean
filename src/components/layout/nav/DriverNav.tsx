@@ -45,9 +45,11 @@ export function DriverNav({ onClose, userDepartment }: Props) {
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
   const isInDivisionView = isDivisionUser && !activeBrigade && !isOnDepartmentSelector;
   const isMaphatch = role === 'maphatch_user' || role === 'maphatch_admin';
+  const superAdminMaphatchContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'maphatch';
   const showDriverNavItems =
     !isInBattalionContext &&
     !isMaphatch &&
+    !superAdminMaphatchContext &&
     !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView &&
     (!isDivisionUser || !!activeBrigade);
 

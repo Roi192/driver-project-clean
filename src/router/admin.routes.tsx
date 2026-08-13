@@ -26,6 +26,8 @@ import ProcedureSignaturesTracking from "@/pages/ProcedureSignaturesTracking";
 import EquipmentTracking from "@/pages/EquipmentTracking";
 import FrameworksManagement from "@/pages/FrameworksManagement";
 import WhatsAppSettings from "@/pages/WhatsAppSettings";
+import MaphatchDeptSelector from "@/pages/MaphatchDeptSelector";
+import MaphatchUsersManagement from "@/pages/MaphatchUsersManagement";
 
 const protect = (element: ReactNode) => (
   <ProtectedRoute>{element}</ProtectedRoute>
@@ -58,5 +60,7 @@ export const adminRoutes = (
     <Route path="/equipment-tracking" element={protect(<EquipmentTracking />)} />
     <Route path="/frameworks" element={protect(<FrameworksManagement />)} />
     <Route path="/whatsapp-settings" element={protect(<WhatsAppSettings />)} />
+    <Route path="/maphatch-dept-selector" element={protect(<MaphatchDeptSelector />)} />
+    <Route path="/maphatch-users" element={protect(<MaphatchUsersManagement />)} />
   </>
 );

@@ -27,11 +27,12 @@ export function AdminNav({ onClose }: Props) {
 
   const isOnDepartmentSelector = location.pathname === '/department-selector';
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
+  const superAdminMaphatchContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'maphatch';
   const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
   const isInDivisionView = isDivisionUser && !activeBrigade && !isOnDepartmentSelector;
   const hasAdminAccess = isAdmin || isPlatoonCommander || isBattalionAdmin || (realIsDivisionAdmin && !!activeBrigade);
   // Battalion admins who have selected a specific brigade should see the brigade admin menu
-  const showPlanagMenu = (!isInBattalionContext || (isBattalionAdmin && !!activeBrigade)) && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView;
+  const showPlanagMenu = (!isInBattalionContext || (isBattalionAdmin && !!activeBrigade)) && !(isSuperAdmin && isOnDepartmentSelector) && !isInDivisionView && !superAdminMaphatchContext;
   const showSuperAdminSelector = isSuperAdmin && isOnDepartmentSelector;
 
   if (!showSuperAdminSelector && (!hasAdminAccess || !showPlanagMenu)) return null;

@@ -36,10 +36,12 @@ Deno.serve(async (req) => {
       .eq('user_id', callerUser.id)
       .single()
 
-    const allowedRoles = ['admin', 'super_admin', 'ravshatz', 'division_admin']
+    const allowedRoles = ['admin', 'super_admin', 'ravshatz', 'division_admin', 'maphatch_admin']
     if (!roleData || !allowedRoles.includes(roleData.role)) {
       throw new Error('Only admins can update users')
     }
+
+    const isMaphatchAdmin = roleData.role === 'maphatch_admin'
 
     // Create admin client with service role key
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -66,10 +68,31 @@ Deno.serve(async (req) => {
     }
     const ALLOWED_ROLES = [
       'driver','admin','super_admin','battalion_admin',
-      'platoon_commander','division_admin','division_user','ravshatz','company_commander'
+      'platoon_commander','division_admin','division_user','ravshatz','company_commander',
+      'maphatch_user','maphatch_admin'
     ]
     if (newRole !== undefined && (typeof newRole !== 'string' || !ALLOWED_ROLES.includes(newRole))) {
       throw new Error('newRole is not a recognized role')
+    }
+
+    // maphatch_admin may only manage users in their own department with maphatch roles
+    if (isMaphatchAdmin) {
+      const [callerProfileRes, targetProfileRes] = await Promise.all([
+        supabaseAdmin.from('profiles').select('department').eq('user_id', callerUser.id).single(),
+        supabaseAdmin.from('profiles').select('department, user_type').eq('user_id', targetUserId).single(),
+      ])
+      const callerDept = callerProfileRes.data?.department
+      const targetDept = targetProfileRes.data?.department
+      const targetType = targetProfileRes.data?.user_type
+      if (!callerDept || callerDept !== targetDept) {
+        throw new Error('Maphatch admin can only manage users in their own department')
+      }
+      if (targetType !== 'maphatch') {
+        throw new Error('Maphatch admin can only manage maphatch users')
+      }
+      if (newRole !== undefined && !['maphatch_user', 'maphatch_admin'].includes(newRole as string)) {
+        throw new Error('Maphatch admin can only assign maphatch roles')
+      }
     }
     if (profileUpdates !== undefined && (profileUpdates === null || typeof profileUpdates !== 'object' || Array.isArray(profileUpdates))) {
       throw new Error('profileUpdates must be an object')
