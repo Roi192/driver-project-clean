@@ -271,6 +271,23 @@ export function AddEditDialog({
                   {gettingLocation ? "מקבל מיקום..." : "הוסף מיקום בזמן אמת"}
                 </Button>
               ) : field.type === "map_picker" ? (
+                <div className={`rounded-xl overflow-hidden border-2 transition-all ${
+                  toInputString(formData[field.latField || "latitude"])
+                    ? "border-green-500 shadow-md shadow-green-500/20"
+                    : "border-orange-400 shadow-md shadow-orange-400/20"
+                }`}>
+                  {!toInputString(formData[field.latField || "latitude"]) && (
+                    <div className="bg-orange-50 dark:bg-orange-950/30 px-3 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 flex items-center gap-2">
+                      <span>⚠️</span>
+                      <span>יש לדקור נקודה במפה — שדה חובה</span>
+                    </div>
+                  )}
+                  {toInputString(formData[field.latField || "latitude"]) && (
+                    <div className="bg-green-50 dark:bg-green-950/30 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-400 flex items-center gap-2">
+                      <span>✅</span>
+                      <span>מיקום נבחר</span>
+                    </div>
+                  )}
                 <MapPicker
                   latitude={toInputString(formData[field.latField || "latitude"])}
                   longitude={toInputString(formData[field.lngField || "longitude"])}
@@ -278,6 +295,7 @@ export function AddEditDialog({
                     handleLocationChange(field.latField || "latitude", field.lngField || "longitude", lat, lng);
                   }}
                 />
+                </div>
               ) : field.type === "date" ? (
                 <Input
                   id={field.name}

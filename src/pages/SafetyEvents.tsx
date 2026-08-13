@@ -273,9 +273,9 @@ const getFields = (
       // ── 3. תאריך ────────────────────────────────────────────────────────────
       { name: "event_date", label: "תאריך", type: "date", placeholder: "בחר תאריך", required: true },
       // ── 4. שעה ──────────────────────────────────────────────────────────────
-      { name: "event_time", label: "שעה", type: "time", placeholder: "HH:MM" },
+      { name: "event_time", label: "שעה", type: "time", placeholder: "HH:MM", required: true },
       // ── 5. מיקום האירוע (תיאור מלל) ─────────────────────────────────────────
-      { name: "location_text", label: "מיקום האירוע", type: "text", placeholder: "לדוגמה: כביש 60, צומת בית אל..." },
+      { name: "location_text", label: "מיקום האירוע", type: "text", placeholder: "לדוגמה: כביש 60, צומת בית אל...", required: true },
       // ── 6. מסגרת ────────────────────────────────────────────────────────────
       {
         name: "framework_type",
@@ -385,23 +385,25 @@ const getFields = (
         placeholder: "בחר מוצב",
       },
       // ── 11. חיילים מעורבים ───────────────────────────────────────────────────
-      { name: "involved_soldiers", label: "חיילים מעורבים", type: "textarea", placeholder: "פרט את החיילים המעורבים..." },
+      { name: "involved_soldiers", label: "חיילים מעורבים", type: "textarea", placeholder: "פרט את החיילים המעורבים...", required: true },
       // ── 13. תיאור האירוע ─────────────────────────────────────────────────────
-      { name: "description", label: "תיאור האירוע", type: "textarea", placeholder: "תיאור מפורט של האירוע...", required: !isBattalionUser },
+      { name: "description", label: "תיאור האירוע", type: "textarea", placeholder: "תיאור מפורט של האירוע...", required: true },
       // ── 14. תוצאות האירוע ────────────────────────────────────────────────────
-      { name: "event_outcomes", label: "תוצאות האירוע", type: "textarea", placeholder: "פרט את תוצאות האירוע..." },
+      { name: "event_outcomes", label: "תוצאות האירוע", type: "textarea", placeholder: "פרט את תוצאות האירוע...", required: true },
       // ── 15. הערכת חומרת הפגיעה (שדה מלל משולב) ────────────────────────────
       {
         name: "person_injury_severity",
         label: "הערכת חומרת הפגיעה באדם ורכוש",
         type: "textarea",
         placeholder: "פרט את חומרת הפגיעה באדם וברכוש...",
+        required: true,
       },
       // ── 17. סוג הנהג ─────────────────────────────────────────────────────────
       {
         name: "driver_type",
         label: "סוג הנהג",
         type: "select",
+        required: true,
         dynamicOptions: (formData) => {
           if (isBattalionFwFn(String(formData.framework_type || ""))) {
             return [...DRIVER_TYPES_BATTALION];
@@ -430,6 +432,7 @@ const getFields = (
         name: "vehicle_type",
         label: "סוג הרכב",
         type: "select",
+        required: true,
         placeholder: "בחר סוג רכב",
         options: [
           { value: "דויד",         label: "דויד" },
@@ -454,12 +457,13 @@ const getFields = (
           ["סיור קל", "מנהלה", "אזרחי", "רכב אורגני", "אחר"].includes(String(formData.vehicle_type || "")),
       },
       // ── 19. מספר רכב ─────────────────────────────────────────────────────────
-      { name: "vehicle_number", label: "מספר רכב", type: "text", placeholder: "הזן מספר רכב..." },
+      { name: "vehicle_number", label: "מספר רכב", type: "text", placeholder: "הזן מספר רכב...", required: true },
       // ── 19ב. סוג אוכלוסייה ───────────────────────────────────────────────────
       {
         name: "population_type",
         label: "סוג אוכלוסייה",
         type: "select",
+        required: true,
         placeholder: "בחר סוג אוכלוסייה",
         options: [
           { value: "קבע",     label: "קבע" },
@@ -469,7 +473,7 @@ const getFields = (
         ],
       },
       // ── 20. סוג האירוע (פעילות היחידה) ──────────────────────────────────────
-      { name: "unit_activity_type", label: "סוג האירוע (פעילות היחידה)", type: "text", placeholder: "לדוגמה: סיור, מחסום, אימון..." },
+      { name: "unit_activity_type", label: "סוג האירוע (פעילות היחידה)", type: "text", placeholder: "לדוגמה: סיור, מחסום, אימון...", required: true },
       // ── 20ב. סוג האירוע (תאונה/התחפרות/התהפכות) ─────────────────────────────
       {
         name: "event_type",
@@ -498,6 +502,7 @@ const getFields = (
         name: "culpability",
         label: "סיווג האשמה",
         type: "select",
+        required: true,
         placeholder: "בחר סיכות אשמה",
         options: [
           { value: "אשם",    label: "אשם" },
@@ -509,6 +514,7 @@ const getFields = (
         name: "damage_and_casualties",
         label: "נזק ונפגעים",
         type: "select",
+        required: true,
         placeholder: "בחר סיווג נזק ונפגעים",
         options: [
           { value: "יש נזק אין נפגעים",  label: "יש נזק אין נפגעים" },
@@ -517,10 +523,9 @@ const getFields = (
         ],
       },
       // ── 22. לקחים ראשונים ────────────────────────────────────────────────────
-      { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים..." },
-      // ── 23. דקירת מיקום במפה ────────────────────────────────────────────────
-      { name: "get_location", label: "מיקום נוכחי (GPS)", type: "location", latField: "latitude", lngField: "longitude" },
-      { name: "map_picker", label: "בחר מיקום במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
+      { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים...", required: true },
+      // ── 23. דקירת מיקום במפה (GPS button removed — map pin only) ────────────
+      { name: "map_picker", label: "📍 דקור מיקום האירוע במפה", type: "map_picker", latField: "latitude", lngField: "longitude", required: true },
       // ── 24. הוספת תמונות ─────────────────────────────────────────────────────
       { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
       { name: "video_url", label: "סרטון", type: "media", mediaTypes: ["video", "youtube"] },
@@ -749,15 +754,28 @@ export default function SafetyEvents() {
     // Required-field validation for sector events
     if (selectedCategory === "sector_events") {
       const missing: string[] = [];
+      if (!toNullableText(data.safety_category)) missing.push("קטגוריה");
+      if (!toText(data.title)) missing.push("כותרת");
       if (!eventDate) missing.push("תאריך");
+      if (!toNullableText(data.event_time)) missing.push("שעה");
+      if (!toNullableText(data.location_text)) missing.push("מיקום האירוע");
       if (showBrigadeSelector && !toNullableText(data.brigade)) missing.push("חטיבה");
-      if (!eventType) missing.push("סוג אירוע");
-      if (!driverType) missing.push("סוג נהג");
-      if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
-      if (!toNullableText(data.severity)) missing.push("חומרת אירוע");
-      if (!latitude || !longitude) missing.push("מיקום (דקירה במפה או מיקום נוכחי)");
       if (!toNullableText(data.framework_type)) missing.push("מסגרת");
-      if (!isBattalionUser && !description) missing.push("תיאור");
+      if (!toNullableText(data.involved_soldiers)) missing.push("חיילים מעורבים");
+      if (!description) missing.push("תיאור האירוע");
+      if (!toNullableText(data.event_outcomes)) missing.push("תוצאות האירוע");
+      if (!toNullableText(data.person_injury_severity)) missing.push("הערכת חומרת הפגיעה");
+      if (!driverType) missing.push("סוג נהג");
+      if (!toNullableText(data.vehicle_type)) missing.push("סוג הרכב");
+      if (!toNullableText(data.vehicle_number)) missing.push("מספר רכב");
+      if (!toNullableText(data.population_type)) missing.push("סוג אוכלוסייה");
+      if (!toNullableText(data.unit_activity_type)) missing.push("סוג האירוע (פעילות היחידה)");
+      if (!eventType) missing.push("סוג האירוע");
+      if (!toNullableText(data.severity)) missing.push("חומרת האירוע");
+      if (!toNullableText(data.culpability)) missing.push("סיווג האשמה");
+      if (!toNullableText(data.damage_and_casualties)) missing.push("נזק ונפגעים");
+      if (!toNullableText(data.initial_lessons)) missing.push("לקחים ראשונים");
+      if (!latitude || !longitude) missing.push("מיקום במפה (דקור נקודה)");
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
         setIsSubmitting(false);
