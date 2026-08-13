@@ -1,6 +1,7 @@
 import { Route } from "react-router-dom";
 import Auth from "@/pages/Auth";
 import AuthBattalion from "@/pages/AuthBattalion";
+import AuthMaphatch from "@/pages/AuthMaphatch";
 import BrigadeAuth from "@/pages/BrigadeAuth";
 import DivisionAuth from "@/pages/DivisionAuth";
 import ResetPassword from "@/pages/ResetPassword";
@@ -11,6 +12,7 @@ export const authRoutes = (
   <>
     <Route path="/auth" element={<Auth />} />
     <Route path="/auth/gdud" element={<AuthBattalion />} />
+    <Route path="/auth/maphatch" element={<AuthMaphatch />} />
     <Route path="/auth/brigade/:code" element={<BrigadeAuth />} />
     <Route path="/auth/division" element={<DivisionAuth />} />
     <Route path="/reset-password" element={<ResetPassword />} />
