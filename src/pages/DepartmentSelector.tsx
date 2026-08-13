@@ -34,7 +34,7 @@ const DepartmentSelector = () => {
     },
     {
       id: "maphatch",
-      title: 'מפח"ט בנימין',
+      title: 'מפח"ט',
       subtitle: "אגפי המפקדה החטיבתית",
       description: "ניהול אירועי בטיחות והכר את הגזרה לאגפי המפח\"ט",
       icon: Building2,

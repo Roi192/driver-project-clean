@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { registerAppServiceWorker } from "@/lib/service-worker";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -254,7 +254,7 @@ export default function DepartmentInstallPage({ department }: Props) {
                           borderRadius: "50%", background: `hsl(${p} / 0.12)`, color: `hsl(${p})`,
                           fontWeight: 800, fontSize: ".82rem", border: `1px solid hsl(${p} / 0.28)`,
                         }}>{i + 1}</span>
-                        <span dangerouslySetInnerHTML={{ __html: step.replace(/"([^"]+)"/g, '<strong>"$1"</strong>') }} />
+                        <span>{step.split(/"([^"]+)"/g).map((part, j) => j % 2 === 1 ? <Fragment key={j}><strong>"{part}"</strong></Fragment> : part)}</span>
                       </div>
                     ))}
                   </div>
@@ -276,7 +276,7 @@ export default function DepartmentInstallPage({ department }: Props) {
                           borderRadius: "50%", background: `hsl(${p} / 0.12)`, color: `hsl(${p})`,
                           fontWeight: 800, fontSize: ".82rem", border: `1px solid hsl(${p} / 0.28)`,
                         }}>{i + 1}</span>
-                        <span dangerouslySetInnerHTML={{ __html: step.replace(/"([^"]+)"/g, '<strong>"$1"</strong>') }} />
+                        <span>{step.split(/"([^"]+)"/g).map((part, j) => j % 2 === 1 ? <Fragment key={j}><strong>"{part}"</strong></Fragment> : part)}</span>
                       </div>
                     ))}
                   </div>

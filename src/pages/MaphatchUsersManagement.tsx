@@ -54,6 +54,7 @@ const MaphatchUsersManagement = () => {
   const canAccess = isSuperAdmin || isMaphatchAdmin;
 
   const [myDepartment, setMyDepartment] = useState<string | null>(null);
+  const [myBrigade, setMyBrigade] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [userEmails, setUserEmails] = useState<Record<string, string>>({});
@@ -65,20 +66,23 @@ const MaphatchUsersManagement = () => {
   const [editMilitaryRole, setEditMilitaryRole] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Determine which department to show
-  const getDepartment = async (): Promise<string | null> => {
+  // Determine department + brigade to show
+  const getContext = async (): Promise<{ dept: string | null; brigade: string | null }> => {
     if (isSuperAdmin) {
-      return sessionStorage.getItem('maphatchDeptContext');
+      return {
+        dept: sessionStorage.getItem('maphatchDeptContext'),
+        brigade: sessionStorage.getItem('brigadeContext'),
+      };
     }
     if (isMaphatchAdmin && user?.id) {
       const { data } = await supabase
         .from('profiles')
-        .select('department')
+        .select('department, brigade')
         .eq('user_id', user.id)
         .maybeSingle();
-      return data?.department || null;
+      return { dept: data?.department || null, brigade: data?.brigade || null };
     }
-    return null;
+    return { dept: null, brigade: null };
   };
 
   useEffect(() => {
@@ -87,26 +91,41 @@ const MaphatchUsersManagement = () => {
       return;
     }
     const init = async () => {
-      const dept = await getDepartment();
+      const { dept, brigade } = await getContext();
       setMyDepartment(dept);
-      if (dept) await fetchUsers(dept);
+      setMyBrigade(brigade);
+      if (dept && brigade) await fetchUsers(dept, brigade);
       else setLoading(false);
     };
     init();
   }, [canAccess, user?.id]);
 
-  const fetchUsers = async (dept: string) => {
+  const fetchUsers = async (dept: string, brigade: string) => {
     try {
       setLoading(true);
-      const [profilesRes, rolesRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('user_type', 'maphatch').eq('department', dept).order('created_at', { ascending: false }),
-        supabase.from('user_roles').select('user_id, role'),
-      ]);
+      const profilesRes = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_type', 'maphatch')
+        .eq('department', dept)
+        .eq('brigade', brigade)
+        .order('created_at', { ascending: false });
       if (profilesRes.error) throw profilesRes.error;
-      if (rolesRes.error) throw rolesRes.error;
 
-      setProfiles(profilesRes.data || []);
-      setUserRoles((rolesRes.data || []) as UserRole[]);
+      const fetchedProfiles = profilesRes.data || [];
+      setProfiles(fetchedProfiles);
+
+      const userIds = fetchedProfiles.map((p) => p.user_id);
+      if (userIds.length > 0) {
+        const rolesRes = await supabase
+          .from('user_roles')
+          .select('user_id, role')
+          .in('user_id', userIds);
+        if (rolesRes.error) throw rolesRes.error;
+        setUserRoles((rolesRes.data || []) as UserRole[]);
+      } else {
+        setUserRoles([]);
+      }
 
       if (isSuperAdmin) {
         const { data: emailData, error: emailError } = await supabase.functions.invoke('get-user-emails');
@@ -143,7 +162,7 @@ const MaphatchUsersManagement = () => {
       if (error) throw error;
       toast.success('המשתמש עודכן בהצלחה');
       setEditingUser(null);
-      if (myDepartment) await fetchUsers(myDepartment);
+      if (myDepartment && myBrigade) await fetchUsers(myDepartment, myBrigade);
     } catch (err: any) {
       toast.error(`שגיאה בעדכון: ${err?.message || err}`);
     } finally {
@@ -162,7 +181,7 @@ const MaphatchUsersManagement = () => {
       <div className="p-4 max-w-4xl mx-auto" dir="rtl">
         <PageHeader
           title={`ניהול משתמשים — ${myDepartment || ''}`}
-          subtitle={`אגף ${myDepartment || ''} · מפח"ט בנימין`}
+          subtitle={`אגף ${myDepartment || ''} · מפח"ט ${myBrigade || ''}`}
           icon={Users}
         />
 
@@ -170,10 +189,10 @@ const MaphatchUsersManagement = () => {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : !myDepartment ? (
+        ) : !myDepartment || !myBrigade ? (
           <div className="text-center py-20 text-slate-400">
             <Building2 className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p>לא נמצא אגף — חזור לבחירת מחלקה</p>
+            <p>לא נמצאה חטיבה / אגף — חזור לבחירת מחלקה</p>
           </div>
         ) : (
           <>

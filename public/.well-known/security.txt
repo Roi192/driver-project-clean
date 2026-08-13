@@ -1,0 +1,5 @@
+Contact: mailto:roimoshe92@gmail.com
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: he, en
+Canonical: https://connect-main.vercel.app/.well-known/security.txt
+Policy: This is an internal military fleet management system. Unauthorized access is prohibited.
