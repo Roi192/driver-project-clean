@@ -49,7 +49,7 @@ type ActiveSection = 'none' | 'accidents' | 'punishments' | 'inspections' | 'att
 export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierProfileDialogProps) {
   const [activeSection, setActiveSection] = useState<ActiveSection>('none');
 
-  // Fetch accidents
+  // Fetch accidents — refetch on every dialog open (enabled: open) so deleted records disappear
   const { data: accidents = [], isLoading: accidentsLoading } = useQuery({
     queryKey: ['soldier-accidents', soldier?.id],
     queryFn: async () => {
@@ -62,10 +62,11 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
       if (error) throw error;
       return data;
     },
-    enabled: !!soldier
+    enabled: !!soldier && open,
+    staleTime: 0,
   });
 
-  // Fetch punishments
+  // Fetch punishments — refetch on every dialog open so deleted records disappear
   const { data: punishments = [], isLoading: punishmentsLoading } = useQuery({
     queryKey: ['soldier-punishments', soldier?.id],
     queryFn: async () => {
@@ -78,7 +79,8 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
       if (error) throw error;
       return data;
     },
-    enabled: !!soldier
+    enabled: !!soldier && open,
+    staleTime: 0,
   });
 
   // Fetch inspections
@@ -94,7 +96,8 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
       if (error) throw error;
       return data;
     },
-    enabled: !!soldier
+    enabled: !!soldier && open,
+    staleTime: 0,
   });
 
   // Fetch attendance
@@ -111,7 +114,8 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
       if (error) throw error;
       return data;
     },
-    enabled: !!soldier
+    enabled: !!soldier && open,
+    staleTime: 0,
   });
 
   // Fetch safety scores
@@ -127,7 +131,8 @@ export function SoldierProfileDialog({ soldier, open, onOpenChange }: SoldierPro
       if (error) throw error;
       return data;
     },
-    enabled: !!soldier
+    enabled: !!soldier && open,
+    staleTime: 0,
   });
 
   // Reset active section when dialog closes
