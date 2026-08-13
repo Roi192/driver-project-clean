@@ -527,8 +527,7 @@ const getFields = (
       // ── 23. דקירת מיקום במפה (GPS button removed — map pin only) ────────────
       { name: "map_picker", label: "📍 דקור מיקום האירוע במפה", type: "map_picker", latField: "latitude", lngField: "longitude", required: true },
       // ── 24. הוספת תמונות ─────────────────────────────────────────────────────
-      { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
-      { name: "video_url", label: "סרטון", type: "media", mediaTypes: ["video", "youtube"] },
+      { name: "image_urls", label: "תמונות האירוע", type: "multi_image", required: true, imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
     ];
     return sectorFields;
   }
@@ -776,6 +775,7 @@ export default function SafetyEvents() {
       if (!toNullableText(data.damage_and_casualties)) missing.push("נזק ונפגעים");
       if (!toNullableText(data.initial_lessons)) missing.push("לקחים ראשונים");
       if (!latitude || !longitude) missing.push("מיקום במפה (דקור נקודה)");
+      if (!toNullableText(data.image_urls)) missing.push("תמונות האירוע (חובה להעלות לפחות תמונה אחת)");
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
         setIsSubmitting(false);
