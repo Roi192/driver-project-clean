@@ -1,8 +1,8 @@
 {
   "id": "/drivers-app",
-  "name": "נהגי בט\"ש - חטיבת בנימין",
-  "short_name": "נהגי בט\"ש",
-  "description": "מערכת ניהול נהגי בט״ש לחטיבת בנימין - דיווחים, תרגולות ובטיחות",
+  "name": "Connect — ניהול נהגים",
+  "short_name": "Connect",
+  "description": "מערכת ניהול נהגים ובטיחות — דיווחים, תרגולות, אירועים ומעקב",
   "start_url": "/auth",
   "scope": "/",
   "display": "standalone",
