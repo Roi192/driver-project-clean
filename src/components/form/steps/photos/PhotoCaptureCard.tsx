@@ -4,7 +4,6 @@ import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { uploadShiftPhoto, deleteShiftPhoto, prepareShiftPhotoForUpload } from "@/lib/shift-photo-storage";
-import { CameraViewfinder } from "./CameraViewfinder";
 
 interface PhotoCaptureCardProps {
   photoId: string;
@@ -26,10 +25,11 @@ export function PhotoCaptureCard({
   onRemoved,
 }: PhotoCaptureCardProps) {
   const processingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const mountedRef = useRef(true);
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
   const previewSrc = localPreview ?? storedPath ?? undefined;
@@ -39,50 +39,39 @@ export function PhotoCaptureCard({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (localPreview && localPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(localPreview);
-      }
+      if (localPreview?.startsWith("blob:")) URL.revokeObjectURL(localPreview);
     };
   }, [localPreview]);
 
   const uploadBlob = useCallback(
     async (blob: Blob) => {
-      console.log("[PhotoCapture] uploadBlob called", photoId, "size:", blob.size, "type:", blob.type);
-      if (processingRef.current) {
-        console.warn("[PhotoCapture] already processing, skipping", photoId);
-        return;
-      }
+      if (processingRef.current) return;
       processingRef.current = true;
+      setUploading(true);
 
       const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
         type: blob.type || "image/jpeg",
         lastModified: Date.now(),
       });
 
-      setUploading(true);
-
       try {
-        console.log("[PhotoCapture] preparing file for upload...", photoId);
         const uploadFile = await prepareShiftPhotoForUpload(file);
-        console.log("[PhotoCapture] file prepared", photoId, "size:", uploadFile.size);
 
+        // Show immediate preview while uploading
         const objectUrl = URL.createObjectURL(uploadFile);
         if (mountedRef.current) {
           setLocalPreview((prev) => {
-            if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+            if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
             return objectUrl;
           });
         }
 
-        console.log("[PhotoCapture] starting upload to storage...", photoId);
         const previousStoredPath = storedPath;
         const path = await uploadShiftPhoto({ file: uploadFile, photoId });
 
-        console.log("[PhotoCapture] upload success", photoId, path);
-        if (mountedRef.current) {
-          onUploaded(photoId, path);
-        }
+        if (mountedRef.current) onUploaded(photoId, path);
 
+        // Delete old photo from storage if replacing
         if (previousStoredPath && previousStoredPath !== path) {
           await deleteShiftPhoto(previousStoredPath).catch(() => {});
         }
@@ -90,15 +79,17 @@ export function PhotoCaptureCard({
         toast({ title: "✅ התמונה נטענה ונשמרה", description: label });
       } catch (error) {
         const message = error instanceof Error ? error.message : "אירעה שגיאה";
-        console.error("[PhotoCapture] upload failed", photoId, message);
-        if (mountedRef.current) {
-          setLocalPreview(null);
-        }
-        const isAuthError = message.includes("AUTH_REQUIRED") || message.toLowerCase().includes("jwt") || message.toLowerCase().includes("session");
+        if (mountedRef.current) setLocalPreview(null);
+
+        const isAuthError =
+          message.includes("AUTH_REQUIRED") ||
+          message.toLowerCase().includes("jwt") ||
+          message.toLowerCase().includes("session");
+
         if (isAuthError) {
           toast({
             title: "❌ פג תוקף ההתחברות",
-            description: "ההתחברות שלך פגה. מעביר אותך לדף ההתחברות כדי להתחבר מחדש ולהמשיך בטופס.",
+            description: "ההתחברות שלך פגה. מעביר אותך לדף ההתחברות.",
             variant: "destructive",
           });
           setTimeout(() => {
@@ -108,29 +99,30 @@ export function PhotoCaptureCard({
         } else {
           toast({
             title: "❌ העלאת התמונה נכשלה",
-            description: `${label} - ${message}`,
+            description: `${label} — ${message}`,
             variant: "destructive",
           });
         }
       } finally {
-        if (mountedRef.current) {
-          setUploading(false);
-        }
+        if (mountedRef.current) setUploading(false);
         processingRef.current = false;
+        // Reset so the same photo can be retaken immediately
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
     [label, onUploaded, photoId, storedPath]
   );
 
-  const handleCardClick = useCallback(async () => {
+  const handleCardClick = useCallback(() => {
     if (isDisabled) return;
-    setCameraOpen(true);
+    fileInputRef.current?.click();
   }, [isDisabled]);
 
-  const handleCameraCapture = useCallback(
-    async (blob: Blob) => {
-      setCameraOpen(false);
-      await uploadBlob(blob);
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await uploadBlob(file);
     },
     [uploadBlob]
   );
@@ -138,16 +130,29 @@ export function PhotoCaptureCard({
   const handleRemove = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-
     setLocalPreview(null);
-    if (storedPath) {
-      await deleteShiftPhoto(storedPath).catch(() => {});
-    }
+    if (storedPath) await deleteShiftPhoto(storedPath).catch(() => {});
     onRemoved(photoId);
   };
 
   return (
     <>
+      {/*
+        Native file input — capture="environment" opens the rear camera directly on mobile.
+        No getUserMedia, no permission dialogs, no browser blocking.
+        Falls back to file picker on desktop.
+      */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={handleFileChange}
+      />
+
       <div className="relative animate-fade-in" style={{ animationDelay: `${animationDelayMs}ms` }}>
         <button
           type="button"
@@ -161,23 +166,10 @@ export function PhotoCaptureCard({
             isDisabled && "cursor-not-allowed opacity-90"
           )}
         >
-          <CardContent
-            uploading={uploading}
-            hasPhoto={hasPhoto}
-            previewSrc={previewSrc}
-            label={label}
-          />
+          <CardContent uploading={uploading} hasPhoto={hasPhoto} previewSrc={previewSrc} label={label} />
         </button>
         <PhotoOverlays hasPhoto={hasPhoto} uploading={uploading} label={label} onRemove={handleRemove} />
       </div>
-
-      {cameraOpen && (
-        <CameraViewfinder
-          label={label}
-          onCapture={handleCameraCapture}
-          onClose={() => setCameraOpen(false)}
-        />
-      )}
     </>
   );
 }
