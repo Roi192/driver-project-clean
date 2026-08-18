@@ -25,7 +25,6 @@ export function PhotoCaptureCard({
   onRemoved,
 }: PhotoCaptureCardProps) {
   const processingRef = useRef(false);
-  const mountedRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [uploading, setUploading] = useState(false);
@@ -34,15 +33,6 @@ export function PhotoCaptureCard({
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
   const previewSrc = localPreview ?? storedPath ?? undefined;
   const isDisabled = disabled || uploading;
-
-  // Track actual mount/unmount only — must NOT depend on localPreview,
-  // otherwise StrictMode's double-invoke leaves mountedRef=false during active uploads.
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   // Revoke stale blob URLs when localPreview is replaced or the component unmounts.
   useEffect(() => {
@@ -67,17 +57,15 @@ export function PhotoCaptureCard({
 
         // Show immediate preview while uploading
         const objectUrl = URL.createObjectURL(uploadFile);
-        if (mountedRef.current) {
-          setLocalPreview((prev) => {
-            if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-            return objectUrl;
-          });
-        }
+        setLocalPreview((prev) => {
+          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
 
         const previousStoredPath = storedPath;
         const path = await uploadShiftPhoto({ file: uploadFile, photoId });
 
-        if (mountedRef.current) onUploaded(photoId, path);
+        onUploaded(photoId, path);
 
         // Delete old photo from storage if replacing
         if (previousStoredPath && previousStoredPath !== path) {
@@ -87,7 +75,7 @@ export function PhotoCaptureCard({
         toast({ title: "✅ התמונה נטענה ונשמרה", description: label });
       } catch (error) {
         const message = error instanceof Error ? error.message : "אירעה שגיאה";
-        if (mountedRef.current) setLocalPreview(null);
+        setLocalPreview(null);
 
         const isAuthError =
           message.includes("AUTH_REQUIRED") ||
