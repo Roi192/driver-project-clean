@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Camera, Check, Sparkles, MessageSquare } from "lucide-react";
@@ -7,6 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { PhotoCaptureCard } from "./photos/PhotoCaptureCard";
 
 type PhotosMap = Record<string, string | undefined>;
+
+// Global debug counter — survives component unmount/remount so we can tell
+// if handlePhotoUploaded is being called even if React state isn't updating.
+const _g = (window as unknown as Record<string, number>);
+_g.__dbgPhotoCallCount = _g.__dbgPhotoCallCount ?? 0;
 
 export function PhotosStep() {
   const { setValue, register, getValues } = useFormContext();
@@ -24,8 +29,19 @@ export function PhotosStep() {
     return initial;
   });
 
+  // Debug: tracks how many times handlePhotoUploaded fired (survives re-renders)
+  const callCountRef = useRef(0);
+  const [debugCallCount, setDebugCallCount] = useState(0);
+  const [debugLastId, setDebugLastId] = useState("");
+
   const handlePhotoUploaded = useCallback(
     (photoId: string, storagePath: string) => {
+      // Debug instrumentation
+      callCountRef.current += 1;
+      _g.__dbgPhotoCallCount += 1;
+      setDebugCallCount(callCountRef.current);
+      setDebugLastId(photoId);
+
       // Update local UI state immediately (counter, storedPath prop)
       setPhotoState((prev) => ({ ...prev, [photoId]: storagePath }));
       // Sync to RHF so submission validation (hasAllRequiredPhotos) sees the value
@@ -41,6 +57,7 @@ export function PhotosStep() {
   const handlePhotoRemoved = useCallback(
     (photoId: string) => {
       setPhotoState((prev) => ({ ...prev, [photoId]: undefined }));
+      setDebugLastId("");
       setValue(`photos.${photoId}`, "", {
         shouldDirty: true,
         shouldTouch: true,
@@ -103,6 +120,17 @@ export function PhotosStep() {
           />
         ))}
       </div>
+
+      {/* TEMP DEBUG — remove after diagnosis */}
+      <div className="mt-4 rounded-xl border-2 border-yellow-400 bg-yellow-50 p-3 text-xs text-slate-800 space-y-1">
+        <p className="font-bold text-yellow-700">🔍 דיאגנוזה — דווח על הנתונים הבאים:</p>
+        <p>handlePhotoUploaded נקרא: <strong className="text-green-700">{debugCallCount} פעמים</strong></p>
+        <p>תמונה אחרונה: <strong>{debugLastId || "—"}</strong></p>
+        <p>photoState keys: <strong>{Object.keys(photoState).filter(k => photoState[k]).join(", ") || "ריק"}</strong></p>
+        <p>completedPhotos: <strong>{completedPhotos}</strong></p>
+        <p>window counter: <strong>{_g.__dbgPhotoCallCount}</strong></p>
+      </div>
+      {/* END TEMP DEBUG */}
 
       <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-4 flex items-center gap-3">
