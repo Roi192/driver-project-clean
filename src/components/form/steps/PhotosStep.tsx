@@ -21,23 +21,18 @@ export function PhotosStep() {
     });
   }, [register]);
 
-  // Watch whole photos object for robust nested updates across mobile browsers
-  const watchedPhotos = useWatch({ name: "photos" }) as PhotosMap | undefined;
+  // Watch individual registered paths — more reliable than watching the parent "photos" object
+  // when sub-fields were registered via register("photos.front") etc.
+  const watchedValues = useWatch({ name: PHOTO_FIELD_NAMES }) as (string | undefined)[];
 
   const photoValues: PhotosMap = {};
-  VEHICLE_PHOTOS.forEach((photo) => {
-    const value = watchedPhotos?.[photo.id];
+  VEHICLE_PHOTOS.forEach((photo, index) => {
+    const value = watchedValues?.[index];
     photoValues[photo.id] = typeof value === "string" && value.trim().length > 0 ? value : undefined;
   });
 
   const handlePhotoUploaded = (photoId: string, storagePath: string) => {
-    const currentPhotos = (methods.getValues("photos") ?? {}) as PhotosMap;
-    const nextPhotos: PhotosMap = {
-      ...currentPhotos,
-      [photoId]: storagePath,
-    };
-
-    setValue("photos", nextPhotos, {
+    setValue(`photos.${photoId}`, storagePath, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -45,13 +40,7 @@ export function PhotosStep() {
   };
 
   const handlePhotoRemoved = (photoId: string) => {
-    const currentPhotos = (methods.getValues("photos") ?? {}) as PhotosMap;
-    const nextPhotos: PhotosMap = {
-      ...currentPhotos,
-      [photoId]: "",
-    };
-
-    setValue("photos", nextPhotos, {
+    setValue(`photos.${photoId}`, "", {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
