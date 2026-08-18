@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { extractFilePath } from "./storage-utils";
+import { CameraLog } from "./camera-logger";
 
 export const SHIFT_PHOTOS_BUCKET = "shift-photos";
 
@@ -16,10 +17,11 @@ const UPLOAD_TIMEOUT_MS = 45_000;
 const resolveFileExtension = (file: File) => {
   const fromMime = file.type?.split("/")?.[1]?.toLowerCase()?.split(";")?.[0];
   const fromName = file.name?.split(".")?.pop()?.toLowerCase();
-  // Treat heic/heif as jpg — we always convert these to JPEG before upload
   const raw = fromMime || fromName || FALLBACK_EXTENSION;
   if (raw === "jpeg") return "jpg";
-  if (raw === "heic" || raw === "heif") return "jpg";
+  // Do NOT alias heic/heif → jpg here.  prepareShiftPhotoForUpload attempts
+  // canvas conversion; if that fails the original HEIC is uploaded and we
+  // must keep the real extension so the stored object has the correct MIME.
   return raw;
 };
 
@@ -190,6 +192,17 @@ export async function uploadShiftPhoto(params: {
   console.log("[uploadShiftPhoto] Starting upload for photoId:", params.photoId);
   const authenticatedUserId = await getAuthenticatedUserId(params.userId);
   console.log("[uploadShiftPhoto] Authenticated userId:", authenticatedUserId);
+
+  // Verify the session is still active before starting the upload.
+  // If the token is close to expiring, refresh it proactively so the
+  // subsequent storage.upload() call uses a fresh JWT.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("AUTH_REQUIRED");
+  if (session.expires_at && session.expires_at - Date.now() / 1000 < 60) {
+    await supabase.auth.refreshSession();
+  }
+
+  CameraLog.uploadStarted(params.photoId, params.file.size);
   const optimizedFile = await prepareShiftPhotoForUpload(params.file);
   const uploadCandidates = optimizedFile === params.file ? [params.file] : [optimizedFile, params.file];
 
@@ -221,6 +234,7 @@ export async function uploadShiftPhoto(params: {
             break;
           }
 
+          CameraLog.uploadSuccess(params.photoId, filePath);
           return filePath;
         }
 
@@ -236,7 +250,9 @@ export async function uploadShiftPhoto(params: {
     }
   }
 
-  throw new Error(getUploadErrorMessage(lastError));
+  const errMsg = getUploadErrorMessage(lastError);
+  CameraLog.uploadFailed(params.photoId, errMsg);
+  throw new Error(errMsg);
 }
 
 export async function deleteShiftPhoto(pathOrUrl?: string | null): Promise<void> {

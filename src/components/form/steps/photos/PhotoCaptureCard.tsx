@@ -3,7 +3,12 @@ import { Camera, Check, Loader2, X } from "lucide-react";
 import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { uploadShiftPhoto, deleteShiftPhoto, prepareShiftPhotoForUpload } from "@/lib/shift-photo-storage";
+import {
+  uploadShiftPhoto,
+  deleteShiftPhoto,
+  prepareShiftPhotoForUpload,
+} from "@/lib/shift-photo-storage";
+import { CameraLog } from "@/lib/camera-logger";
 import { CameraModal } from "./CameraModal";
 
 // Data URLs embed the image bytes in the string — unlike blob: URLs they survive
@@ -16,36 +21,67 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-// Creates a temporary, body-level file input and clicks it.
-// Avoids sr-only / clipping issues that prevent `onChange` from firing on some
-// Android Chrome versions when programmatically clicking a hidden input element.
-// `capture` = "environment" opens the rear camera directly; omit for media picker.
+/**
+ * Creates a temporary, body-level file input and clicks it.
+ *
+ * Full-size but invisible — avoids the Android Chrome bug where a 1×1 px or
+ * clipped element never fires the `change` event after returning from the
+ * camera / gallery.  pointer-events:none ensures it never blocks taps.
+ *
+ * Secondary `visibilitychange` signal handles the case where the user returns
+ * from the native camera app but the `change` event is delayed or lost.
+ *
+ * `capture="environment"` opens the rear camera directly (no gallery choice);
+ * omit for a media picker that includes gallery.
+ */
 const openNativePicker = (
   accept: string,
-  onFile: (file: File) => void,
+  onFile: (f: File) => void,
   capture?: string,
 ) => {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = accept;
   if (capture) input.setAttribute("capture", capture);
-  // Invisible but NOT clipped — clipping (clip: rect) prevents camera intent return on Android
+  // Full-size but invisible — avoids Android Chrome ignoring clicks on micro-elements
   input.style.cssText =
-    "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none";
+    "position:fixed;top:0;left:0;width:100%;height:100%;opacity:0;pointer-events:none;z-index:-1";
   document.body.appendChild(input);
 
+  let resolved = false;
+
   const cleanup = () => {
-    try { document.body.removeChild(input); } catch { /* already removed */ }
+    document.removeEventListener("visibilitychange", onVisChange);
+    clearTimeout(timeoutId);
+    try {
+      document.body.removeChild(input);
+    } catch {
+      // already removed
+    }
   };
 
-  input.addEventListener("change", () => {
-    const file = input.files?.[0];
+  const resolve = (file: File | null) => {
+    if (resolved) return;
+    resolved = true;
     cleanup();
     if (file) onFile(file);
-  }, { once: true });
+  };
 
-  // Fallback cleanup after 5 minutes in case `change` never fires (tab killed, cancelled)
-  setTimeout(cleanup, 5 * 60 * 1000);
+  input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+
+  // Secondary signal: visibilitychange fires when the user returns from the camera app.
+  // Give `change` 400 ms to arrive first before we read files ourselves.
+  const onVisChange = () => {
+    if (document.visibilityState === "visible") {
+      setTimeout(() => {
+        if (!resolved) resolve(input.files?.[0] ?? null);
+      }, 400);
+    }
+  };
+  document.addEventListener("visibilitychange", onVisChange);
+
+  // 10-minute safety cleanup in case change never fires (tab killed, cancelled)
+  const timeoutId = setTimeout(() => resolve(null), 10 * 60 * 1000);
 
   input.click();
 };
@@ -71,50 +107,78 @@ export function PhotoCaptureCard({
 }: PhotoCaptureCardProps) {
   const processingRef = useRef(false);
 
+  // acquiring: file selected but preview not yet ready (prepareShiftPhotoForUpload + FileReader)
+  // uploading: preview ready, Supabase upload in progress
+  const [acquiring, setAcquiring] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
   const previewSrc = localPreview ?? storedPath ?? undefined;
-  const isDisabled = disabled || uploading;
+  const isDisabled = disabled || acquiring || uploading;
 
   const uploadBlob = useCallback(
     async (blob: Blob) => {
       if (processingRef.current) return;
       processingRef.current = true;
-      setUploading(true);
 
       const originalType = (blob.type || "").toLowerCase();
-      const originalName = blob instanceof File ? (blob.name || "") : "";
+      const originalName = blob instanceof File ? blob.name || "" : "";
       const extFromName = (originalName.split(".").pop() ?? "").toLowerCase();
-      const isLikelyHeic =
-        originalType.includes("heic") || originalType.includes("heif") ||
-        extFromName === "heic" || extFromName === "heif";
 
-      const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
-        type: isLikelyHeic ? "image/heic" : (blob.type || ""),
-        lastModified: Date.now(),
-      });
+      const isLikelyHeic =
+        originalType.includes("heic") ||
+        originalType.includes("heif") ||
+        extFromName === "heic" ||
+        extFromName === "heif";
+
+      // Blobs produced by canvas.toBlob("image/jpeg") are always JPEG — they
+      // are plain Blobs (not File instances) with type "image/jpeg".  Never
+      // treat them as HEIC regardless of what the original file was.
+      let file: File;
+      if (isLikelyHeic) {
+        // Native HEIC from iOS: keep the original MIME type and use the .heic
+        // extension. prepareShiftPhotoForUpload will attempt canvas conversion
+        // to JPEG; if that fails the original HEIC is uploaded unchanged.
+        file = new File([blob], `${photoId}_${Date.now()}.heic`, {
+          type: "image/heic",
+          lastModified: Date.now(),
+        });
+      } else {
+        file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
+          type: blob.type || "image/jpeg",
+          lastModified: Date.now(),
+        });
+      }
+
+      CameraLog.uploadStarted(photoId, file.size);
 
       try {
+        // Phase 1: prepare the upload candidate (may do canvas re-encoding) +
+        //          generate a local preview — show "אוסף תמונה..." spinner.
+        setAcquiring(true);
         const uploadFile = await prepareShiftPhotoForUpload(file);
-
         const dataUrl = await readFileAsDataUrl(uploadFile);
         setLocalPreview(dataUrl);
+        setAcquiring(false);
 
+        // Phase 2: actually upload to Supabase — show "מעלה תמונה..." spinner.
+        setUploading(true);
         const previousStoredPath = storedPath;
         const path = await uploadShiftPhoto({ file: uploadFile, photoId });
 
         onUploaded(photoId, path);
+        CameraLog.uploadSuccess(photoId, path);
 
         if (previousStoredPath && previousStoredPath !== path) {
           await deleteShiftPhoto(previousStoredPath).catch(() => {});
         }
 
-        toast({ title: "✅ התמונה נטענה ונשמרה", description: label });
+        toast({ title: "התמונה נטענה ונשמרה", description: label });
       } catch (error) {
         const message = error instanceof Error ? error.message : "אירעה שגיאה";
+        CameraLog.uploadFailed(photoId, message);
         setLocalPreview(null);
 
         const isAuthError =
@@ -124,7 +188,7 @@ export function PhotoCaptureCard({
 
         if (isAuthError) {
           toast({
-            title: "❌ פג תוקף ההתחברות",
+            title: "פג תוקף ההתחברות",
             description: "ההתחברות שלך פגה. מעביר אותך לדף ההתחברות.",
             variant: "destructive",
           });
@@ -134,17 +198,18 @@ export function PhotoCaptureCard({
           }, 1800);
         } else {
           toast({
-            title: "❌ העלאת התמונה נכשלה",
+            title: "העלאת התמונה נכשלה",
             description: `${label} — ${message}`,
             variant: "destructive",
           });
         }
       } finally {
+        setAcquiring(false);
         setUploading(false);
         processingRef.current = false;
       }
     },
-    [label, onUploaded, photoId, storedPath]
+    [label, onUploaded, photoId, storedPath],
   );
 
   // Try to open the in-app camera modal first.
@@ -154,8 +219,17 @@ export function PhotoCaptureCard({
     if (navigator.mediaDevices?.getUserMedia) {
       setShowCamera(true);
     } else {
-      // getUserMedia not available — open camera directly via native picker
-      openNativePicker("image/*", (file) => uploadBlob(file), "environment");
+      // getUserMedia not available — open camera directly via native picker.
+      // capture="environment" forces the rear camera (no gallery).
+      CameraLog.nativeFallbackStarted();
+      openNativePicker(
+        "image/*",
+        (file) => {
+          CameraLog.nativeFileReceived(file.name, file.size, file.type);
+          void uploadBlob(file);
+        },
+        "environment",
+      );
     }
   }, [isDisabled, uploadBlob]);
 
@@ -164,7 +238,7 @@ export function PhotoCaptureCard({
       setShowCamera(false);
       await uploadBlob(blob);
     },
-    [uploadBlob]
+    [uploadBlob],
   );
 
   const handleCameraClose = useCallback(() => {
@@ -172,11 +246,19 @@ export function PhotoCaptureCard({
   }, []);
 
   // Camera permission denied in CameraModal — fall back to native camera via dynamic input.
-  // capture="environment" forces the camera (no gallery). The dynamic body-level input
-  // (opacity:0, no clip) ensures onChange fires reliably after the camera returns.
+  // capture="environment" forces the camera (no gallery). This is intentional:
+  // users must take a live photo, not upload from gallery.
   const handleCameraFallback = useCallback(() => {
     setShowCamera(false);
-    openNativePicker("image/*", (file) => uploadBlob(file), "environment");
+    CameraLog.nativeFallbackStarted();
+    openNativePicker(
+      "image/*",
+      (file) => {
+        CameraLog.nativeFileReceived(file.name, file.size, file.type);
+        void uploadBlob(file);
+      },
+      "environment",
+    );
   }, [uploadBlob]);
 
   const handleRemove = async (event: React.MouseEvent) => {
@@ -199,7 +281,10 @@ export function PhotoCaptureCard({
         />
       )}
 
-      <div className="relative animate-fade-in" style={{ animationDelay: `${animationDelayMs}ms` }}>
+      <div
+        className="relative animate-fade-in"
+        style={{ animationDelay: `${animationDelayMs}ms` }}
+      >
         <button
           type="button"
           disabled={isDisabled}
@@ -209,12 +294,23 @@ export function PhotoCaptureCard({
             hasPhoto
               ? "border-primary shadow-lg"
               : "border-dashed border-border bg-card hover:border-primary/40 hover:bg-primary/5",
-            isDisabled && "cursor-not-allowed opacity-90"
+            isDisabled && "cursor-not-allowed opacity-90",
           )}
         >
-          <CardContent uploading={uploading} hasPhoto={hasPhoto} previewSrc={previewSrc} label={label} />
+          <CardContent
+            acquiring={acquiring}
+            uploading={uploading}
+            hasPhoto={hasPhoto}
+            previewSrc={previewSrc}
+            label={label}
+          />
         </button>
-        <PhotoOverlays hasPhoto={hasPhoto} uploading={uploading} label={label} onRemove={handleRemove} />
+        <PhotoOverlays
+          hasPhoto={hasPhoto}
+          uploading={uploading || acquiring}
+          label={label}
+          onRemove={handleRemove}
+        />
       </div>
     </>
   );
@@ -223,16 +319,27 @@ export function PhotoCaptureCard({
 /* ── Sub-components ── */
 
 function CardContent({
+  acquiring,
   uploading,
   hasPhoto,
   previewSrc,
   label,
 }: {
+  acquiring: boolean;
   uploading: boolean;
   hasPhoto: boolean;
   previewSrc?: string;
   label: string;
 }) {
+  if (acquiring) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/50 p-4 text-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <span className="text-sm font-medium text-muted-foreground">אוסף תמונה...</span>
+      </div>
+    );
+  }
+
   if (uploading) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/50 p-4 text-center">

@@ -33,6 +33,12 @@ export function PhotosStep() {
     return initial;
   });
 
+  // Always-current snapshot of photoState used by callbacks below.
+  // This avoids calling saveShiftPhotosDraft inside a setState updater, which
+  // React 18 Strict Mode can invoke twice, causing duplicate side-effects.
+  const latestPhotoStateRef = useRef<PhotosMap>(photoState);
+  latestPhotoStateRef.current = photoState;
+
   // After mount: merge localStorage draft (survives Android tab-kill / page reload)
   useEffect(() => {
     const draft = loadShiftPhotosDraft(user?.id);
@@ -55,35 +61,31 @@ export function PhotosStep() {
 
   const handlePhotoUploaded = useCallback(
     (photoId: string, storagePath: string) => {
-      setPhotoState((prev) => {
-        const next = { ...prev, [photoId]: storagePath };
-        // Persist to localStorage immediately so a page reload doesn't lose the photo
-        saveShiftPhotosDraft(userIdRef.current, next);
-        return next;
-      });
+      const next = { ...latestPhotoStateRef.current, [photoId]: storagePath };
+      // Persist immediately so a page reload doesn't lose the photo
+      saveShiftPhotosDraft(userIdRef.current, next);
+      setPhotoState(next);
       setValue(`photos.${photoId}`, storagePath, {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
       });
     },
-    [setValue]
+    [setValue],
   );
 
   const handlePhotoRemoved = useCallback(
     (photoId: string) => {
-      setPhotoState((prev) => {
-        const next = { ...prev, [photoId]: undefined };
-        saveShiftPhotosDraft(userIdRef.current, next);
-        return next;
-      });
+      const next = { ...latestPhotoStateRef.current, [photoId]: undefined };
+      saveShiftPhotosDraft(userIdRef.current, next);
+      setPhotoState(next);
       setValue(`photos.${photoId}`, "", {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
       });
     },
-    [setValue]
+    [setValue],
   );
 
   const completedPhotos = VEHICLE_PHOTOS.filter((p) => Boolean(photoState[p.id])).length;
@@ -104,7 +106,7 @@ export function PhotosStep() {
             "mt-5 inline-flex items-center gap-3 rounded-full border px-5 py-2.5",
             allPhotosCompleted
               ? "border-primary/20 bg-primary/10 text-primary"
-              : "border-primary/20 bg-primary/5 text-primary"
+              : "border-primary/20 bg-primary/5 text-primary",
           )}
         >
           {allPhotosCompleted && <Sparkles className="h-4 w-4" />}
