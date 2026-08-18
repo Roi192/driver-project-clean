@@ -19,12 +19,15 @@ export function PhotosStep() {
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
 
-  // Lazy init from RHF (picks up sessionStorage restore on component mount)
+  // Lazy init: merge RHF values (same session) + localStorage draft (tab-kill recovery).
+  // This runs synchronously on first render, BEFORE the parent's reset() useEffect fires,
+  // so we must read the draft directly here rather than relying on getValues() alone.
   const [photoState, setPhotoState] = useState<PhotosMap>(() => {
-    const saved = (getValues("photos") ?? {}) as PhotosMap;
+    const rhfPhotos = (getValues("photos") ?? {}) as PhotosMap;
+    const draft = loadShiftPhotosDraft(user?.id);
     const initial: PhotosMap = {};
     VEHICLE_PHOTOS.forEach((p) => {
-      const v = saved[p.id];
+      const v = rhfPhotos[p.id] || draft[p.id];
       if (typeof v === "string" && v.trim()) initial[p.id] = v;
     });
     return initial;

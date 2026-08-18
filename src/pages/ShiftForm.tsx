@@ -16,7 +16,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Navigate } from "react-router-dom";
 import { getBrigade } from "@/lib/brigades";
-import { clearShiftPhotosDraft } from "@/lib/shift-photos-draft";
+import { clearShiftPhotosDraft, saveShiftPhotosDraft } from "@/lib/shift-photos-draft";
+import type { PhotosDraftMap } from "@/lib/shift-photos-draft";
 
 const STEP_LABELS_WITH_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות", "תמונות"];
 const STEP_LABELS_NO_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות"];
@@ -154,9 +155,24 @@ export default function ShiftForm() {
 
     // Restore saved form data
     if (!restoredRef.current) {
+      // Detect tab-kill recovery: sessionStorage gone but localStorage survived
+      const sessionRaw = (() => { try { return sessionStorage.getItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${user.id}`); } catch { return null; } })();
       const saved = loadFormFromStorage(user.id);
+      const isTabKillRecovery = !sessionRaw && !!saved;
+
       if (saved) {
         reset(saved);
+        // Mirror restored photos to shift_photos_draft so PhotosStep sees them
+        // (the lazy init reads draft synchronously before this useEffect runs)
+        const photos = saved.photos as PhotosDraftMap | undefined;
+        if (photos && Object.values(photos).some(Boolean)) {
+          saveShiftPhotosDraft(user.id, photos);
+        }
+        if (isTabKillRecovery) {
+          setTimeout(() => {
+            toast({ title: "✅ הטופס שוחזר אוטומטית", description: "כל הנתונים שמולאת לפני הסגירה שוחזרו" });
+          }, 800);
+        }
       }
       restoredRef.current = true;
     }
