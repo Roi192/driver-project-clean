@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Camera, Check, Loader2, X } from "lucide-react";
 import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { uploadShiftPhoto, deleteShiftPhoto, prepareShiftPhotoForUpload } from "@/lib/shift-photo-storage";
+
+// Data URLs embed the image bytes in the string — unlike blob: URLs they survive
+// tab backgrounding (camera opens) and memory-pressure events on low-end Android.
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("FileReader failed"));
+    reader.readAsDataURL(file);
+  });
 
 interface PhotoCaptureCardProps {
   photoId: string;
@@ -34,13 +44,6 @@ export function PhotoCaptureCard({
   const previewSrc = localPreview ?? storedPath ?? undefined;
   const isDisabled = disabled || uploading;
 
-  // Revoke stale blob URLs when localPreview is replaced or the component unmounts.
-  useEffect(() => {
-    return () => {
-      if (localPreview?.startsWith("blob:")) URL.revokeObjectURL(localPreview);
-    };
-  }, [localPreview]);
-
   const uploadBlob = useCallback(
     async (blob: Blob) => {
       if (processingRef.current) return;
@@ -55,12 +58,10 @@ export function PhotoCaptureCard({
       try {
         const uploadFile = await prepareShiftPhotoForUpload(file);
 
-        // Show immediate preview while uploading
-        const objectUrl = URL.createObjectURL(uploadFile);
-        setLocalPreview((prev) => {
-          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-          return objectUrl;
-        });
+        // Use a data: URL so the preview survives tab-backgrounding (camera opens)
+        // and low-memory situations on mobile where blob: URLs can become invalid.
+        const dataUrl = await readFileAsDataUrl(uploadFile);
+        setLocalPreview(dataUrl);
 
         const previousStoredPath = storedPath;
         const path = await uploadShiftPhoto({ file: uploadFile, photoId });
@@ -196,14 +197,14 @@ function CardContent({
   if (hasPhoto && previewSrc) {
     const isLocal = previewSrc.startsWith("blob:") || previewSrc.startsWith("data:");
     return isLocal ? (
-      <img src={previewSrc} alt={label} className="h-full w-full object-cover" loading="lazy" />
+      <img src={previewSrc} alt={label} className="h-full w-full object-cover" loading="eager" />
     ) : (
       <StorageImage
         src={previewSrc}
         bucket="shift-photos"
         alt={label}
         className="h-full w-full object-cover"
-        loading="lazy"
+        loading="eager"
         showLoader={false}
         fallback={<div className="h-full w-full bg-muted" />}
       />

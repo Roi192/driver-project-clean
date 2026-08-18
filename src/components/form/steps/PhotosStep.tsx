@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Camera, Check, Sparkles, MessageSquare } from "lucide-react";
@@ -31,21 +31,29 @@ export function PhotosStep() {
     photoValues[photo.id] = typeof value === "string" && value.trim().length > 0 ? value : undefined;
   });
 
-  const handlePhotoUploaded = (photoId: string, storagePath: string) => {
-    setValue(`photos.${photoId}`, storagePath, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-  };
+  // Stable callbacks so PhotoCaptureCard's uploadBlob useCallback doesn't
+  // get a new reference on every PhotosStep render and re-register unnecessarily.
+  const handlePhotoUploaded = useCallback(
+    (photoId: string, storagePath: string) => {
+      setValue(`photos.${photoId}`, storagePath, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    },
+    [setValue]
+  );
 
-  const handlePhotoRemoved = (photoId: string) => {
-    setValue(`photos.${photoId}`, "", {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-  };
+  const handlePhotoRemoved = useCallback(
+    (photoId: string) => {
+      setValue(`photos.${photoId}`, "", {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    },
+    [setValue]
+  );
 
   const completedPhotos = VEHICLE_PHOTOS.filter((p) => Boolean(photoValues[p.id])).length;
   const allPhotosCompleted = completedPhotos === VEHICLE_PHOTOS.length;
