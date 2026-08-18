@@ -1,40 +1,34 @@
-import { useCallback, useEffect } from "react";
-import { useFormContext, useWatch } from "react-hook-form";
+import { useCallback, useState } from "react";
+import { useFormContext } from "react-hook-form";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Camera, Check, Sparkles, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { PhotoCaptureCard } from "./photos/PhotoCaptureCard";
 
-const PHOTO_FIELD_NAMES = VEHICLE_PHOTOS.map((p) => `photos.${p.id}` as const);
-
 type PhotosMap = Record<string, string | undefined>;
 
 export function PhotosStep() {
-  const methods = useFormContext();
-  const { setValue, register } = methods;
+  const { setValue, register, getValues } = useFormContext();
 
-  // Register each photo field once on mount
-  useEffect(() => {
-    PHOTO_FIELD_NAMES.forEach((fieldName) => {
-      register(fieldName);
+  // Local state drives the counter and card previews.
+  // Lazy initializer reads RHF on first mount so sessionStorage restores are picked up.
+  // Direct setState calls in handlers guarantee immediate UI update — no useWatch delay.
+  const [photoState, setPhotoState] = useState<PhotosMap>(() => {
+    const saved = (getValues("photos") ?? {}) as PhotosMap;
+    const initial: PhotosMap = {};
+    VEHICLE_PHOTOS.forEach((p) => {
+      const v = saved[p.id];
+      if (typeof v === "string" && v.trim()) initial[p.id] = v;
     });
-  }, [register]);
-
-  // Watch individual registered paths — more reliable than watching the parent "photos" object
-  // when sub-fields were registered via register("photos.front") etc.
-  const watchedValues = useWatch({ name: PHOTO_FIELD_NAMES }) as (string | undefined)[];
-
-  const photoValues: PhotosMap = {};
-  VEHICLE_PHOTOS.forEach((photo, index) => {
-    const value = watchedValues?.[index];
-    photoValues[photo.id] = typeof value === "string" && value.trim().length > 0 ? value : undefined;
+    return initial;
   });
 
-  // Stable callbacks so PhotoCaptureCard's uploadBlob useCallback doesn't
-  // get a new reference on every PhotosStep render and re-register unnecessarily.
   const handlePhotoUploaded = useCallback(
     (photoId: string, storagePath: string) => {
+      // Update local UI state immediately (counter, storedPath prop)
+      setPhotoState((prev) => ({ ...prev, [photoId]: storagePath }));
+      // Sync to RHF so submission validation (hasAllRequiredPhotos) sees the value
       setValue(`photos.${photoId}`, storagePath, {
         shouldDirty: true,
         shouldTouch: true,
@@ -46,6 +40,7 @@ export function PhotosStep() {
 
   const handlePhotoRemoved = useCallback(
     (photoId: string) => {
+      setPhotoState((prev) => ({ ...prev, [photoId]: undefined }));
       setValue(`photos.${photoId}`, "", {
         shouldDirty: true,
         shouldTouch: true,
@@ -55,7 +50,7 @@ export function PhotosStep() {
     [setValue]
   );
 
-  const completedPhotos = VEHICLE_PHOTOS.filter((p) => Boolean(photoValues[p.id])).length;
+  const completedPhotos = VEHICLE_PHOTOS.filter((p) => Boolean(photoState[p.id])).length;
   const allPhotosCompleted = completedPhotos === VEHICLE_PHOTOS.length;
 
   return (
@@ -100,7 +95,7 @@ export function PhotosStep() {
             key={photo.id}
             photoId={photo.id}
             label={photo.label}
-            storedPath={photoValues[photo.id]}
+            storedPath={photoState[photo.id]}
             disabled={false}
             animationDelayMs={index * 80}
             onUploaded={handlePhotoUploaded}
