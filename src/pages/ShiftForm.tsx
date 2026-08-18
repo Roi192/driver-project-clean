@@ -37,6 +37,9 @@ const STEPS_NO_PHOTOS = [
 
 const SHIFT_FORM_STEP_STORAGE_KEY = "shiftFormStep";
 const SHIFT_FORM_DATA_STORAGE_KEY = "shiftFormData";
+// localStorage mirrors — survive Android tab-kill (sessionStorage is cleared on kill)
+const SHIFT_FORM_DATA_LOCAL_KEY = "shiftFormDataLocal";
+const SHIFT_FORM_STEP_LOCAL_KEY = "shiftFormStepLocal";
 
 const createDefaultShiftFormValues = () => ({
   dateTime: new Date(),
@@ -59,39 +62,44 @@ const createDefaultShiftFormValues = () => ({
 
 type ShiftFormValues = ReturnType<typeof createDefaultShiftFormValues>;
 
-const saveFormToStorage = (userId: string, data: ShiftFormValues) => {
-  try {
-    const toStore = {
-      ...data,
-      dateTime: data.dateTime instanceof Date ? data.dateTime.toISOString() : data.dateTime,
-    };
-    sessionStorage.setItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${userId}`, JSON.stringify(toStore));
-  } catch {
-    // storage full or unavailable – non-critical
-  }
-};
+const serializeForm = (data: ShiftFormValues) => ({
+  ...data,
+  dateTime: data.dateTime instanceof Date ? data.dateTime.toISOString() : data.dateTime,
+});
 
-const loadFormFromStorage = (userId: string): ShiftFormValues | null => {
+const deserializeForm = (raw: string): ShiftFormValues | null => {
   try {
-    const raw = sessionStorage.getItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${userId}`);
-    if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Restore dateTime as Date object
-    if (parsed.dateTime) {
-      parsed.dateTime = new Date(parsed.dateTime);
-    }
+    if (parsed.dateTime) parsed.dateTime = new Date(parsed.dateTime);
     return parsed as ShiftFormValues;
   } catch {
     return null;
   }
 };
 
-const clearFormStorage = (userId: string) => {
+const saveFormToStorage = (userId: string, data: ShiftFormValues) => {
+  const serialized = JSON.stringify(serializeForm(data));
+  try { sessionStorage.setItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${userId}`, serialized); } catch {}
+  // Also mirror to localStorage — survives Android tab-kill
+  try { localStorage.setItem(`${SHIFT_FORM_DATA_LOCAL_KEY}:${userId}`, serialized); } catch {}
+};
+
+const loadFormFromStorage = (userId: string): ShiftFormValues | null => {
+  // Prefer sessionStorage (same-session), fall back to localStorage (tab-kill recovery)
   try {
-    sessionStorage.removeItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${userId}`);
-  } catch {
-    // ignore
-  }
+    const raw = sessionStorage.getItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${userId}`);
+    if (raw) return deserializeForm(raw);
+  } catch {}
+  try {
+    const raw = localStorage.getItem(`${SHIFT_FORM_DATA_LOCAL_KEY}:${userId}`);
+    if (raw) return deserializeForm(raw);
+  } catch {}
+  return null;
+};
+
+const clearFormStorage = (userId: string) => {
+  try { sessionStorage.removeItem(`${SHIFT_FORM_DATA_STORAGE_KEY}:${userId}`); } catch {}
+  try { localStorage.removeItem(`${SHIFT_FORM_DATA_LOCAL_KEY}:${userId}`); } catch {}
 };
 
 const parseStoredStep = (value: string | null, totalSteps: number): number => {
@@ -158,7 +166,12 @@ export default function ShiftForm() {
       return;
     }
 
-    setCurrentStep(parseStoredStep(sessionStorage.getItem(stepStorageKey), steps.length));
+    // Prefer sessionStorage step; fall back to localStorage (tab-kill recovery)
+    const sessionStep = sessionStorage.getItem(stepStorageKey);
+    const localStep = sessionStep ?? (() => {
+      try { return localStorage.getItem(`${SHIFT_FORM_STEP_LOCAL_KEY}:${user.id}`); } catch { return null; }
+    })();
+    setCurrentStep(parseStoredStep(localStep, steps.length));
   }, [reset, stepStorageKey, user?.id]);
 
   // Persist form data to sessionStorage on every change
@@ -176,6 +189,10 @@ export default function ShiftForm() {
     setCurrentStep(step);
     if (stepStorageKey) {
       sessionStorage.setItem(stepStorageKey, String(step));
+    }
+    // Mirror step to localStorage for tab-kill recovery
+    if (user?.id) {
+      try { localStorage.setItem(`${SHIFT_FORM_STEP_LOCAL_KEY}:${user.id}`, String(step)); } catch {}
     }
   };
 
@@ -364,6 +381,7 @@ export default function ShiftForm() {
       if (user?.id) {
         clearFormStorage(user.id);
         clearShiftPhotosDraft(user.id);
+        try { localStorage.removeItem(`${SHIFT_FORM_STEP_LOCAL_KEY}:${user.id}`); } catch {}
       }
       toast({
         title: "הדיווח נשלח בהצלחה!",

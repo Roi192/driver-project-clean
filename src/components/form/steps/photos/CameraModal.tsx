@@ -60,7 +60,8 @@ export function CameraModal({ label, onCapture, onClose, onFallback }: CameraMod
           e.name === "PermissionDeniedError" ||
           e.name === "SecurityError"
         ) {
-          onFallback();
+          // Permission denied — show instructions instead of silently falling back
+          setError("הרשאת מצלמה נדחתה");
           return;
         }
         // facing constraint failed (single-camera or OverconstrainedError) — retry without it
@@ -77,7 +78,7 @@ export function CameraModal({ label, onCapture, onClose, onFallback }: CameraMod
             e2.name === "PermissionDeniedError" ||
             e2.name === "SecurityError"
           ) {
-            onFallback();
+            setError("הרשאת מצלמה נדחתה");
           } else {
             setError("לא ניתן לגשת למצלמה");
           }
@@ -175,15 +176,31 @@ export function CameraModal({ label, onCapture, onClose, onFallback }: CameraMod
         )}
 
         {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black px-8 text-center">
-            <p className="text-lg font-bold text-white">{error}</p>
-            <button
-              type="button"
-              onClick={onFallback}
-              className="rounded-2xl bg-white px-8 py-4 text-base font-bold text-black"
-            >
-              בחר תמונה מהגלריה
-            </button>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black px-8 text-center">
+            <p className="text-xl font-bold text-white">{error}</p>
+            {error.includes("הרשאת") ? (
+              <>
+                <p className="text-sm text-white/70 leading-relaxed">
+                  כדי לאפשר מצלמה פנימית בדפדפן:
+                  {"\n"}הגדרות אנדרואיד ← אפליקציות ← Chrome ← הרשאות ← מצלמה ← אפשר
+                </p>
+                <button
+                  type="button"
+                  onClick={onFallback}
+                  className="rounded-2xl bg-white px-8 py-3 text-sm font-bold text-black"
+                >
+                  צלם עם מצלמת הטלפון במקום
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={onFallback}
+                className="rounded-2xl bg-white px-8 py-4 text-base font-bold text-black"
+              >
+                בחר תמונה מהגלריה
+              </button>
+            )}
           </div>
         )}
       </div>
