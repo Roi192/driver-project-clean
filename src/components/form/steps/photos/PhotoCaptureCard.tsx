@@ -171,12 +171,12 @@ export function PhotoCaptureCard({
     setShowCamera(false);
   }, []);
 
-  // Camera permission denied in CameraModal — fall back to Android media picker.
-  // No `capture` attribute: the media picker is more reliable for cross-app returns
-  // than a direct camera intent on Android Chrome.
+  // Camera permission denied in CameraModal — fall back to native camera via dynamic input.
+  // capture="environment" forces the camera (no gallery). The dynamic body-level input
+  // (opacity:0, no clip) ensures onChange fires reliably after the camera returns.
   const handleCameraFallback = useCallback(() => {
     setShowCamera(false);
-    openNativePicker("image/*", (file) => uploadBlob(file));
+    openNativePicker("image/*", (file) => uploadBlob(file), "environment");
   }, [uploadBlob]);
 
   const handleRemove = async (event: React.MouseEvent) => {

@@ -198,7 +198,7 @@ export function CameraModal({ label, onCapture, onClose, onFallback }: CameraMod
                 onClick={onFallback}
                 className="rounded-2xl bg-white px-8 py-4 text-base font-bold text-black"
               >
-                בחר תמונה מהגלריה
+                צלם עם מצלמת הטלפון במקום
               </button>
             )}
           </div>
