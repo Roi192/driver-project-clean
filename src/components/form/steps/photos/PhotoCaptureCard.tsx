@@ -16,6 +16,40 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+// Creates a temporary, body-level file input and clicks it.
+// Avoids sr-only / clipping issues that prevent `onChange` from firing on some
+// Android Chrome versions when programmatically clicking a hidden input element.
+// `capture` = "environment" opens the rear camera directly; omit for media picker.
+const openNativePicker = (
+  accept: string,
+  onFile: (file: File) => void,
+  capture?: string,
+) => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = accept;
+  if (capture) input.setAttribute("capture", capture);
+  // Invisible but NOT clipped — clipping (clip: rect) prevents camera intent return on Android
+  input.style.cssText =
+    "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none";
+  document.body.appendChild(input);
+
+  const cleanup = () => {
+    try { document.body.removeChild(input); } catch { /* already removed */ }
+  };
+
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    cleanup();
+    if (file) onFile(file);
+  }, { once: true });
+
+  // Fallback cleanup after 5 minutes in case `change` never fires (tab killed, cancelled)
+  setTimeout(cleanup, 5 * 60 * 1000);
+
+  input.click();
+};
+
 interface PhotoCaptureCardProps {
   photoId: string;
   label: string;
@@ -36,7 +70,6 @@ export function PhotoCaptureCard({
   onRemoved,
 }: PhotoCaptureCardProps) {
   const processingRef = useRef(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
@@ -109,22 +142,22 @@ export function PhotoCaptureCard({
       } finally {
         setUploading(false);
         processingRef.current = false;
-        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
     [label, onUploaded, photoId, storedPath]
   );
 
   // Try to open the in-app camera modal first.
-  // Falls back to the native file picker if getUserMedia is unavailable.
+  // Falls back to native file picker (via dynamic input) if getUserMedia unavailable.
   const handleCardClick = useCallback(() => {
     if (isDisabled) return;
     if (navigator.mediaDevices?.getUserMedia) {
       setShowCamera(true);
     } else {
-      fileInputRef.current?.click();
+      // getUserMedia not available — open camera directly via native picker
+      openNativePicker("image/*", (file) => uploadBlob(file), "environment");
     }
-  }, [isDisabled]);
+  }, [isDisabled, uploadBlob]);
 
   const handleCameraCapture = useCallback(
     async (blob: Blob) => {
@@ -138,20 +171,13 @@ export function PhotoCaptureCard({
     setShowCamera(false);
   }, []);
 
-  // Permission denied or unsupported — fall back to native file picker
+  // Camera permission denied in CameraModal — fall back to Android media picker.
+  // No `capture` attribute: the media picker is more reliable for cross-app returns
+  // than a direct camera intent on Android Chrome.
   const handleCameraFallback = useCallback(() => {
     setShowCamera(false);
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      await uploadBlob(file);
-    },
-    [uploadBlob]
-  );
+    openNativePicker("image/*", (file) => uploadBlob(file));
+  }, [uploadBlob]);
 
   const handleRemove = async (event: React.MouseEvent) => {
     event.preventDefault();
@@ -172,18 +198,6 @@ export function PhotoCaptureCard({
           onFallback={handleCameraFallback}
         />
       )}
-
-      {/* Fallback file input (hidden) — used when getUserMedia is unavailable or permission denied */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        aria-hidden="true"
-        tabIndex={-1}
-        onChange={handleFileChange}
-      />
 
       <div className="relative animate-fade-in" style={{ animationDelay: `${animationDelayMs}ms` }}>
         <button
