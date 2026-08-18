@@ -9,7 +9,6 @@ import {
   prepareShiftPhotoForUpload,
 } from "@/lib/shift-photo-storage";
 import { CameraLog } from "@/lib/camera-logger";
-import { CameraModal } from "./CameraModal";
 
 // Data URLs embed the image bytes in the string — unlike blob: URLs they survive
 // tab backgrounding and memory-pressure events on low-end Android.
@@ -31,8 +30,7 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
  * Secondary `visibilitychange` signal handles the case where the user returns
  * from the native camera app but the `change` event is delayed or lost.
  *
- * `capture="environment"` opens the rear camera directly (no gallery choice);
- * omit for a media picker that includes gallery.
+ * `capture="environment"` opens the rear camera directly (no gallery choice).
  */
 const openNativePicker = (
   accept: string,
@@ -49,6 +47,8 @@ const openNativePicker = (
   document.body.appendChild(input);
 
   let resolved = false;
+  // `let` so onVisChange can replace the safety timeout with a poll timeout
+  let timeoutId: ReturnType<typeof setTimeout>;
 
   const cleanup = () => {
     document.removeEventListener("visibilitychange", onVisChange);
@@ -70,18 +70,35 @@ const openNativePicker = (
   input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
 
   // Secondary signal: visibilitychange fires when the user returns from the camera app.
-  // Give `change` 400 ms to arrive first before we read files ourselves.
+  //
+  // Android Chrome quirk: the `change` event sometimes fires 500 ms–2 s AFTER
+  // visibilitychange, or not at all — but input.files IS populated once Android
+  // delivers the Intent result.  We poll every 200 ms for up to 5 s rather than
+  // doing a single 400 ms check (the old approach could call resolve(null) before
+  // the file was ready, setting resolved=true and silently dropping the file).
   const onVisChange = () => {
     if (document.visibilityState === "visible") {
-      setTimeout(() => {
-        if (!resolved) resolve(input.files?.[0] ?? null);
-      }, 400);
+      document.removeEventListener("visibilitychange", onVisChange);
+      clearTimeout(timeoutId); // cancel the 10-min safety timeout
+      let polls = 0;
+      const poll = () => {
+        if (resolved) return; // `change` already fired — nothing to do
+        const file = input.files?.[0];
+        if (file) { resolve(file); return; }
+        polls++;
+        if (polls < 25) { // 25 × 200 ms = 5 s total
+          timeoutId = setTimeout(poll, 200);
+        } else {
+          resolve(null); // no file after 5 s → user cancelled or camera failed
+        }
+      };
+      timeoutId = setTimeout(poll, 200); // first check after 200 ms
     }
   };
   document.addEventListener("visibilitychange", onVisChange);
 
-  // 10-minute safety cleanup in case change never fires (tab killed, cancelled)
-  const timeoutId = setTimeout(() => resolve(null), 10 * 60 * 1000);
+  // 10-minute safety cleanup in case neither change nor visibilitychange ever fires
+  timeoutId = setTimeout(() => resolve(null), 10 * 60 * 1000);
 
   input.click();
 };
@@ -112,7 +129,6 @@ export function PhotoCaptureCard({
   const [acquiring, setAcquiring] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [showCamera, setShowCamera] = useState(false);
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
   const previewSrc = localPreview ?? storedPath ?? undefined;
@@ -138,9 +154,6 @@ export function PhotoCaptureCard({
       // treat them as HEIC regardless of what the original file was.
       let file: File;
       if (isLikelyHeic) {
-        // Native HEIC from iOS: keep the original MIME type and use the .heic
-        // extension. prepareShiftPhotoForUpload will attempt canvas conversion
-        // to JPEG; if that fails the original HEIC is uploaded unchanged.
         file = new File([blob], `${photoId}_${Date.now()}.heic`, {
           type: "image/heic",
           lastModified: Date.now(),
@@ -155,19 +168,20 @@ export function PhotoCaptureCard({
       CameraLog.uploadStarted(photoId, file.size);
 
       try {
-        // Phase 1: prepare the upload candidate (may do canvas re-encoding) +
-        //          generate a local preview — show "אוסף תמונה..." spinner.
+        // Phase 1: prepare + local preview
         setAcquiring(true);
         const uploadFile = await prepareShiftPhotoForUpload(file);
         const dataUrl = await readFileAsDataUrl(uploadFile);
         setLocalPreview(dataUrl);
         setAcquiring(false);
 
-        // Phase 2: actually upload to Supabase — show "מעלה תמונה..." spinner.
+        // Phase 2: upload to Supabase
         setUploading(true);
         const previousStoredPath = storedPath;
         const path = await uploadShiftPhoto({ file: uploadFile, photoId });
 
+        // onUploaded calls saveShiftPhotosDraft synchronously — localStorage is
+        // written before we schedule the reload below.
         onUploaded(photoId, path);
         CameraLog.uploadSuccess(photoId, path);
 
@@ -176,6 +190,12 @@ export function PhotoCaptureCard({
         }
 
         toast({ title: "התמונה נטענה ונשמרה", description: label });
+
+        // Reload so the photo renders from localStorage/storedPath immediately.
+        // Auth-state refreshes on Android Chrome can remount PhotoCaptureCard and
+        // lose localPreview before the user sees it — a page reload sidesteps this
+        // entirely: the new page reads storedPath from localStorage on mount.
+        setTimeout(() => window.location.reload(), 600);
       } catch (error) {
         const message = error instanceof Error ? error.message : "אירעה שגיאה";
         CameraLog.uploadFailed(photoId, message);
@@ -212,44 +232,10 @@ export function PhotoCaptureCard({
     [label, onUploaded, photoId, storedPath],
   );
 
-  // Try to open the in-app camera modal first.
-  // Falls back to native file picker (via dynamic input) if getUserMedia unavailable.
+  // Always open the native rear camera — no getUserMedia, no in-app modal.
+  // This avoids browser camera permission prompts and works reliably on Android.
   const handleCardClick = useCallback(() => {
     if (isDisabled) return;
-    if (navigator.mediaDevices?.getUserMedia) {
-      setShowCamera(true);
-    } else {
-      // getUserMedia not available — open camera directly via native picker.
-      // capture="environment" forces the rear camera (no gallery).
-      CameraLog.nativeFallbackStarted();
-      openNativePicker(
-        "image/*",
-        (file) => {
-          CameraLog.nativeFileReceived(file.name, file.size, file.type);
-          void uploadBlob(file);
-        },
-        "environment",
-      );
-    }
-  }, [isDisabled, uploadBlob]);
-
-  const handleCameraCapture = useCallback(
-    async (blob: Blob) => {
-      setShowCamera(false);
-      await uploadBlob(blob);
-    },
-    [uploadBlob],
-  );
-
-  const handleCameraClose = useCallback(() => {
-    setShowCamera(false);
-  }, []);
-
-  // Camera permission denied in CameraModal — fall back to native camera via dynamic input.
-  // capture="environment" forces the camera (no gallery). This is intentional:
-  // users must take a live photo, not upload from gallery.
-  const handleCameraFallback = useCallback(() => {
-    setShowCamera(false);
     CameraLog.nativeFallbackStarted();
     openNativePicker(
       "image/*",
@@ -259,7 +245,7 @@ export function PhotoCaptureCard({
       },
       "environment",
     );
-  }, [uploadBlob]);
+  }, [isDisabled, uploadBlob]);
 
   const handleRemove = async (event: React.MouseEvent) => {
     event.preventDefault();
@@ -270,49 +256,37 @@ export function PhotoCaptureCard({
   };
 
   return (
-    <>
-      {/* In-app camera — user stays in the browser, no tab reload on Android */}
-      {showCamera && (
-        <CameraModal
-          label={label}
-          onCapture={handleCameraCapture}
-          onClose={handleCameraClose}
-          onFallback={handleCameraFallback}
-        />
-      )}
-
-      <div
-        className="relative animate-fade-in"
-        style={{ animationDelay: `${animationDelayMs}ms` }}
+    <div
+      className="relative animate-fade-in"
+      style={{ animationDelay: `${animationDelayMs}ms` }}
+    >
+      <button
+        type="button"
+        disabled={isDisabled}
+        onClick={handleCardClick}
+        className={cn(
+          "relative block aspect-square w-full overflow-hidden rounded-2xl border-2 text-right transition-all duration-300",
+          hasPhoto
+            ? "border-primary shadow-lg"
+            : "border-dashed border-border bg-card hover:border-primary/40 hover:bg-primary/5",
+          isDisabled && "cursor-not-allowed opacity-90",
+        )}
       >
-        <button
-          type="button"
-          disabled={isDisabled}
-          onClick={handleCardClick}
-          className={cn(
-            "relative block aspect-square w-full overflow-hidden rounded-2xl border-2 text-right transition-all duration-300",
-            hasPhoto
-              ? "border-primary shadow-lg"
-              : "border-dashed border-border bg-card hover:border-primary/40 hover:bg-primary/5",
-            isDisabled && "cursor-not-allowed opacity-90",
-          )}
-        >
-          <CardContent
-            acquiring={acquiring}
-            uploading={uploading}
-            hasPhoto={hasPhoto}
-            previewSrc={previewSrc}
-            label={label}
-          />
-        </button>
-        <PhotoOverlays
+        <CardContent
+          acquiring={acquiring}
+          uploading={uploading}
           hasPhoto={hasPhoto}
-          uploading={uploading || acquiring}
+          previewSrc={previewSrc}
           label={label}
-          onRemove={handleRemove}
         />
-      </div>
-    </>
+      </button>
+      <PhotoOverlays
+        hasPhoto={hasPhoto}
+        uploading={uploading || acquiring}
+        label={label}
+        onRemove={handleRemove}
+      />
+    </div>
   );
 }
 

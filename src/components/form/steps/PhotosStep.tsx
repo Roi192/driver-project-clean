@@ -59,6 +59,49 @@ export function PhotosStep() {
     });
   }, [user?.id, setValue]);
 
+  // When the user returns from the native camera (page becomes visible), re-sync
+  // photo state from localStorage.  This covers two scenarios:
+  //   1. The upload completed and onUploaded fired, but Android Chrome's scheduler
+  //      didn't flush the React state update before the user looked at the screen.
+  //   2. BFCache page restore (pageshow) — the page snapshot may pre-date a fast upload.
+  useEffect(() => {
+    const syncFromDraft = () => {
+      const draft = loadShiftPhotosDraft(userIdRef.current);
+      if (!Object.keys(draft).length) return;
+      const prev = latestPhotoStateRef.current;
+      const merged: PhotosMap = {};
+      let changed = false;
+      VEHICLE_PHOTOS.forEach((p) => {
+        merged[p.id] = prev[p.id] || draft[p.id];
+        if (merged[p.id] !== prev[p.id]) changed = true;
+      });
+      if (!changed) return;
+      setPhotoState(merged);
+      VEHICLE_PHOTOS.forEach((p) => {
+        if (merged[p.id] && !prev[p.id]) {
+          setValue(`photos.${p.id}`, merged[p.id], { shouldDirty: true });
+        }
+      });
+    };
+
+    // visibilitychange: returning from camera app or switching tabs
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        // 1 500 ms delay: give any in-flight upload a chance to call
+        // saveShiftPhotosDraft before we read it.
+        setTimeout(syncFromDraft, 1500);
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    // pageshow fires on BFCache restore; sync immediately (upload already finished)
+    window.addEventListener("pageshow", syncFromDraft);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", syncFromDraft);
+    };
+  }, [setValue]);
+
   const handlePhotoUploaded = useCallback(
     (photoId: string, storagePath: string) => {
       const next = { ...latestPhotoStateRef.current, [photoId]: storagePath };
