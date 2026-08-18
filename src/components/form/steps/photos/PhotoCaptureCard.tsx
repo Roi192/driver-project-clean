@@ -35,10 +35,18 @@ export function PhotoCaptureCard({
   const previewSrc = localPreview ?? storedPath ?? undefined;
   const isDisabled = disabled || uploading;
 
+  // Track actual mount/unmount only — must NOT depend on localPreview,
+  // otherwise StrictMode's double-invoke leaves mountedRef=false during active uploads.
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+    };
+  }, []);
+
+  // Revoke stale blob URLs when localPreview is replaced or the component unmounts.
+  useEffect(() => {
+    return () => {
       if (localPreview?.startsWith("blob:")) URL.revokeObjectURL(localPreview);
     };
   }, [localPreview]);
@@ -104,7 +112,8 @@ export function PhotoCaptureCard({
           });
         }
       } finally {
-        if (mountedRef.current) setUploading(false);
+        // Always stop the spinner — React 18 silently ignores setState on unmounted components.
+        setUploading(false);
         processingRef.current = false;
         // Reset so the same photo can be retaken immediately
         if (fileInputRef.current) fileInputRef.current.value = "";
