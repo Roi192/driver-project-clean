@@ -4,9 +4,10 @@ import { StorageImage } from "@/components/shared/StorageImage";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { uploadShiftPhoto, deleteShiftPhoto, prepareShiftPhotoForUpload } from "@/lib/shift-photo-storage";
+import { CameraModal } from "./CameraModal";
 
 // Data URLs embed the image bytes in the string — unlike blob: URLs they survive
-// tab backgrounding (camera opens) and memory-pressure events on low-end Android.
+// tab backgrounding and memory-pressure events on low-end Android.
 const readFileAsDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -39,6 +40,7 @@ export function PhotoCaptureCard({
 
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
 
   const hasPhoto = Boolean(storedPath) || Boolean(localPreview);
   const previewSrc = localPreview ?? storedPath ?? undefined;
@@ -50,9 +52,6 @@ export function PhotoCaptureCard({
       processingRef.current = true;
       setUploading(true);
 
-      // Detect HEIC before wrapping — iOS 14/15 bug: camera files arrive with
-      // type="" even when content is HEIC. Defaulting to "image/jpeg" would make
-      // prepareShiftPhotoForUpload skip canvas conversion for large files.
       const originalType = (blob.type || "").toLowerCase();
       const originalName = blob instanceof File ? (blob.name || "") : "";
       const extFromName = (originalName.split(".").pop() ?? "").toLowerCase();
@@ -61,9 +60,6 @@ export function PhotoCaptureCard({
         extFromName === "heic" || extFromName === "heif";
 
       const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
-        // Preserve "image/heic" for detected HEIC so prepareShiftPhotoForUpload
-        // forces canvas conversion. For truly-empty type (not HEIC), keep it
-        // empty so prepareShiftPhotoForUpload still tries canvas (size > 1MB check).
         type: isLikelyHeic ? "image/heic" : (blob.type || ""),
         lastModified: Date.now(),
       });
@@ -71,8 +67,6 @@ export function PhotoCaptureCard({
       try {
         const uploadFile = await prepareShiftPhotoForUpload(file);
 
-        // Use a data: URL so the preview survives tab-backgrounding (camera opens)
-        // and low-memory situations on mobile where blob: URLs can become invalid.
         const dataUrl = await readFileAsDataUrl(uploadFile);
         setLocalPreview(dataUrl);
 
@@ -81,7 +75,6 @@ export function PhotoCaptureCard({
 
         onUploaded(photoId, path);
 
-        // Delete old photo from storage if replacing
         if (previousStoredPath && previousStoredPath !== path) {
           await deleteShiftPhoto(previousStoredPath).catch(() => {});
         }
@@ -114,20 +107,42 @@ export function PhotoCaptureCard({
           });
         }
       } finally {
-        // Always stop the spinner — React 18 silently ignores setState on unmounted components.
         setUploading(false);
         processingRef.current = false;
-        // Reset so the same photo can be retaken immediately
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
     [label, onUploaded, photoId, storedPath]
   );
 
+  // Try to open the in-app camera modal first.
+  // Falls back to the native file picker if getUserMedia is unavailable.
   const handleCardClick = useCallback(() => {
     if (isDisabled) return;
-    fileInputRef.current?.click();
+    if (navigator.mediaDevices?.getUserMedia) {
+      setShowCamera(true);
+    } else {
+      fileInputRef.current?.click();
+    }
   }, [isDisabled]);
+
+  const handleCameraCapture = useCallback(
+    async (blob: Blob) => {
+      setShowCamera(false);
+      await uploadBlob(blob);
+    },
+    [uploadBlob]
+  );
+
+  const handleCameraClose = useCallback(() => {
+    setShowCamera(false);
+  }, []);
+
+  // Permission denied or unsupported — fall back to native file picker
+  const handleCameraFallback = useCallback(() => {
+    setShowCamera(false);
+    fileInputRef.current?.click();
+  }, []);
 
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,11 +163,17 @@ export function PhotoCaptureCard({
 
   return (
     <>
-      {/*
-        Native file input — capture="environment" opens the rear camera directly on mobile.
-        No getUserMedia, no permission dialogs, no browser blocking.
-        Falls back to file picker on desktop.
-      */}
+      {/* In-app camera — user stays in the browser, no tab reload on Android */}
+      {showCamera && (
+        <CameraModal
+          label={label}
+          onCapture={handleCameraCapture}
+          onClose={handleCameraClose}
+          onFallback={handleCameraFallback}
+        />
+      )}
+
+      {/* Fallback file input (hidden) — used when getUserMedia is unavailable or permission denied */}
       <input
         ref={fileInputRef}
         type="file"

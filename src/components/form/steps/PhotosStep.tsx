@@ -1,24 +1,25 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useFormContext } from "react-hook-form";
+import { useAuth } from "@/hooks/useAuth";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Camera, Check, Sparkles, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { PhotoCaptureCard } from "./photos/PhotoCaptureCard";
+import { saveShiftPhotosDraft, loadShiftPhotosDraft } from "@/lib/shift-photos-draft";
 
 type PhotosMap = Record<string, string | undefined>;
 
-// Global debug counter — survives component unmount/remount so we can tell
-// if handlePhotoUploaded is being called even if React state isn't updating.
-const _g = (window as unknown as Record<string, number>);
-_g.__dbgPhotoCallCount = _g.__dbgPhotoCallCount ?? 0;
-
 export function PhotosStep() {
   const { setValue, register, getValues } = useFormContext();
+  const { user } = useAuth();
 
-  // Local state drives the counter and card previews.
-  // Lazy initializer reads RHF on first mount so sessionStorage restores are picked up.
-  // Direct setState calls in handlers guarantee immediate UI update — no useWatch delay.
+  // Stable ref so callbacks don't need user in their dep array
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
+
+  // Lazy init from RHF (picks up sessionStorage restore on component mount)
   const [photoState, setPhotoState] = useState<PhotosMap>(() => {
     const saved = (getValues("photos") ?? {}) as PhotosMap;
     const initial: PhotosMap = {};
@@ -29,22 +30,34 @@ export function PhotosStep() {
     return initial;
   });
 
-  // Debug: tracks how many times handlePhotoUploaded fired (survives re-renders)
-  const callCountRef = useRef(0);
-  const [debugCallCount, setDebugCallCount] = useState(0);
-  const [debugLastId, setDebugLastId] = useState("");
+  // After mount: merge localStorage draft (survives Android tab-kill / page reload)
+  useEffect(() => {
+    const draft = loadShiftPhotosDraft(user?.id);
+    if (!Object.keys(draft).length) return;
+    setPhotoState((prev) => {
+      const merged: PhotosMap = {};
+      VEHICLE_PHOTOS.forEach((p) => {
+        // RHF-restored value wins; draft fills gaps
+        merged[p.id] = prev[p.id] || draft[p.id];
+      });
+      // Sync merged values back to RHF so validation sees them
+      VEHICLE_PHOTOS.forEach((p) => {
+        if (merged[p.id] && !prev[p.id]) {
+          setValue(`photos.${p.id}`, merged[p.id], { shouldDirty: true });
+        }
+      });
+      return merged;
+    });
+  }, [user?.id, setValue]);
 
   const handlePhotoUploaded = useCallback(
     (photoId: string, storagePath: string) => {
-      // Debug instrumentation
-      callCountRef.current += 1;
-      _g.__dbgPhotoCallCount += 1;
-      setDebugCallCount(callCountRef.current);
-      setDebugLastId(photoId);
-
-      // Update local UI state immediately (counter, storedPath prop)
-      setPhotoState((prev) => ({ ...prev, [photoId]: storagePath }));
-      // Sync to RHF so submission validation (hasAllRequiredPhotos) sees the value
+      setPhotoState((prev) => {
+        const next = { ...prev, [photoId]: storagePath };
+        // Persist to localStorage immediately so a page reload doesn't lose the photo
+        saveShiftPhotosDraft(userIdRef.current, next);
+        return next;
+      });
       setValue(`photos.${photoId}`, storagePath, {
         shouldDirty: true,
         shouldTouch: true,
@@ -56,8 +69,11 @@ export function PhotosStep() {
 
   const handlePhotoRemoved = useCallback(
     (photoId: string) => {
-      setPhotoState((prev) => ({ ...prev, [photoId]: undefined }));
-      setDebugLastId("");
+      setPhotoState((prev) => {
+        const next = { ...prev, [photoId]: undefined };
+        saveShiftPhotosDraft(userIdRef.current, next);
+        return next;
+      });
       setValue(`photos.${photoId}`, "", {
         shouldDirty: true,
         shouldTouch: true,
@@ -120,17 +136,6 @@ export function PhotosStep() {
           />
         ))}
       </div>
-
-      {/* TEMP DEBUG — remove after diagnosis */}
-      <div className="mt-4 rounded-xl border-2 border-yellow-400 bg-yellow-50 p-3 text-xs text-slate-800 space-y-1">
-        <p className="font-bold text-yellow-700">🔍 דיאגנוזה — דווח על הנתונים הבאים:</p>
-        <p>handlePhotoUploaded נקרא: <strong className="text-green-700">{debugCallCount} פעמים</strong></p>
-        <p>תמונה אחרונה: <strong>{debugLastId || "—"}</strong></p>
-        <p>photoState keys: <strong>{Object.keys(photoState).filter(k => photoState[k]).join(", ") || "ריק"}</strong></p>
-        <p>completedPhotos: <strong>{completedPhotos}</strong></p>
-        <p>window counter: <strong>{_g.__dbgPhotoCallCount}</strong></p>
-      </div>
-      {/* END TEMP DEBUG */}
 
       <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-4 flex items-center gap-3">

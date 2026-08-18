@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Navigate } from "react-router-dom";
 import { getBrigade } from "@/lib/brigades";
+import { clearShiftPhotosDraft } from "@/lib/shift-photos-draft";
 
 const STEP_LABELS_WITH_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות", "תמונות"];
 const STEP_LABELS_NO_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות"];
@@ -362,6 +363,7 @@ export default function ShiftForm() {
       }
       if (user?.id) {
         clearFormStorage(user.id);
+        clearShiftPhotosDraft(user.id);
       }
       toast({
         title: "הדיווח נשלח בהצלחה!",
