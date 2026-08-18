@@ -50,8 +50,21 @@ export function PhotoCaptureCard({
       processingRef.current = true;
       setUploading(true);
 
+      // Detect HEIC before wrapping — iOS 14/15 bug: camera files arrive with
+      // type="" even when content is HEIC. Defaulting to "image/jpeg" would make
+      // prepareShiftPhotoForUpload skip canvas conversion for large files.
+      const originalType = (blob.type || "").toLowerCase();
+      const originalName = blob instanceof File ? (blob.name || "") : "";
+      const extFromName = (originalName.split(".").pop() ?? "").toLowerCase();
+      const isLikelyHeic =
+        originalType.includes("heic") || originalType.includes("heif") ||
+        extFromName === "heic" || extFromName === "heif";
+
       const file = new File([blob], `${photoId}_${Date.now()}.jpg`, {
-        type: blob.type || "image/jpeg",
+        // Preserve "image/heic" for detected HEIC so prepareShiftPhotoForUpload
+        // forces canvas conversion. For truly-empty type (not HEIC), keep it
+        // empty so prepareShiftPhotoForUpload still tries canvas (size > 1MB check).
+        type: isLikelyHeic ? "image/heic" : (blob.type || ""),
         lastModified: Date.now(),
       });
 

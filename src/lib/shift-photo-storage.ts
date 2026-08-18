@@ -4,7 +4,10 @@ import { extractFilePath } from "./storage-utils";
 export const SHIFT_PHOTOS_BUCKET = "shift-photos";
 
 const FALLBACK_EXTENSION = "jpg";
-const MAX_IMAGE_UPLOAD_SIZE_BYTES = 6 * 1024 * 1024; // 6MB
+const MAX_IMAGE_UPLOAD_SIZE_BYTES = 6 * 1024 * 1024; // 6MB — ceiling for Supabase
+// Only skip canvas for small JPEGs that are already web-safe and compact.
+// iPhone JPEGs (3–8 MB) must still go through canvas; anything above this threshold is re-encoded.
+const MAX_SKIP_COMPRESSION_BYTES = 1 * 1024 * 1024; // 1 MB
 const MAX_IMAGE_DIMENSION = 1920;
 const JPEG_QUALITY = 0.82;
 const MAX_UPLOAD_RETRIES = 3;
@@ -13,9 +16,11 @@ const UPLOAD_TIMEOUT_MS = 45_000;
 const resolveFileExtension = (file: File) => {
   const fromMime = file.type?.split("/")?.[1]?.toLowerCase()?.split(";")?.[0];
   const fromName = file.name?.split(".")?.pop()?.toLowerCase();
-  const extension = fromMime || fromName || FALLBACK_EXTENSION;
-
-  return extension === "jpeg" ? "jpg" : extension;
+  // Treat heic/heif as jpg — we always convert these to JPEG before upload
+  const raw = fromMime || fromName || FALLBACK_EXTENSION;
+  if (raw === "jpeg") return "jpg";
+  if (raw === "heic" || raw === "heif") return "jpg";
+  return raw;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,15 +71,24 @@ export const prepareShiftPhotoForUpload = async (file: File): Promise<File> => {
     throw new Error("קובץ התמונה ריק או לא תקין");
   }
 
-  if (!file.type?.startsWith("image/")) return file;
+  const mimeType = (file.type || "").toLowerCase();
 
-  const mimeType = file.type.toLowerCase();
-  const isAlreadyWebSafeJpeg = mimeType === "image/jpeg" || mimeType === "image/jpg";
-  if (isAlreadyWebSafeJpeg && file.size <= MAX_IMAGE_UPLOAD_SIZE_BYTES) return file;
+  // Only bail out for files we know are non-images (non-empty, non-image MIME).
+  // An EMPTY type is treated as a possible HEIC from iOS (iOS 14/15 bug where
+  // camera files arrive with type="" even though the content is HEIC/JPEG).
+  if (mimeType !== "" && !mimeType.startsWith("image/")) return file;
+
+  const isJpeg = mimeType === "image/jpeg" || mimeType === "image/jpg";
+
+  // For already-small JPEGs: skip canvas — they are already web-safe.
+  // Everything else (HEIC, PNG, WebP, empty-type, large JPEG) must go through
+  // canvas so we always produce a web-safe JPEG ≤ MAX_IMAGE_DIMENSION.
+  if (isJpeg && file.size <= MAX_SKIP_COMPRESSION_BYTES) return file;
+
   if (typeof window === "undefined" || typeof document === "undefined") return file;
 
   try {
-    console.log("[prepareShiftPhotoForUpload] decoding image", file.name, file.size, file.type);
+    console.log("[prepareShiftPhotoForUpload] converting", file.name, file.size, mimeType || "(no type)");
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const objectUrl = URL.createObjectURL(file);
       const img = new Image();
@@ -114,8 +128,17 @@ export const prepareShiftPhotoForUpload = async (file: File): Promise<File> => {
       canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY);
     });
 
-    if (!optimizedBlob || optimizedBlob.size === 0 || optimizedBlob.size >= file.size) {
-      console.log("[prepareShiftPhotoForUpload] keeping original (optimized not smaller)");
+    if (!optimizedBlob || optimizedBlob.size === 0) {
+      // canvas.toBlob returned null — likely memory pressure on iOS
+      console.warn("[prepareShiftPhotoForUpload] toBlob returned null, keeping original");
+      return file;
+    }
+
+    // For HEIC / unknown type: ALWAYS use the canvas JPEG output — we must produce
+    // a web-safe format regardless of size comparison.
+    // For plain JPEG: only use canvas output if it's actually smaller.
+    if (isJpeg && optimizedBlob.size >= file.size) {
+      console.log("[prepareShiftPhotoForUpload] canvas not smaller, keeping original JPEG");
       return file;
     }
 
