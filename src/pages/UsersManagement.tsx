@@ -167,7 +167,8 @@ const UsersManagement = () => {
         (() => {
           let q = supabase
             .from("profiles")
-            .select("*");
+            .select("*")
+            .eq("is_active", true);          // hide soft-deleted profiles
 
           if (isBattalionAdmin) {
             // Battalion admins see only their battalion's users
@@ -336,22 +337,49 @@ const UsersManagement = () => {
       toast.success("המשתמש נמחק בהצלחה");
       setDeletingUser(null);
       fetchUsers();
-    } catch (error: any) {
-      console.error("Error deleting user:", error);
-      const msg: string = error?.message ?? "";
-      if (msg.includes("Cannot delete your own account")) {
+    } catch (error: unknown) {
+      // Log the full error to console for debugging
+      const rawMsg: string =
+        error instanceof Error ? error.message : String(error ?? "");
+      // FunctionsHttpError stores the response body in .context or the parsed body in .message
+      const context = (error as Record<string, unknown>)?.context;
+      const bodyStr = typeof context === 'string'
+        ? context
+        : context instanceof Response ? null : null;
+      let bodyDetail: string | undefined;
+      if (typeof context === 'object' && context !== null) {
+        bodyDetail = (context as Record<string, unknown>)?.error as string | undefined;
+      }
+      if (!bodyDetail && bodyStr) {
+        try { bodyDetail = (JSON.parse(bodyStr) as Record<string, unknown>)?.error as string; } catch { /* noop */ }
+      }
+      const detail = bodyDetail || rawMsg;
+
+      console.error("[DeleteUser] deletion failed", {
+        message: rawMsg,
+        context,
+        detail,
+        error,
+      });
+
+      if (rawMsg.includes("Cannot delete your own account")) {
         toast.error("לא ניתן למחוק את החשבון שלך");
-      } else if (msg.includes("FORBIDDEN") || msg.includes("different brigade")) {
+      } else if (rawMsg.includes("FORBIDDEN") || rawMsg.includes("different brigade")) {
         toast.error("אין הרשאה למחוק משתמש זה");
-      } else if (msg.includes("UNAUTHENTICATED") || msg.includes("Unauthorized")) {
+      } else if (rawMsg.includes("UNAUTHENTICATED") || rawMsg.includes("Unauthorized")) {
         toast.error("פג תוקף ההתחברות — יש להתחבר מחדש");
-      } else if (msg.includes("FetchError") || msg.toLowerCase().includes("failed to fetch") || msg.includes("Failed to send request")) {
-        // Network-level error (e.g. CORS, function not deployed)
-        console.error("Edge Function network error — check CORS / deployment:", error);
+      } else if (
+        rawMsg.includes("FetchError") ||
+        rawMsg.toLowerCase().includes("failed to fetch") ||
+        rawMsg.includes("Failed to send request")
+      ) {
+        console.error("[DeleteUser] network/CORS error — check Edge Function deployment and CORS config");
         toast.error("לא ניתן לתקשר עם השרת — נסה שוב מאוחר יותר");
       } else {
-        const detail = error?.context?.error ?? msg;
-        toast.error(`שגיאה במחיקת המשתמש: ${detail || "שגיאה לא ידועה"}`, { duration: 8000 });
+        toast.error(
+          `שגיאה במחיקת המשתמש: ${detail || "שגיאה לא ידועה"}`,
+          { duration: 8000 }
+        );
       }
     } finally {
       setDeleting(false);
