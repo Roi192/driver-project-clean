@@ -46,18 +46,19 @@ export function PhotosStep() {
     setPhotoState((prev) => {
       const merged: PhotosMap = {};
       VEHICLE_PHOTOS.forEach((p) => {
-        // RHF-restored value wins; draft fills gaps
         merged[p.id] = prev[p.id] || draft[p.id];
       });
-      // Sync merged values back to RHF so validation sees them
+      // Call setValue for any photo that draft has but RHF doesn't.
+      // Check getValues() (not prev) because prev is already populated from the
+      // lazy init — using prev would skip setValue even when RHF is still empty.
       VEHICLE_PHOTOS.forEach((p) => {
-        if (merged[p.id] && !prev[p.id]) {
+        if (merged[p.id] && !getValues(`photos.${p.id}`)) {
           setValue(`photos.${p.id}`, merged[p.id], { shouldDirty: true });
         }
       });
       return merged;
     });
-  }, [user?.id, setValue]);
+  }, [user?.id, setValue, getValues]);
 
   // When the user returns from the native camera (page becomes visible), re-sync
   // photo state from localStorage.  This covers two scenarios:
@@ -77,8 +78,11 @@ export function PhotosStep() {
       });
       if (!changed) return;
       setPhotoState(merged);
+      // Use getValues() (not prev) to check the RHF state — prev reflects local
+      // display state which may already include the photo, while RHF might still
+      // be empty if the setValue call was missed during a token-refresh remount.
       VEHICLE_PHOTOS.forEach((p) => {
-        if (merged[p.id] && !prev[p.id]) {
+        if (merged[p.id] && !getValues(`photos.${p.id}`)) {
           setValue(`photos.${p.id}`, merged[p.id], { shouldDirty: true });
         }
       });
@@ -100,7 +104,7 @@ export function PhotosStep() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", syncFromDraft);
     };
-  }, [setValue]);
+  }, [setValue, getValues]);
 
   const handlePhotoUploaded = useCallback(
     (photoId: string, storagePath: string) => {

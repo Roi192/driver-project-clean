@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { VEHICLE_PHOTOS } from "@/lib/constants";
 import { Navigate } from "react-router-dom";
 import { getBrigade } from "@/lib/brigades";
-import { clearShiftPhotosDraft, saveShiftPhotosDraft } from "@/lib/shift-photos-draft";
+import { clearShiftPhotosDraft, loadShiftPhotosDraft, saveShiftPhotosDraft } from "@/lib/shift-photos-draft";
 import type { PhotosDraftMap } from "@/lib/shift-photos-draft";
 
 const STEP_LABELS_WITH_PHOTOS = ["פרטים", "תדריכים", "ציוד", "תרגולות", "תמונות"];
@@ -162,11 +162,20 @@ export default function ShiftForm() {
 
       if (saved) {
         reset(saved);
-        // Mirror restored photos to shift_photos_draft so PhotosStep sees them
-        // (the lazy init reads draft synchronously before this useEffect runs)
-        const photos = saved.photos as PhotosDraftMap | undefined;
-        if (photos && Object.values(photos).some(Boolean)) {
-          saveShiftPhotosDraft(user.id, photos);
+        // shift_photos_draft is the authoritative source for photo paths — it is
+        // written synchronously on every upload, BEFORE the watch subscription
+        // calls saveFormToStorage.  The watch can miss updates during a brief auth
+        // token-refresh (subscription temporarily unsubscribed), so we always
+        // merge the draft ON TOP of the saved form data and push the result into RHF.
+        const draft = loadShiftPhotosDraft(user.id);
+        const mergedPhotos: PhotosDraftMap = { ...(saved.photos ?? {}), ...draft };
+        if (Object.values(mergedPhotos).some(Boolean)) {
+          saveShiftPhotosDraft(user.id, mergedPhotos);
+          VEHICLE_PHOTOS.forEach((photo) => {
+            if (mergedPhotos[photo.id]) {
+              methods.setValue(`photos.${photo.id}`, mergedPhotos[photo.id], { shouldDirty: true });
+            }
+          });
         }
         if (isTabKillRecovery) {
           setTimeout(() => {
@@ -217,10 +226,8 @@ export default function ShiftForm() {
   };
 
   const hasAllRequiredPhotos = (formData: Record<string, unknown>) => {
-    return VEHICLE_PHOTOS.every((photo) => {
-      const value = formData[`photos.${photo.id}`] ?? (formData.photos as Record<string, unknown> | undefined)?.[photo.id];
-      return hasPhotoValue(value);
-    });
+    const photos = formData.photos as Record<string, string | undefined> | undefined;
+    return VEHICLE_PHOTOS.every((photo) => hasPhotoValue(photos?.[photo.id]));
   };
 
   const goToNextStep = () => {
@@ -384,6 +391,18 @@ export default function ShiftForm() {
   };
 
   const handleSubmit = async () => {
+    // Pre-flight: sync any photos that are in localStorage but not yet in RHF.
+    // This covers edge cases where setValue was skipped during the restore effect
+    // (e.g. auth token refresh during upload caused watch to miss the update).
+    if (includePhotos && user) {
+      const draft = loadShiftPhotosDraft(user.id);
+      VEHICLE_PHOTOS.forEach((photo) => {
+        if (draft[photo.id] && !methods.getValues(`photos.${photo.id}`)) {
+          methods.setValue(`photos.${photo.id}`, draft[photo.id], { shouldDirty: true });
+        }
+      });
+    }
+
     if (!validateAllSteps()) return;
 
     const formData = methods.getValues();
