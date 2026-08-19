@@ -41,7 +41,10 @@ Deno.serve(async (req) => {
       throw new Error('Only admins can update users')
     }
 
-    const isMaphatchAdmin = roleData.role === 'maphatch_admin'
+    const callerRole = roleData.role
+    const isMaphatchAdmin = callerRole === 'maphatch_admin'
+    const isSuperAdmin = callerRole === 'super_admin'
+    const isDivisionAdmin = callerRole === 'division_admin'
 
     // Create admin client with service role key
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -73,6 +76,31 @@ Deno.serve(async (req) => {
     ]
     if (newRole !== undefined && (typeof newRole !== 'string' || !ALLOWED_ROLES.includes(newRole))) {
       throw new Error('newRole is not a recognized role')
+    }
+
+    // ─── Brigade-level authorization (server-side, not client-trustable) ──────
+    // super_admin / ravshatz: global
+    // division_admin: only users with brigade = 'division'
+    // admin: only users in the same brigade
+    // maphatch_admin: same brigade + same department (checked below)
+    if (!isSuperAdmin && callerRole !== 'ravshatz') {
+      const [callerProfileRes, targetProfileRes] = await Promise.all([
+        supabaseAdmin.from('profiles').select('brigade').eq('user_id', callerUser.id).maybeSingle(),
+        supabaseAdmin.from('profiles').select('brigade').eq('user_id', targetUserId).maybeSingle(),
+      ])
+      const callerBrigade = callerProfileRes.data?.brigade ?? null
+      const targetBrigade = targetProfileRes.data?.brigade ?? null
+
+      if (isDivisionAdmin) {
+        if (targetBrigade !== 'division') {
+          throw new Error('FORBIDDEN: division_admin can only manage division users')
+        }
+      } else {
+        // admin / maphatch_admin: must be same brigade
+        if (!callerBrigade || !targetBrigade || callerBrigade !== targetBrigade) {
+          throw new Error('FORBIDDEN: cannot manage users from a different brigade')
+        }
+      }
     }
 
     // maphatch_admin may only manage users in their own department with maphatch roles

@@ -86,6 +86,8 @@ const ROLE_LABELS: Record<AppRole, string> = {
   platoon_commander: "מנהל מ\"מ נהגים",
   battalion_admin: "מנהל גדוד תע\"ם",
   ravshatz: 'רבש"צ',
+  maphatch_admin: "מנהל מפח\"ט",
+  maphatch_user: "משתמש מפח\"ט",
   driver: "נהג",
 };
 
@@ -330,11 +332,20 @@ const UsersManagement = () => {
       fetchUsers();
     } catch (error: any) {
       console.error("Error deleting user:", error);
-      if (error.message?.includes('Cannot delete your own account')) {
+      const msg: string = error?.message ?? "";
+      if (msg.includes("Cannot delete your own account")) {
         toast.error("לא ניתן למחוק את החשבון שלך");
+      } else if (msg.includes("FORBIDDEN") || msg.includes("different brigade")) {
+        toast.error("אין הרשאה למחוק משתמש זה");
+      } else if (msg.includes("UNAUTHENTICATED") || msg.includes("Unauthorized")) {
+        toast.error("פג תוקף ההתחברות — יש להתחבר מחדש");
+      } else if (msg.includes("FetchError") || msg.toLowerCase().includes("failed to fetch") || msg.includes("Failed to send request")) {
+        // Network-level error (e.g. CORS, function not deployed)
+        console.error("Edge Function network error — check CORS / deployment:", error);
+        toast.error("לא ניתן לתקשר עם השרת — נסה שוב מאוחר יותר");
       } else {
-        const detail = error?.context?.error || error?.message || JSON.stringify(error);
-        toast.error(`שגיאה במחיקת המשתמש: ${detail}`, { duration: 10000 });
+        const detail = error?.context?.error ?? msg;
+        toast.error(`שגיאה במחיקת המשתמש: ${detail || "שגיאה לא ידועה"}`, { duration: 8000 });
       }
     } finally {
       setDeleting(false);
