@@ -13,7 +13,7 @@ const getAuthRedirectUrl = (path: string): string => {
 };
 
 // Updated roles: super_admin (מנהל ראשי), admin (מ"פ), platoon_commander (מ"מ), battalion_admin (גדוד), driver (נהג)
-export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'ravshatz' | 'division_admin' | 'division_user' | 'maphatch_user' | 'maphatch_admin';
+export type AppRole = 'driver' | 'admin' | 'platoon_commander' | 'battalion_admin' | 'super_admin' | 'ravshatz' | 'division_admin' | 'division_user' | 'maphatch_user' | 'maphatch_admin' | 'brigade_admin';
 
 interface SignUpData {
   email: string;
@@ -47,6 +47,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isPlatoonCommander: boolean;
   isBattalionAdmin: boolean;
+  isBrigadeAdmin: boolean;
   isDivisionAdmin: boolean;
   realIsDivisionAdmin: boolean;
   isDivisionUser: boolean;
@@ -86,6 +87,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const ROLE_PRIORITY: AppRole[] = [
   'super_admin',
   'division_admin',
+  'brigade_admin',
   'division_user',
   'admin',
   'battalion_admin',
@@ -271,7 +273,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSuperAdmin = role === 'super_admin';
   const realIsDivisionAdmin = role === 'division_admin' || role === 'super_admin';
   const isDivisionBrigadePeek = realIsDivisionAdmin && !!brigadeOverride;
-  const isAdmin = role === 'admin' || role === 'super_admin' || isDivisionBrigadePeek;
+  const isBrigadeAdmin = role === 'brigade_admin';
+  const isAdmin = role === 'admin' || role === 'super_admin' || role === 'brigade_admin' || isDivisionBrigadePeek;
   const isPlatoonCommander = role === 'platoon_commander';
   const isBattalionAdmin = role === 'battalion_admin';
   const isDivisionUser = role === 'division_user' || realIsDivisionAdmin;
@@ -331,7 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   
-  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
+  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'division_admin' || role === 'brigade_admin' || isDivisionBrigadePeek;
   const canAccessBomReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessAnnualWorkPlan = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessSoldiersControl = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
@@ -366,6 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isPlatoonCommander,
     isBattalionAdmin,
+    isBrigadeAdmin,
     isDivisionAdmin,
     realIsDivisionAdmin,
     isDivisionUser,

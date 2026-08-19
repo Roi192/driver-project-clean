@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       .eq('user_id', callerUser.id)
       .single()
 
-    const allowedRoles = ['admin', 'super_admin', 'ravshatz', 'division_admin', 'maphatch_admin']
+    const allowedRoles = ['admin', 'super_admin', 'ravshatz', 'division_admin', 'maphatch_admin', 'brigade_admin']
     if (!roleData || !allowedRoles.includes(roleData.role)) {
       throw new Error('Only admins can update users')
     }
@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     const isMaphatchAdmin = callerRole === 'maphatch_admin'
     const isSuperAdmin = callerRole === 'super_admin'
     const isDivisionAdmin = callerRole === 'division_admin'
+    const isBrigadeAdmin = callerRole === 'brigade_admin'
 
     // Create admin client with service role key
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -72,16 +73,33 @@ Deno.serve(async (req) => {
     const ALLOWED_ROLES = [
       'driver','admin','super_admin','battalion_admin',
       'platoon_commander','division_admin','division_user','ravshatz','company_commander',
-      'maphatch_user','maphatch_admin'
+      'maphatch_user','maphatch_admin','brigade_admin'
     ]
     if (newRole !== undefined && (typeof newRole !== 'string' || !ALLOWED_ROLES.includes(newRole))) {
       throw new Error('newRole is not a recognized role')
     }
 
+    // Role escalation guard: prevent privilege escalation by lower-tier callers
+    if (newRole !== undefined) {
+      const SUPER_ONLY_ROLES = ['super_admin']
+      const DIVISION_ONLY_ROLES = ['division_admin', 'division_user']
+      const BRIGADE_ELEVATED_ROLES = ['brigade_admin']
+
+      if (!isSuperAdmin && SUPER_ONLY_ROLES.includes(newRole as string)) {
+        throw new Error('FORBIDDEN: only super_admin can assign super_admin role')
+      }
+      if (!isSuperAdmin && !isDivisionAdmin && DIVISION_ONLY_ROLES.includes(newRole as string)) {
+        throw new Error('FORBIDDEN: only super_admin or division_admin can assign division roles')
+      }
+      if (!isSuperAdmin && !isDivisionAdmin && BRIGADE_ELEVATED_ROLES.includes(newRole as string)) {
+        throw new Error('FORBIDDEN: only super_admin or division_admin can assign brigade_admin role')
+      }
+    }
+
     // ─── Brigade-level authorization (server-side, not client-trustable) ──────
     // super_admin / ravshatz: global
     // division_admin: only users with brigade = 'division'
-    // admin: only users in the same brigade
+    // admin / brigade_admin: only users in the same brigade
     // maphatch_admin: same brigade + same department (checked below)
     if (!isSuperAdmin && callerRole !== 'ravshatz') {
       const [callerProfileRes, targetProfileRes] = await Promise.all([

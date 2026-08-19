@@ -50,9 +50,10 @@ Deno.serve(async (req) => {
     const isSuperAdmin = roles.some((r: { role: string }) => r.role === 'super_admin')
     const isDivisionAdmin = roles.some((r: { role: string }) => r.role === 'division_admin')
     const isAdmin = roles.some((r: { role: string }) => r.role === 'admin')
+    const isBrigadeAdmin = roles.some((r: { role: string }) => r.role === 'brigade_admin')
 
-    // Only super_admin, division_admin, and admin (brigade-scoped) may delete users
-    if (!isSuperAdmin && !isDivisionAdmin && !isAdmin) {
+    // Only super_admin, division_admin, admin, and brigade_admin (brigade-scoped) may delete users
+    if (!isSuperAdmin && !isDivisionAdmin && !isAdmin && !isBrigadeAdmin) {
       return new Response(
         JSON.stringify({ success: false, error: 'FORBIDDEN' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -107,7 +108,7 @@ Deno.serve(async (req) => {
           )
         }
       } else {
-        // Regular admin: must be same brigade
+        // admin / brigade_admin: must be same brigade
         if (!callerBrigade || !targetBrigade || callerBrigade !== targetBrigade) {
           return new Response(
             JSON.stringify({ success: false, error: 'FORBIDDEN: cannot delete users from a different brigade' }),

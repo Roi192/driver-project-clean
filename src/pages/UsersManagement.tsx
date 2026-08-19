@@ -82,6 +82,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "מנהל ראשי",
   division_admin: "מנהל מפאו\"ג איו\"ש",
   division_user: "משתמש מפאו\"ג רגיל",
+  brigade_admin: "מנהל חטיבה",
   admin: "מנהל מ\"פ נהגים",
   platoon_commander: "מנהל מ\"מ נהגים",
   battalion_admin: "מנהל גדוד תע\"ם",
@@ -93,7 +94,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
 
 const UsersManagement = () => {
   const navigate = useNavigate();
-  const { user, canDelete, isSuperAdmin, isDivisionAdmin, isBattalionAdmin, brigade: myBrigade } = useAuth();
+  const { user, canDelete, isSuperAdmin, isDivisionAdmin, isBattalionAdmin, isBrigadeAdmin, brigade: myBrigade } = useAuth();
   const { isAdmin, canAccessUsersManagement, isLoading: roleLoading } = useUserRole();
   // In the division (מפאו"ג איו"ש) view the page must show ONLY users that registered
   // through the dedicated division link (brigade='division'). Brigade admins see only
@@ -172,7 +173,9 @@ const UsersManagement = () => {
             // Battalion admins see only their battalion's users
             q = q.eq("user_type", "battalion");
             if (myBattalionName) q = q.eq("battalion_name", myBattalionName);
-          } else {
+          } else if (!isBrigadeAdmin) {
+            // brigade_admin sees everyone in their brigade (no dept filter)
+            // all others see only planag / non-battalion
             q = q
               .or("department.eq.planag,department.is.null")
               .neq("user_type", "battalion");
@@ -210,8 +213,11 @@ const UsersManagement = () => {
               if (existingUserIds.has(u.id)) return false;
               const dept = u.user_metadata?.department;
               const utype = u.user_metadata?.user_type;
-              if (utype === "battalion") return false;
-              if (dept === "battalion") return false;
+              // brigade_admin sees all orphans in their brigade; others skip battalion
+              if (!isBrigadeAdmin) {
+                if (utype === "battalion") return false;
+                if (dept === "battalion") return false;
+              }
               // Brigade scoping for orphan auth users
               if (effectiveBrigadeFilter) {
                 const userBrigade = u.user_metadata?.brigade || 'binyamin';
@@ -694,6 +700,7 @@ const UsersManagement = () => {
                     {isSuperAdmin && <SelectItem value="super_admin">מנהל ראשי (מח"ט)</SelectItem>}
                     {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_admin">מנהל מפאו"ג איו"ש (אוגדתי)</SelectItem>}
                     {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_user">משתמש מפאו"ג רגיל</SelectItem>}
+                    {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="brigade_admin">מנהל חטיבה</SelectItem>}
                     <SelectItem value="admin">מנהל מ"פ נהגים (גישה מלאה)</SelectItem>
                     <SelectItem value="platoon_commander">מנהל מ"מ נהגים</SelectItem>
                     {!isDivisionAdmin || isSuperAdmin ? (
@@ -705,6 +712,7 @@ const UsersManagement = () => {
                   {editFormData.role === 'super_admin' && '✓ מנהל ראשי - גישה מלאה לכל המחלקות וכל החטיבות'}
                   {editFormData.role === 'division_admin' && '✓ מפאו"ג - רואה את כל החטיבות, מנהל מ"פ ומ"מ בכל החטיבות'}
                   {editFormData.role === 'division_user' && '✓ משתמש מפאו"ג רגיל - תצוגה אוגדתית בלבד, ללא כניסה לחטיבות וללא עריכה'}
+                  {editFormData.role === 'brigade_admin' && '✓ מנהל חטיבה - גישה מלאה לכל משתמשי החטיבה כולל מחיקה וניהול'}
                   {editFormData.role === 'admin' && '✓ גישה מלאה לכל הפיצ\'רים כולל מחיקה וניהול משתמשים'}
                   {editFormData.role === 'platoon_commander' && '✓ ללא דו"ח בו"מ, ניהול משתמשים ומחיקות'}
                   {editFormData.role === 'driver' && '✓ צפייה בלבד + מילוי טפסים'}

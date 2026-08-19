@@ -3,13 +3,17 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
+type AuthContext = ReturnType<typeof useAuth>;
+
 interface ProtectedRouteProps {
   children: ReactNode;
   requireAdmin?: boolean;
+  guard?: (auth: AuthContext) => boolean;
 }
 
-export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { user, loading, isAdmin } = useAuth();
+export function ProtectedRoute({ children, requireAdmin = false, guard }: ProtectedRouteProps) {
+  const auth = useAuth();
+  const { user, loading, isAdmin } = auth;
   const location = useLocation();
 
   if (loading) {
@@ -25,6 +29,10 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
   }
 
   if (requireAdmin && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (guard && !guard(auth)) {
     return <Navigate to="/" replace />;
   }
 
