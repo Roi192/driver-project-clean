@@ -20,7 +20,7 @@ export function useUserRole() {
   const canEditSafetyEvents = isAdmin || role === 'platoon_commander' || role === 'battalion_admin' || role === 'division_admin' || role === 'maphatch_admin';
   const canEditTrainingVideos = isAdmin || role === 'platoon_commander';
   const canEditProcedures = isAdmin || role === 'platoon_commander';
-  const canAccessUsersManagement = isAdmin || role === 'division_admin';
+  const canAccessUsersManagement = isAdmin || role === 'division_admin' || role === 'platoon_commander';
   const canAccessBomReport = isAdmin || role === 'division_admin';
   const canAccessAnnualWorkPlan = isAdmin || role === 'platoon_commander' || role === 'division_admin';
   const canAccessSoldiersControl = isAdmin || role === 'platoon_commander' || role === 'division_admin';

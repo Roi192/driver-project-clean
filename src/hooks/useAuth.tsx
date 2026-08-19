@@ -334,7 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
   
-  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'division_admin' || role === 'brigade_admin' || isDivisionBrigadePeek;
+  const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'division_admin' || role === 'brigade_admin' || role === 'platoon_commander' || isDivisionBrigadePeek;
   const canAccessBomReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessAnnualWorkPlan = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
   const canAccessSoldiersControl = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, AppRole } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { getUserDomain, getAssignableRoles, DOMAIN_ROLE_LABELS, type UserDomain } from "@/lib/rolePermissions";
 import { BRIGADES, BRIGADE_CODES, getBrigade, type BrigadeCode, DIVISION_BRIGADE_CODE, DIVISION_LABEL } from "@/lib/brigades";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
 
 const UsersManagement = () => {
   const navigate = useNavigate();
-  const { user, canDelete, isSuperAdmin, isDivisionAdmin, isBattalionAdmin, isBrigadeAdmin, brigade: myBrigade } = useAuth();
+  const { user, role, canDelete, isSuperAdmin, isDivisionAdmin, isBattalionAdmin, isBrigadeAdmin, brigade: myBrigade } = useAuth();
   const { isAdmin, canAccessUsersManagement, isLoading: roleLoading } = useUserRole();
   // In the division (מפאו"ג איו"ש) view the page must show ONLY users that registered
   // through the dedicated division link (brigade='division'). Brigade admins see only
@@ -303,13 +304,31 @@ const UsersManagement = () => {
       });
 
       if (updateError) {
-        throw updateError;
+        console.error("[UpdateUser] edge function error", updateError);
+        const rawMsg: string = updateError instanceof Error ? updateError.message : String(updateError ?? "");
+        const context = (updateError as Record<string, unknown>)?.context;
+        let detail: string | undefined;
+        if (typeof context === 'object' && context !== null) {
+          detail = (context as Record<string, unknown>)?.error as string | undefined;
+        } else if (typeof context === 'string') {
+          try { detail = (JSON.parse(context) as Record<string, unknown>)?.error as string; } catch { /* noop */ }
+        }
+        const msg = detail || rawMsg;
+        if (msg.includes('FORBIDDEN') || msg.includes('אין הרשאה')) {
+          toast.error("אין הרשאה לבצע פעולה זו");
+        } else if (msg.includes('UNAUTHENTICATED') || msg.includes('Unauthorized')) {
+          toast.error("פג תוקף ההתחברות — יש להתחבר מחדש");
+        } else {
+          toast.error(`שגיאה בעדכון המשתמש: ${msg}`, { duration: 8000 });
+        }
+        setSaving(false);
+        return;
       }
 
       toast.success("פרטי המשתמש עודכנו בהצלחה");
       setEditingUser(null);
       fetchUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating user:", error);
       toast.error("שגיאה בעדכון המשתמש");
     } finally {
@@ -461,6 +480,12 @@ const UsersManagement = () => {
         return 'bg-gradient-to-br from-slate-500/20 to-slate-600/20';
     }
   };
+
+  // Domain-aware role options for the edit dialog.
+  // Re-computed whenever editFormData.user_type changes.
+  const targetDomain: UserDomain = getUserDomain(editFormData.user_type);
+  const assignableRoles: AppRole[] = getAssignableRoles(role, targetDomain);
+  const domainRoleLabels = DOMAIN_ROLE_LABELS[targetDomain];
 
   if (roleLoading || loading) {
     return (
@@ -725,25 +750,29 @@ const UsersManagement = () => {
                     <SelectValue placeholder="בחר הרשאה" />
                   </SelectTrigger>
                     <SelectContent className="bg-popover border-border z-[10000]">
-                    {isSuperAdmin && <SelectItem value="super_admin">מנהל ראשי (מח"ט)</SelectItem>}
-                    {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_admin">מנהל מפאו"ג איו"ש (אוגדתי)</SelectItem>}
-                    {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="division_user">משתמש מפאו"ג רגיל</SelectItem>}
-                    {(isSuperAdmin || isDivisionAdmin) && <SelectItem value="brigade_admin">מנהל חטיבה</SelectItem>}
-                    <SelectItem value="admin">מנהל מ"פ נהגים (גישה מלאה)</SelectItem>
-                    <SelectItem value="platoon_commander">מנהל מ"מ נהגים</SelectItem>
-                    {!isDivisionAdmin || isSuperAdmin ? (
-                      <SelectItem value="driver">נהג (משתמש רגיל)</SelectItem>
-                    ) : null}
+                    {assignableRoles.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {domainRoleLabels[r] ?? ROLE_LABELS[r] ?? r}
+                      </SelectItem>
+                    ))}
+                    {assignableRoles.length === 0 && (
+                      <SelectItem value={editFormData.role} disabled>
+                        {ROLE_LABELS[editFormData.role] ?? editFormData.role}
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {editFormData.role === 'super_admin' && '✓ מנהל ראשי - גישה מלאה לכל המחלקות וכל החטיבות'}
-                  {editFormData.role === 'division_admin' && '✓ מפאו"ג - רואה את כל החטיבות, מנהל מ"פ ומ"מ בכל החטיבות'}
-                  {editFormData.role === 'division_user' && '✓ משתמש מפאו"ג רגיל - תצוגה אוגדתית בלבד, ללא כניסה לחטיבות וללא עריכה'}
-                  {editFormData.role === 'brigade_admin' && '✓ מנהל חטיבה - גישה מלאה לכל משתמשי החטיבה כולל מחיקה וניהול'}
-                  {editFormData.role === 'admin' && '✓ גישה מלאה לכל הפיצ\'רים כולל מחיקה וניהול משתמשים'}
-                  {editFormData.role === 'platoon_commander' && '✓ ללא דו"ח בו"מ, ניהול משתמשים ומחיקות'}
-                  {editFormData.role === 'driver' && '✓ צפייה בלבד + מילוי טפסים'}
+                  {editFormData.role === 'super_admin'        && '✓ גישה מלאה לכל המערכת וכל החטיבות'}
+                  {editFormData.role === 'division_admin'     && '✓ רואה את כל החטיבות — ניהול מ"פ/מ"מ בכל חטיבה'}
+                  {editFormData.role === 'division_user'      && '✓ תצוגה אוגדתית בלבד, ללא עריכה'}
+                  {editFormData.role === 'brigade_admin'      && '✓ גישה מלאה לכל משתמשי החטיבה כולל מחיקה'}
+                  {editFormData.role === 'admin'              && '✓ גישה מלאה לכל הפיצ\'רים כולל ניהול משתמשים'}
+                  {editFormData.role === 'platoon_commander'  && '✓ ללא דו"ח בו"מ ומחיקת משתמשים'}
+                  {editFormData.role === 'battalion_admin'    && '✓ ניהול מודול גדוד תע"ם'}
+                  {editFormData.role === 'maphatch_admin'     && '✓ ניהול מודול מפח"ט'}
+                  {editFormData.role === 'maphatch_user'      && '✓ צפייה במודול מפח"ט בלבד'}
+                  {editFormData.role === 'driver'             && '✓ צפייה + מילוי טפסים'}
                 </p>
               </div>
 
