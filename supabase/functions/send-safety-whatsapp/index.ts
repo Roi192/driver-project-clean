@@ -124,10 +124,33 @@ serve(async (req: Request) => {
     const record = await req.json();
     if (!record?.id) return new Response("Invalid payload", { status: 400 });
 
+    const BINYAMIN = 'binyamin';
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    console.log(JSON.stringify({ step: '[SafetyWhatsApp] event_received', eventId: record.id }));
+
+    // Re-read brigade from DB — the trigger body (to_jsonb(NEW)) is already authoritative,
+    // but re-reading prevents a spoofed direct API call from bypassing the check.
+    const { data: dbEvent } = await supabase
+      .from('safety_content')
+      .select('brigade')
+      .eq('id', record.id)
+      .maybeSingle();
+
+    const eventBrigade: string | null = dbEvent?.brigade ?? (record.brigade || null);
+    console.log(JSON.stringify({ step: '[SafetyWhatsApp] brigade_resolved', eventId: record.id, brigade: eventBrigade, source: dbEvent ? 'db' : 'payload' }));
+
+    if (eventBrigade !== BINYAMIN) {
+      console.log(JSON.stringify({ step: '[SafetyWhatsApp] skipped_non_binyamin', eventId: record.id, brigade: eventBrigade }));
+      return new Response(
+        JSON.stringify({ success: true, skipped: true, reason: 'NON_BINYAMIN_BRIGADE', brigade: eventBrigade }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
     const { data: cfg } = await supabase
       .from("whatsapp_config")
@@ -190,17 +213,19 @@ serve(async (req: Request) => {
     const BASE = `https://api.green-api.com/waInstance${cfg.instance_id}`;
     const TOKEN = cfg.api_token;
 
+    console.log(JSON.stringify({ step: '[SafetyWhatsApp] send_started', eventId: record.id, recipientCount: recipients.length, groups: recipients.map(g => g.name) }));
     let sent = 0, failed = 0;
     for (const g of recipients) {
       try {
         await sendToGroup(BASE, TOKEN, g.wa_id, record, message, imageSignedUrls);
         sent++;
+        console.log(JSON.stringify({ step: '[SafetyWhatsApp] send_success', group: g.name }));
       } catch (e) {
-        console.error(`Failed sending to ${g.name}:`, e);
         failed++;
+        console.log(JSON.stringify({ step: '[SafetyWhatsApp] send_failed', group: g.name, error: String(e) }));
       }
     }
-    console.log(`WhatsApp: sent=${sent} to [${recipients.map(g => g.name).join(", ")}], failed=${failed}`);
+    console.log(JSON.stringify({ step: '[SafetyWhatsApp] send_complete', eventId: record.id, sent, failed }));
 
     return new Response(JSON.stringify({ sent, failed }), {
       status: 200,
