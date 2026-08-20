@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
       && getUserDomain(incomingUserType) !== targetDomain;
 
     if (isDomainTransfer) {
-      const DOMAIN_TRANSFER_ROLES = ['super_admin', 'ravshatz', 'brigade_admin', 'division_admin'];
+      const DOMAIN_TRANSFER_ROLES = ['super_admin', 'brigade_admin'];
       if (!DOMAIN_TRANSFER_ROLES.includes(callerRole)) {
         return errResponse(
           corsHeaders, 403,

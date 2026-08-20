@@ -97,7 +97,7 @@ export default function WorkSchedule() {
   const [selectedSoldierIds, setSelectedSoldierIds] = useState<Set<string>>(new Set());
   const [savingAssignment, setSavingAssignment] = useState(false);
 
-  const canEdit = role === 'admin' || role === 'platoon_commander';
+  const canEdit = role === 'admin' || role === 'platoon_commander' || role === 'brigade_admin';
   const canView = canEdit || role === 'battalion_admin';
 
   useEffect(() => {

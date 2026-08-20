@@ -86,7 +86,7 @@ const MAPHATCH_DEPARTMENTS = [
 
 // Can the current actor transfer users between domains?
 // (only brigade_admin and super_admin can change a user's domain)
-const DOMAIN_TRANSFER_ROLES: AppRole[] = ['brigade_admin', 'super_admin', 'division_admin', 'ravshatz'];
+const DOMAIN_TRANSFER_ROLES: AppRole[] = ['brigade_admin', 'super_admin'];
 
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "מנהל ראשי",
@@ -869,7 +869,7 @@ const UsersManagement = () => {
 
               {/* Domain (מחלקה) selector — only brigade_admin / super_admin can change */}
               <div className="space-y-2">
-                <Label className="text-foreground">מחלקה (שיוך)</Label>
+                <Label className="text-foreground">מחלקה / שיוך</Label>
                 <Select
                   value={editFormData.department}
                   onValueChange={canChangeDomain ? handleDomainChange : undefined}
@@ -879,7 +879,7 @@ const UsersManagement = () => {
                     <SelectValue placeholder="בחר מחלקה" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border z-[10000]">
-                    <SelectItem value="planag">נהגים (פלנ&quot;ג)</SelectItem>
+                    <SelectItem value="planag">פלנ&quot;ג - מחלקת נהגים</SelectItem>
                     <SelectItem value="battalion">גדוד תע&quot;ם</SelectItem>
                     <SelectItem value="maphatch">מפח&quot;ט</SelectItem>
                   </SelectContent>

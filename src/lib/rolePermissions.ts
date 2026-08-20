@@ -40,14 +40,14 @@ export function getAssignableRoles(
   }
 
   if (actorRole === 'brigade_admin') {
-    if (targetDomain === 'drivers')   return ['driver', 'platoon_commander', 'admin'];
+    if (targetDomain === 'drivers')   return ['driver', 'platoon_commander', 'admin', 'brigade_admin'];
     if (targetDomain === 'battalion') return ['driver', 'battalion_admin'];
     if (targetDomain === 'maphatch')  return ['maphatch_user', 'maphatch_admin'];
     return [];
   }
 
   if (actorRole === 'admin') {
-    if (targetDomain === 'drivers')   return ['driver', 'platoon_commander'];
+    if (targetDomain === 'drivers')   return ['driver', 'platoon_commander', 'admin'];
     if (targetDomain === 'battalion') return ['driver', 'battalion_admin'];
     return [];
   }

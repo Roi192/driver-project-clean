@@ -322,36 +322,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBrigadeOverride(code);
   };
   
-  // Only admin/super_admin can delete
-  const canDelete = role === 'admin' || role === 'super_admin' || isDivisionBrigadePeek;
-  
-  // Admin, platoon_commander, battalion_admin, and super_admin can add/edit
-  const canEdit = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isDivisionBrigadePeek;
-  
-  const canEditDrillLocations = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isDivisionBrigadePeek;
-  const canEditSafetyFiles = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isDivisionBrigadePeek;
-  const canEditSafetyEvents = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || role === 'maphatch_admin';
-  const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
-  const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isDivisionBrigadePeek;
-  
+  // Only admin/super_admin/brigade_admin can delete
+  const canDelete = role === 'admin' || role === 'super_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+
+  // Admin, platoon_commander, battalion_admin, brigade_admin, and super_admin can add/edit
+  const canEdit = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+
+  const canEditDrillLocations = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canEditSafetyFiles = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canEditSafetyEvents = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || role === 'maphatch_admin' || isBrigadeAdmin;
+  const canEditTrainingVideos = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canEditProcedures = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+
   const canAccessUsersManagement = role === 'admin' || role === 'super_admin' || role === 'division_admin' || role === 'brigade_admin' || role === 'platoon_commander' || isDivisionBrigadePeek;
-  const canAccessBomReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessAnnualWorkPlan = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessSoldiersControl = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessAttendance = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessPunishments = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessInspections = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessHolidays = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessFitnessReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessAccidents = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessCourses = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessCleaningManagement = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessSafetyScores = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessDriverInterviews = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessAdminDashboard = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessWorkSchedule = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessWeeklyMeeting = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isDivisionBrigadePeek;
-  const canAccessEquipmentTracking = role === 'admin' || role === 'super_admin' || role === 'battalion_admin' || role === 'division_admin' || isDivisionBrigadePeek;
+  const canAccessBomReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessAnnualWorkPlan = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessSoldiersControl = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessAttendance = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessPunishments = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessInspections = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessHolidays = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessFitnessReport = role === 'admin' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessAccidents = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessCourses = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessCleaningManagement = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessSafetyScores = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessDriverInterviews = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessAdminDashboard = role === 'admin' || role === 'platoon_commander' || role === 'battalion_admin' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessWorkSchedule = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessWeeklyMeeting = role === 'admin' || role === 'platoon_commander' || role === 'super_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
+  const canAccessEquipmentTracking = role === 'admin' || role === 'super_admin' || role === 'battalion_admin' || role === 'division_admin' || isBrigadeAdmin || isDivisionBrigadePeek;
   const isRavshatz = role === 'ravshatz';
 
   const value = {

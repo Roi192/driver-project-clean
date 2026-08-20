@@ -40,7 +40,7 @@ const getItemConfig = (type: string) => ITEM_TYPES.find(i => i.value === type);
 export default function EquipmentTracking() {
   const { user } = useAuth();
   const { role } = useUserRole();
-  const isAdmin = role === "admin" || role === "super_admin";
+  const isAdmin = role === "admin" || role === "super_admin" || role === "brigade_admin";
   const [selectedOutpost, setSelectedOutpost] = useState<string>("");
   const [trackingDate, setTrackingDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [items, setItems] = useState<EquipmentItem[]>([]);
