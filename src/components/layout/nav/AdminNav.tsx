@@ -1,11 +1,15 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { NavMenuItem } from "./NavMenuItem";
 import {
   LayoutDashboard, Calendar, ClipboardCheck, Users, UserCheck, Gavel, DoorOpen,
   ShieldAlert, FileSearch, Gauge, Car, Map, UserCog, Building, Sparkles,
   GraduationCap, BarChart3, CalendarDays, Crosshair, Home, Bell, Building2, MessageCircle,
+  ArrowRight, Shield,
 } from "lucide-react";
+import { BRIGADE_CTX_KEY } from "./BrigadeNav";
+import { getBrigade } from "@/lib/brigades";
+import type { BrigadeCode } from "@/lib/brigades";
 
 interface Props {
   onClose: () => void;
@@ -13,7 +17,7 @@ interface Props {
 
 export function AdminNav({ onClose }: Props) {
   const {
-    isAdmin, isPlatoonCommander, isBattalionAdmin, isSuperAdmin, isDivisionUser, role,
+    isAdmin, isPlatoonCommander, isBattalionAdmin, isSuperAdmin, isDivisionUser, isBrigadeAdmin, role, brigade,
     canAccessUsersManagement, canAccessBomReport, canAccessAnnualWorkPlan,
     canAccessSoldiersControl, canAccessAttendance, canAccessPunishments,
     canAccessInspections, canAccessHolidays, canAccessFitnessReport,
@@ -24,6 +28,11 @@ export function AdminNav({ onClose }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { realIsDivisionAdmin, activeBrigade } = useAuth() as any;
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const brigadeAdminCtx = sessionStorage.getItem(BRIGADE_CTX_KEY);
+  // brigade_admin only sees AdminNav when they explicitly entered planag context
+  if (isBrigadeAdmin && brigadeAdminCtx !== 'planag') return null;
 
   const isOnDepartmentSelector = location.pathname === '/department-selector';
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
@@ -48,6 +57,17 @@ export function AdminNav({ onClose }: Props) {
 
   return (
     <>
+      {isBrigadeAdmin && (
+        <button
+          onClick={() => { sessionStorage.removeItem(BRIGADE_CTX_KEY); navigate('/brigade-dashboard'); onClose(); }}
+          className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-white transition-all group border border-primary/40 hover:border-primary/60 hover:bg-gradient-to-l hover:from-primary/20 hover:to-transparent mb-2"
+        >
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <ArrowRight className="w-6 h-6 text-white" />
+          </div>
+          <span className="font-bold text-base flex-1 text-right">חזרה לדשבורד חטיבה</span>
+        </button>
+      )}
       <NavMenuItem to="/admin" label="דשבורד מנהל" icon={LayoutDashboard} iconBg="from-gold via-gold-dark to-gold" iconColor="text-slate-900" theme="gold" onClose={onClose} />
       {canAccessAnnualWorkPlan && <NavMenuItem to="/annual-work-plan" label="תוכנית עבודה שנתית" icon={Calendar} iconBg="from-emerald-500 to-emerald-600" theme="gold" onClose={onClose} />}
       {canAccessBomReport && <NavMenuItem to="/bom-report" label='דו"ח בו"מ' icon={ClipboardCheck} iconBg="from-blue-500 to-blue-600" theme="gold" onClose={onClose} />}

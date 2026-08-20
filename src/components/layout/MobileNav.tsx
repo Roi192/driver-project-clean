@@ -12,6 +12,7 @@ import unitLogo from "@/assets/unit-logo.png";
 import { BRIGADES, getBrigade, getBrigadeLabel } from "@/lib/brigades";
 import { AdminNav } from "./nav/AdminNav";
 import { BattalionNav } from "./nav/BattalionNav";
+import { BrigadeNav, BRIGADE_CTX_KEY } from "./nav/BrigadeNav";
 import { DivisionNav } from "./nav/DivisionNav";
 import { DriverNav } from "./nav/DriverNav";
 import { MaphatchNav } from "./nav/MaphatchNav";
@@ -23,7 +24,7 @@ export function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { signOut, isSuperAdmin, isBattalionAdmin, isDivisionUser, user, brigade, role, userType } = useAuth();
+  const { signOut, isSuperAdmin, isBattalionAdmin, isDivisionUser, isBrigadeAdmin, user, brigade, role, userType } = useAuth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { realIsDivisionAdmin, activeBrigade, isBattalion } = useAuth() as any;
 
@@ -31,13 +32,21 @@ export function MobileNav() {
 
   const isOnDepartmentSelector = location.pathname === '/department-selector';
   const superAdminBattalionContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'battalion';
-  const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext;
+  const brigadeAdminCtx = isBrigadeAdmin ? sessionStorage.getItem(BRIGADE_CTX_KEY) : null;
+  const brigadeAdminBattalionMode = isBrigadeAdmin && brigadeAdminCtx === 'battalion';
+  const isInBattalionContext = isBattalionAdmin || superAdminBattalionContext || brigadeAdminBattalionMode;
 
   const isMaphatch = userType === 'maphatch';
   const superAdminMaphatchContext = isSuperAdmin && sessionStorage.getItem('superAdminDeptContext') === 'maphatch';
   const maphatchDept = sessionStorage.getItem('maphatchDeptContext') || '';
   const effectiveMaphatchDept = userDepartment || maphatchDept;
+
+  // Header label — context-aware for brigade_admin
   const departmentLabel = isOnDepartmentSelector ? 'מנהל ראשי'
+    : (isBrigadeAdmin && brigadeAdminCtx === 'battalion') ? 'גדוד תע"ם'
+    : (isBrigadeAdmin && brigadeAdminCtx === 'maphatch') ? `מפח"ט${effectiveMaphatchDept ? ` — ${effectiveMaphatchDept}` : ''}`
+    : (isBrigadeAdmin && brigadeAdminCtx === 'planag') ? 'פלנ"ג'
+    : isBrigadeAdmin ? 'מנהל חטיבה'
     : isInBattalionContext ? 'גדוד תע"ם'
     : (isMaphatch || superAdminMaphatchContext) ? `מפח"ט${effectiveMaphatchDept ? ` - ${effectiveMaphatchDept}` : ''}`
     : (isDivisionUser && !activeBrigade) ? getBrigadeLabel('division')
@@ -197,6 +206,7 @@ export function MobileNav() {
           )}
 
           <DivisionNav onClose={close} />
+          <BrigadeNav onClose={close} />
           <BattalionNav onClose={close} />
           <AdminNav onClose={close} />
           <MaphatchNav onClose={close} />

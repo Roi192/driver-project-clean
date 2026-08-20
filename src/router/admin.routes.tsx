@@ -28,6 +28,7 @@ import FrameworksManagement from "@/pages/FrameworksManagement";
 import WhatsAppSettings from "@/pages/WhatsAppSettings";
 import MaphatchDeptSelector from "@/pages/MaphatchDeptSelector";
 import MaphatchUsersManagement from "@/pages/MaphatchUsersManagement";
+import BrigadeDashboard from "@/pages/BrigadeDashboard";
 
 const protect = (element: ReactNode) => (
   <ProtectedRoute>{element}</ProtectedRoute>
@@ -35,6 +36,7 @@ const protect = (element: ReactNode) => (
 
 export const adminRoutes = (
   <>
+    <Route path="/brigade-dashboard" element={protect(<BrigadeDashboard />)} />
     <Route path="/admin" element={protect(<AdminDashboard />)} />
     <Route path="/annual-work-plan" element={protect(<AnnualWorkPlan />)} />
     <Route path="/bom-report" element={protect(<BomReport />)} />

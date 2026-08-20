@@ -34,9 +34,12 @@ const DEPT_COLORS = [
 
 const MaphatchDeptSelector = () => {
   const navigate = useNavigate();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, isBrigadeAdmin, brigade: myBrigade } = useAuth();
 
-  const [selectedBrigade, setSelectedBrigade] = useState<string | null>(null);
+  // brigade_admin: brigade is fixed — skip brigade-selection step
+  const [selectedBrigade, setSelectedBrigade] = useState<string | null>(
+    isBrigadeAdmin ? (myBrigade ?? null) : null
+  );
 
   const handleSelectBrigade = (code: string) => {
     setSelectedBrigade(code);
@@ -44,13 +47,22 @@ const MaphatchDeptSelector = () => {
 
   const handleSelectDept = (dept: string) => {
     if (!selectedBrigade) return;
-    sessionStorage.setItem('brigadeContext', selectedBrigade);
     sessionStorage.setItem('maphatchDeptContext', dept);
-    navigate('/safety-events');
+    if (isBrigadeAdmin) {
+      // brigadeAdminContext was already set to 'maphatch' when entering from BrigadeNav
+      navigate('/safety-events');
+    } else {
+      sessionStorage.setItem('brigadeContext', selectedBrigade);
+      navigate('/safety-events');
+    }
   };
 
   const handleBack = () => {
-    if (selectedBrigade) {
+    if (isBrigadeAdmin) {
+      sessionStorage.removeItem('brigadeAdminContext');
+      sessionStorage.removeItem('maphatchDeptContext');
+      navigate('/brigade-dashboard');
+    } else if (selectedBrigade) {
       setSelectedBrigade(null);
     } else {
       sessionStorage.removeItem('superAdminDeptContext');
@@ -60,7 +72,7 @@ const MaphatchDeptSelector = () => {
     }
   };
 
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin && !isBrigadeAdmin) {
     navigate('/');
     return null;
   }
@@ -77,7 +89,9 @@ const MaphatchDeptSelector = () => {
           className="absolute top-20 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-all"
         >
           <ArrowRight className="w-4 h-4" />
-          <span className="text-sm font-semibold">{selectedBrigade ? 'חזרה לבחירת חטיבה' : 'חזרה לבחירת מחלקה'}</span>
+          <span className="text-sm font-semibold">
+            {isBrigadeAdmin ? 'חזרה לדשבורד חטיבה' : selectedBrigade ? 'חזרה לבחירת חטיבה' : 'חזרה לבחירת מחלקה'}
+          </span>
         </button>
 
         {/* Logo & Title */}
@@ -87,23 +101,23 @@ const MaphatchDeptSelector = () => {
             <img src={unitLogo} alt="סמל היחידה" className="w-20 h-20 object-contain relative z-10 drop-shadow-2xl mx-auto" />
           </div>
 
-          {!selectedBrigade ? (
+          {!selectedBrigade && !isBrigadeAdmin ? (
             <>
-              <h1 className="text-3xl font-black text-white mb-2">מפח"ט — בחר חטיבה</h1>
+              <h1 className="text-3xl font-black text-white mb-2">מפח&quot;ט — בחר חטיבה</h1>
               <p className="text-slate-400">שלב 1 מתוך 2 · בחר את החטיבה</p>
             </>
           ) : (
             <>
               <h1 className="text-3xl font-black text-white mb-2">
-                מפח"ט — {BRIGADES[selectedBrigade as keyof typeof BRIGADES]?.name || selectedBrigade}
+                מפח&quot;ט — {BRIGADES[selectedBrigade as keyof typeof BRIGADES]?.name || selectedBrigade}
               </h1>
-              <p className="text-slate-400">שלב 2 מתוך 2 · בחר אגף</p>
+              <p className="text-slate-400">{isBrigadeAdmin ? 'בחר אגף' : 'שלב 2 מתוך 2 · בחר אגף'}</p>
             </>
           )}
         </div>
 
-        {/* Step 1 — Brigade selection */}
-        {!selectedBrigade && (
+        {/* Step 1 — Brigade selection (super_admin only; brigade_admin skips this) */}
+        {!selectedBrigade && !isBrigadeAdmin && (
           <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-2xl">
             {Object.values(BRIGADES).map((b) => (
               <button
@@ -129,7 +143,7 @@ const MaphatchDeptSelector = () => {
         )}
 
         {/* Step 2 — Department selection */}
-        {selectedBrigade && (
+        {(selectedBrigade || isBrigadeAdmin) && (
           <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 w-full max-w-4xl">
             {MAPHATCH_DEPARTMENTS.map((dept, i) => (
               <button
@@ -155,7 +169,9 @@ const MaphatchDeptSelector = () => {
 
         <div className="relative z-10 mt-8 flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700">
           <Building2 className="w-4 h-4 text-emerald-400" />
-          <span className="text-slate-400 text-sm font-medium">מנהל ראשי — מפח"ט</span>
+          <span className="text-slate-400 text-sm font-medium">
+            {isBrigadeAdmin ? 'מנהל חטיבה — מפח"ט' : 'מנהל ראשי — מפח"ט'}
+          </span>
         </div>
       </div>
     </AppLayout>

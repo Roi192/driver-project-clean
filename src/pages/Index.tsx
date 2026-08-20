@@ -45,6 +45,13 @@ const Index = () => {
       if (!user || !isRootPath) { setDepartmentChecked(true); return; }
       if (role === null) return;
       
+      // brigade_admin always lands on the Brigade Dashboard
+      if (role === 'brigade_admin') {
+        setIsRedirecting(true);
+        navigate('/brigade-dashboard', { replace: true });
+        return;
+      }
+
       if (isSuperAdmin) {
         const deptCtx = sessionStorage.getItem('superAdminDeptContext');
         if (!deptCtx) {
