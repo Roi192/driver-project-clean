@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, AppRole } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { getAssignableRoles } from "@/lib/rolePermissions";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,9 +79,15 @@ const ROLE_LABELS: Record<string, string> = {
 
 const BattalionUsersManagement = () => {
   const navigate = useNavigate();
-  const { user, canDelete, isSuperAdmin } = useAuth();
+  const { user, role, canDelete, isSuperAdmin, brigade: myBrigade } = useAuth();
   const { isLoading: roleLoading } = useUserRole();
-  
+
+  const canAccess = isSuperAdmin
+    || role === 'admin'
+    || role === 'maphatch_admin'
+    || role === 'brigade_admin'
+    || role === 'platoon_commander';
+
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [battalionFilter, setBattalionFilter] = useState<string>("all");
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
@@ -104,25 +111,31 @@ const BattalionUsersManagement = () => {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (!roleLoading && !isSuperAdmin) {
+    if (!roleLoading && !canAccess) {
       navigate("/");
       return;
     }
-    if (isSuperAdmin) {
+    if (canAccess) {
       fetchUsers();
     }
-  }, [isSuperAdmin, roleLoading, navigate]);
+  }, [canAccess, roleLoading, navigate]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       
+      let profilesQ = supabase
+        .from("profiles")
+        .select("*")
+        .eq("is_active", true)
+        .or("user_type.eq.battalion,department.eq.battalion");
+      // Non-super-admins are brigade-scoped
+      if (!isSuperAdmin && myBrigade) {
+        profilesQ = profilesQ.eq("brigade", myBrigade);
+      }
+
       const [profilesRes, rolesRes] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .or("user_type.eq.battalion,department.eq.battalion")
-          .order("created_at", { ascending: false }),
+        profilesQ.order("created_at", { ascending: false }),
         supabase.from("user_roles").select("user_id, role"),
       ]);
 
@@ -280,7 +293,7 @@ const BattalionUsersManagement = () => {
     );
   }
 
-  if (!isSuperAdmin) return null;
+  if (!canAccess) return null;
 
   const battalionAdminCount = profiles.filter(p => getUserRole(p.user_id) === 'battalion_admin').length;
   const regularCount = profiles.filter(p => getUserRole(p.user_id) === 'driver').length;
@@ -476,9 +489,16 @@ const BattalionUsersManagement = () => {
                     <SelectValue placeholder="בחר הרשאה" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border z-[10000]">
-                    <SelectItem value="super_admin">מנהל ראשי (מח"ט)</SelectItem>
-                    <SelectItem value="battalion_admin">מנהל גדוד תע"ם</SelectItem>
-                    <SelectItem value="driver">משתמש גדוד רגיל</SelectItem>
+                    {getAssignableRoles(role, 'battalion').map(r => (
+                      <SelectItem key={r} value={r}>
+                        {r === 'battalion_admin' ? 'מנהל גדוד תע"ם' :
+                         r === 'driver' ? 'משתמש גדוד רגיל' :
+                         r === 'super_admin' ? 'מנהל ראשי (מח"ט)' : r}
+                      </SelectItem>
+                    ))}
+                    {getAssignableRoles(role, 'battalion').length === 0 && (
+                      <SelectItem value={editFormData.role} disabled>{editFormData.role}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

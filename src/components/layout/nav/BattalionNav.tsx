@@ -41,7 +41,7 @@ export function BattalionNav({ onClose }: Props) {
           <NavMenuItem to="/equipment-tracking" label='מעקב צל"ם' icon={Package} iconBg="from-sky-500 to-blue-600" theme="indigo" onClose={onClose} />
         </>
       )}
-      {isSuperAdmin && <NavMenuItem to="/battalion-users-management" label="ניהול משתמשים" icon={UserCog} iconBg="from-pink-500 to-pink-600" theme="gold" onClose={onClose} />}
+      {(isSuperAdmin || isAdmin || isBattalionAdmin) && <NavMenuItem to="/battalion-users-management" label='ניהול משתמשי גדוד תע"ם' icon={UserCog} iconBg="from-pink-500 to-pink-600" theme="gold" onClose={onClose} />}
     </>
   );
 }

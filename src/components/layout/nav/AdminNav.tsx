@@ -61,7 +61,9 @@ export function AdminNav({ onClose }: Props) {
       {canAccessSafetyScores && <NavMenuItem to="/safety-scores" label="ציוני בטיחות" icon={Gauge} iconBg="from-sky-500 to-sky-600" theme="gold" onClose={onClose} />}
       {canAccessAccidents && <NavMenuItem to="/accidents-tracking" label="מעקב תאונות" icon={Car} iconBg="from-orange-500 to-orange-600" theme="gold" onClose={onClose} />}
       <NavMenuItem to="/know-the-area" label="הכר את הגזרה" icon={Map} iconBg="from-cyan-500 to-cyan-600" theme="gold" onClose={onClose} />
-      {canAccessUsersManagement && <NavMenuItem to="/users-management" label="ניהול משתמשים" icon={UserCog} iconBg="from-pink-500 to-pink-600" theme="gold" onClose={onClose} />}
+      {canAccessUsersManagement && <NavMenuItem to="/users-management" label="ניהול משתמשי נהגים" icon={UserCog} iconBg="from-pink-500 to-pink-600" theme="gold" onClose={onClose} />}
+      {(isAdmin || isSuperAdmin) && !superAdminMaphatchContext && <NavMenuItem to="/battalion-users-management" label='ניהול משתמשי גדוד תע"ם' icon={UserCog} iconBg="from-indigo-500 to-indigo-700" theme="gold" onClose={onClose} />}
+      {role === 'brigade_admin' && <NavMenuItem to="/maphatch-users" label='ניהול משתמשי מפח"ט' icon={UserCog} iconBg="from-emerald-500 to-teal-600" theme="gold" onClose={onClose} />}
       {(isAdmin || isPlatoonCommander || isSuperAdmin || realIsDivisionAdmin) && <NavMenuItem to="/brigade-outposts" label="ניהול מוצבי החטיבה" icon={Building} iconBg="from-emerald-500 to-teal-600" theme="gold" onClose={onClose} />}
       {canAccessCleaningManagement && <NavMenuItem to="/cleaning-parades-admin" label="ניהול מסדרי ניקיון" icon={Sparkles} iconBg="from-purple-500 to-pink-500" theme="gold" onClose={onClose} />}
       {canAccessCourses && <NavMenuItem to="/courses-management" label="ניהול קורסים" icon={GraduationCap} iconBg="from-indigo-500 to-violet-600" theme="gold" onClose={onClose} />}

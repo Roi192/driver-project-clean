@@ -180,17 +180,45 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 8. Role assignment authorization ─────────────────────────────────────
+    // ── 8. Domain transfer authorization + role assignment ───────────────────
+    const incomingUserType = profileUpdates !== undefined
+      ? ((profileUpdates as Record<string, unknown>)?.user_type as string | undefined)
+      : undefined;
+
+    // Detect domain change: compare new user_type (if being set) vs current
+    const isDomainTransfer = incomingUserType !== undefined
+      && getUserDomain(incomingUserType) !== targetDomain;
+
+    if (isDomainTransfer) {
+      const DOMAIN_TRANSFER_ROLES = ['super_admin', 'ravshatz', 'brigade_admin', 'division_admin'];
+      if (!DOMAIN_TRANSFER_ROLES.includes(callerRole)) {
+        return errResponse(
+          corsHeaders, 403,
+          'FORBIDDEN',
+          `Role '${callerRole}' cannot transfer users between domains`,
+        );
+      }
+      log('domain_transfer_authorized', {
+        callerRole,
+        fromDomain: targetDomain,
+        toDomain: getUserDomain(incomingUserType!),
+      });
+    }
+
     if (newRole !== undefined) {
-      const assignable = getAssignableRoles(callerRole, targetDomain)
+      // Use the NEW domain when checking role assignment during a domain transfer
+      const domainForRoleCheck: UserDomain = isDomainTransfer
+        ? getUserDomain(incomingUserType!)
+        : targetDomain;
+      const assignable = getAssignableRoles(callerRole, domainForRoleCheck)
       if (!assignable.includes(newRole)) {
         return errResponse(
           corsHeaders, 403,
           'FORBIDDEN',
-          `Role '${callerRole}' cannot assign '${newRole}' to a ${targetDomain} domain user`,
+          `Role '${callerRole}' cannot assign '${newRole}' to a ${domainForRoleCheck} domain user`,
         )
       }
-      log('role_assignment_authorized', { callerRole, targetDomain, newRole })
+      log('role_assignment_authorized', { callerRole, domainForRoleCheck, newRole })
     }
 
     log('authorization_passed')

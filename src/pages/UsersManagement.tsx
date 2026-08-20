@@ -79,6 +79,15 @@ interface Soldier {
 }
 
 // Role display names in Hebrew
+// Maphatch departments (same as MaphatchDeptSelector)
+const MAPHATCH_DEPARTMENTS = [
+  'לוגיסטיקה', 'אג"ם', 'מודיעין', 'לשכה', 'רפואה', 'תקשוב', 'הנדסה', 'משא"ן', 'הגמ"ר', 'איסוף',
+] as const;
+
+// Can the current actor transfer users between domains?
+// (only brigade_admin and super_admin can change a user's domain)
+const DOMAIN_TRANSFER_ROLES: AppRole[] = ['brigade_admin', 'super_admin', 'division_admin', 'ravshatz'];
+
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: "מנהל ראשי",
   division_admin: "מנהל מפאו\"ג איו\"ש",
@@ -127,6 +136,7 @@ const UsersManagement = () => {
     department: "planag",
     battalion_name: "",
     brigade: "binyamin",
+    maphatch_department: "",
   });
   const [saving, setSaving] = useState(false);
   
@@ -175,12 +185,11 @@ const UsersManagement = () => {
             // Battalion admins see only their battalion's users
             q = q.eq("user_type", "battalion");
             if (myBattalionName) q = q.eq("battalion_name", myBattalionName);
-          } else if (!isBrigadeAdmin) {
-            // brigade_admin sees everyone in their brigade (no dept filter)
-            // all others see only planag / non-battalion
-            q = q
-              .or("department.eq.planag,department.is.null")
-              .neq("user_type", "battalion");
+          } else {
+            // admin, platoon_commander, brigade_admin on /users-management: drivers domain only.
+            // getUserDomain: null/'driver'/'commander'/'officer' → drivers; 'battalion'/'maphatch'/'division' → other domains.
+            // Filter positively to only include drivers-domain user_types.
+            q = q.or("user_type.is.null,user_type.eq.driver,user_type.eq.commander,user_type.eq.officer");
           }
 
           if (effectiveBrigadeFilter) {
@@ -213,13 +222,9 @@ const UsersManagement = () => {
           const orphanProfiles: UserProfile[] = emailData.authUsers
             .filter((u: any) => {
               if (existingUserIds.has(u.id)) return false;
-              const dept = u.user_metadata?.department;
               const utype = u.user_metadata?.user_type;
-              // brigade_admin sees all orphans in their brigade; others skip battalion
-              if (!isBrigadeAdmin) {
-                if (utype === "battalion") return false;
-                if (dept === "battalion") return false;
-              }
+              // /users-management always shows only drivers domain — exclude all other domains
+              if (utype === "battalion" || utype === "maphatch" || utype === "division") return false;
               // Brigade scoping for orphan auth users
               if (effectiveBrigadeFilter) {
                 const userBrigade = u.user_metadata?.brigade || 'binyamin';
@@ -260,19 +265,29 @@ const UsersManagement = () => {
   };
 
   const handleEditClick = (profile: UserProfile) => {
+    const pAny = profile as any;
+    // Map stored user_type to domain-select value ("planag" | "battalion" | "maphatch")
+    const profileUserType: string = pAny.user_type || 'driver';
+    const domainSelectValue =
+      profileUserType === 'maphatch' ? 'maphatch' :
+      (profileUserType === 'battalion' || pAny.department === 'battalion') ? 'battalion' :
+      'planag';
+
     setEditingUser(profile);
     setEditFormData({
       full_name: profile.full_name || "",
       outpost: profile.outpost || "",
-      user_type: profile.user_type || "driver",
+      user_type: profileUserType,
       region: profile.region || "",
       military_role: profile.military_role || "",
       platoon: profile.platoon || "",
       personal_number: profile.personal_number || "",
       role: getUserRole(profile.user_id),
-      department: (profile as any).department || "planag",
-      battalion_name: (profile as any).battalion_name || "",
-      brigade: (profile as any).brigade || myBrigade || "binyamin",
+      department: domainSelectValue,
+      battalion_name: pAny.battalion_name || "",
+      brigade: pAny.brigade || myBrigade || "binyamin",
+      // for maphatch: the specific dept is stored in profiles.department (e.g., 'לוגיסטיקה')
+      maphatch_department: domainSelectValue === 'maphatch' ? (pAny.department || '') : '',
     });
   };
 
@@ -283,6 +298,21 @@ const UsersManagement = () => {
       setSaving(true);
 
       // Admin updates must go through backend function (bypasses RLS)
+      // Compute the stored fields for each domain:
+      //   planag  → user_type stays driver/commander/officer, department='planag'
+      //   battalion → user_type='battalion', department=null, battalion_name=X
+      //   maphatch  → user_type='maphatch', department=<specific dept name>, battalion_name=null
+      const storedUserType =
+        editFormData.department === "battalion" ? "battalion" :
+        editFormData.department === "maphatch" ? "maphatch" :
+        (editFormData.user_type || null);
+      const storedDepartment =
+        editFormData.department === "maphatch" ? (editFormData.maphatch_department || null) :
+        editFormData.department === "battalion" ? null :
+        "planag";
+      const storedBattalionName =
+        editFormData.department === "battalion" ? (editFormData.battalion_name || null) : null;
+
       const { error: updateError } = await supabase.functions.invoke("update-user-admin", {
         body: {
           targetUserId: editingUser.user_id,
@@ -291,13 +321,13 @@ const UsersManagement = () => {
           profileUpdates: {
             full_name: editFormData.full_name,
             outpost: editFormData.outpost || null,
-            user_type: editFormData.department === "battalion" ? "battalion" : (editFormData.user_type || null),
+            user_type: storedUserType,
             region: editFormData.region || null,
             military_role: editFormData.military_role || null,
             platoon: editFormData.platoon || null,
             personal_number: editFormData.personal_number || null,
-            department: editFormData.department || "planag",
-            battalion_name: editFormData.department === "battalion" ? (editFormData.battalion_name || null) : null,
+            department: storedDepartment,
+            battalion_name: storedBattalionName,
             brigade: canSeeAllBrigades ? (editFormData.brigade || "binyamin") : (myBrigade || "binyamin"),
           },
         },
@@ -482,10 +512,38 @@ const UsersManagement = () => {
   };
 
   // Domain-aware role options for the edit dialog.
-  // Re-computed whenever editFormData.user_type changes.
+  // user_type is kept in sync with the domain selector, so getUserDomain(user_type) gives the right domain.
   const targetDomain: UserDomain = getUserDomain(editFormData.user_type);
   const assignableRoles: AppRole[] = getAssignableRoles(role, targetDomain);
   const domainRoleLabels = DOMAIN_ROLE_LABELS[targetDomain];
+  // Only brigade_admin / super_admin may transfer a user between domains
+  const canChangeDomain: boolean = role !== null && DOMAIN_TRANSFER_ROLES.includes(role as AppRole);
+
+  // Handler: domain-selector change — syncs user_type and resets role if needed
+  const handleDomainChange = (newDomain: string) => {
+    setEditFormData(prev => {
+      let newUserType = prev.user_type;
+      if (newDomain === 'battalion') newUserType = 'battalion';
+      else if (newDomain === 'maphatch') newUserType = 'maphatch';
+      else if (prev.user_type === 'battalion' || prev.user_type === 'maphatch') newUserType = 'driver';
+
+      const newTargetDomain = getUserDomain(newUserType);
+      const validRoles = getAssignableRoles(role, newTargetDomain);
+      const newRole: AppRole = validRoles.includes(prev.role)
+        ? prev.role
+        : ((validRoles[0] as AppRole) || 'driver' as AppRole);
+
+      return {
+        ...prev,
+        department: newDomain,
+        user_type: newUserType,
+        role: newRole,
+        // Clear fields that don't apply to the new domain
+        maphatch_department: newDomain !== 'maphatch' ? '' : prev.maphatch_department,
+        battalion_name: newDomain !== 'battalion' ? '' : prev.battalion_name,
+      };
+    });
+  };
 
   if (roleLoading || loading) {
     return (
@@ -809,25 +867,31 @@ const UsersManagement = () => {
                 />
               </div>
 
+              {/* Domain (מחלקה) selector — only brigade_admin / super_admin can change */}
               <div className="space-y-2">
                 <Label className="text-foreground">מחלקה (שיוך)</Label>
                 <Select
                   value={editFormData.department}
-                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, department: value }))}
+                  onValueChange={canChangeDomain ? handleDomainChange : undefined}
+                  disabled={!canChangeDomain}
                 >
                   <SelectTrigger className="h-12 rounded-xl bg-background text-foreground border-border">
                     <SelectValue placeholder="בחר מחלקה" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border z-[10000]">
-                    <SelectItem value="planag">פלנ"ג</SelectItem>
-                    <SelectItem value="battalion">גדוד</SelectItem>
+                    <SelectItem value="planag">נהגים (פלנ&quot;ג)</SelectItem>
+                    <SelectItem value="battalion">גדוד תע&quot;ם</SelectItem>
+                    <SelectItem value="maphatch">מפח&quot;ט</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  שינוי המחלקה יעביר את המשתמש לניהול המשתמשים של המחלקה הנבחרת
-                </p>
+                {canChangeDomain && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    שינוי מחלקה יעביר את המשתמש לניהול המשתמשים של המחלקה החדשה
+                  </p>
+                )}
               </div>
 
+              {/* Battalion name — shown only when domain=battalion */}
               {editFormData.department === "battalion" && (
                 <div className="space-y-2">
                   <Label className="text-foreground">שם הגדוד</Label>
@@ -839,7 +903,29 @@ const UsersManagement = () => {
                   />
                 </div>
               )}
-              
+
+              {/* Maphatch department (אגף) — shown only when domain=maphatch */}
+              {editFormData.department === "maphatch" && (
+                <div className="space-y-2">
+                  <Label className="text-foreground">אגף *</Label>
+                  <Select
+                    value={editFormData.maphatch_department}
+                    onValueChange={(v) => setEditFormData(prev => ({ ...prev, maphatch_department: v }))}
+                  >
+                    <SelectTrigger className="h-12 rounded-xl bg-background text-foreground border-border">
+                      <SelectValue placeholder="בחר אגף" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border z-[10000]">
+                      {MAPHATCH_DEPARTMENTS.map(dept => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* user_type — only relevant for drivers domain */}
+              {editFormData.department === "planag" && (
               <div className="space-y-2">
                 <Label className="text-foreground">סוג משתמש</Label>
                 <Select
@@ -856,6 +942,7 @@ const UsersManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
+              )}
               
               <div className="space-y-2">
                 <Label className="text-foreground">מחלקה</Label>
@@ -898,7 +985,7 @@ const UsersManagement = () => {
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={saving || !editFormData.full_name}
+                disabled={saving || !editFormData.full_name || (editFormData.department === "maphatch" && !editFormData.maphatch_department)}
                 className="flex-1 h-12 rounded-xl bg-gradient-to-r from-primary to-accent"
               >
                 {saving && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}

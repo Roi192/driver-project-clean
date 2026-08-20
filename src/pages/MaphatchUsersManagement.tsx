@@ -51,7 +51,8 @@ const MaphatchUsersManagement = () => {
   const { user, isSuperAdmin, role } = useAuth();
 
   const isMaphatchAdmin = role === 'maphatch_admin';
-  const canAccess = isSuperAdmin || isMaphatchAdmin;
+  const isBrigadeAdmin = role === 'brigade_admin';
+  const canAccess = isSuperAdmin || isMaphatchAdmin || isBrigadeAdmin;
 
   const [myDepartment, setMyDepartment] = useState<string | null>(null);
   const [myBrigade, setMyBrigade] = useState<string | null>(null);
@@ -74,13 +75,17 @@ const MaphatchUsersManagement = () => {
         brigade: sessionStorage.getItem('brigadeContext'),
       };
     }
-    if (isMaphatchAdmin && user?.id) {
+    if ((isMaphatchAdmin || isBrigadeAdmin) && user?.id) {
       const { data } = await supabase
         .from('profiles')
         .select('department, brigade')
         .eq('user_id', user.id)
         .maybeSingle();
-      return { dept: data?.department || null, brigade: data?.brigade || null };
+      // brigade_admin sees ALL departments → dept = null (no dept filter)
+      return {
+        dept: isBrigadeAdmin ? null : (data?.department || null),
+        brigade: data?.brigade || null,
+      };
     }
     return { dept: null, brigade: null };
   };
@@ -94,22 +99,25 @@ const MaphatchUsersManagement = () => {
       const { dept, brigade } = await getContext();
       setMyDepartment(dept);
       setMyBrigade(brigade);
-      if (dept && brigade) await fetchUsers(dept, brigade);
+      // brigade_admin: dept=null but brigade is set → load all depts
+      if (brigade) await fetchUsers(dept, brigade);
       else setLoading(false);
     };
     init();
   }, [canAccess, user?.id]);
 
-  const fetchUsers = async (dept: string, brigade: string) => {
+  const fetchUsers = async (dept: string | null, brigade: string) => {
     try {
       setLoading(true);
-      const profilesRes = await supabase
+      let q = supabase
         .from('profiles')
         .select('*')
         .eq('user_type', 'maphatch')
-        .eq('department', dept)
-        .eq('brigade', brigade)
-        .order('created_at', { ascending: false });
+        .eq('brigade', brigade);
+      // maphatch_admin and super_admin (with dept context) are scoped to their department.
+      // brigade_admin sees all departments in their brigade.
+      if (dept) q = q.eq('department', dept);
+      const profilesRes = await q.order('created_at', { ascending: false });
       if (profilesRes.error) throw profilesRes.error;
 
       const fetchedProfiles = profilesRes.data || [];
@@ -162,7 +170,7 @@ const MaphatchUsersManagement = () => {
       if (error) throw error;
       toast.success('המשתמש עודכן בהצלחה');
       setEditingUser(null);
-      if (myDepartment && myBrigade) await fetchUsers(myDepartment, myBrigade);
+      if (myBrigade) await fetchUsers(myDepartment, myBrigade);
     } catch (err: any) {
       toast.error(`שגיאה בעדכון: ${err?.message || err}`);
     } finally {
@@ -180,8 +188,12 @@ const MaphatchUsersManagement = () => {
     <AppLayout>
       <div className="p-4 max-w-4xl mx-auto" dir="rtl">
         <PageHeader
-          title={`ניהול משתמשים — ${myDepartment || ''}`}
-          subtitle={`אגף ${myDepartment || ''} · מפח"ט ${myBrigade || ''}`}
+          title={isBrigadeAdmin && !myDepartment
+            ? `ניהול משתמשי מפח"ט — ${myBrigade || ''}`
+            : `ניהול משתמשים — ${myDepartment || ''}`}
+          subtitle={isBrigadeAdmin && !myDepartment
+            ? `כל אגפי מפח"ט · חטיבת ${myBrigade || ''}`
+            : `אגף ${myDepartment || ''} · מפח"ט ${myBrigade || ''}`}
           icon={Users}
         />
 
@@ -189,10 +201,10 @@ const MaphatchUsersManagement = () => {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : !myDepartment || !myBrigade ? (
+        ) : !myBrigade ? (
           <div className="text-center py-20 text-slate-400">
             <Building2 className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p>לא נמצאה חטיבה / אגף — חזור לבחירת מחלקה</p>
+            <p>לא נמצאה חטיבה — חזור לבחירת מחלקה</p>
           </div>
         ) : (
           <>
@@ -306,7 +318,7 @@ const MaphatchUsersManagement = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="maphatch_user">משתמש רגיל (צפייה בלבד)</SelectItem>
+                  <SelectItem value="maphatch_user">משתמש אגף (צפייה בלבד)</SelectItem>
                   <SelectItem value="maphatch_admin">מנהל אגף (יכול להוסיף אירועים)</SelectItem>
                 </SelectContent>
               </Select>
