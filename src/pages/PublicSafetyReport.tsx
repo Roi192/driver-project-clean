@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   AlertTriangle, Camera, Send, CheckCircle, X,
-  Locate, Loader2, ChevronDown,
+  Locate, Loader2, ChevronDown, Map as MapIcon, Satellite,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import unitLogo from "@/assets/unit-logo.png";
 
-// ─── Constants (matching internal form exactly) ─────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const BRIGADES = [
   { code: "binyamin", name: "חטיבת בנימין" },
@@ -30,17 +33,17 @@ const SAFETY_CATEGORIES = [
 ];
 
 const DRIVER_TYPES_PLANAG = [
-  { value: "security", label: 'נהג בט"ש' },
-  { value: "combat",   label: "נהג לוחם" },
+  { value: "security",        label: 'נהג בט"ש' },
+  { value: "combat",          label: "נהג לוחם" },
   { value: "vehicle_officer", label: "נהג קצין רכב" },
-  { value: "general",  label: "נהג אגפי" },
-  { value: "other",    label: "אחר" },
+  { value: "general",         label: "נהג אגפי" },
+  { value: "other",           label: "אחר" },
 ];
 
 const DRIVER_TYPES_BATTALION = [
-  { value: "fighter", label: "נהג לוחם" },
-  { value: "palsar",  label: 'נהג פלס"ם' },
-  { value: "general", label: "נהג כללי" },
+  { value: "fighter",  label: "נהג לוחם" },
+  { value: "palsar",   label: 'נהג פלס"ם' },
+  { value: "general",  label: "נהג כללי" },
   { value: "security", label: 'נהג בט"ש' },
 ];
 
@@ -50,7 +53,6 @@ const VEHICLE_TYPES = [
 ];
 
 const VEHICLE_MODEL_TYPES = ["סיור קל", "מנהלה", "אזרחי", "רכב אורגני", "אחר"];
-
 const POPULATION_TYPES = ["קבע", "סדיר", "מילואים", "אזרח"];
 
 const EVENT_TYPES_ROAD = [
@@ -74,10 +76,139 @@ const DAMAGE_OPTIONS = [
   "אין נזק אין נפגעים",
 ];
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Leaflet setup ───────────────────────────────────────────────────────────
+
+const TILE_URLS = {
+  map:       "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+};
+
+const DEFAULT_CENTER: [number, number] = [31.88, 35.22];
+
+const RED_PIN = new L.DivIcon({
+  html: `<div style="width:20px;height:20px;background:#ef4444;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,0.5)"></div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+  className: "",
+});
+
+// ─── Map sub-components ──────────────────────────────────────────────────────
+
+function MapClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) { onPick(e.latlng.lat, e.latlng.lng); },
+    ...({ tap(e: L.LeafletMouseEvent) { onPick(e.latlng.lat, e.latlng.lng); } } as Record<string, unknown>),
+  });
+  return null;
+}
+
+function FlyToPosition({ position }: { position: [number, number] | null }) {
+  const map = useMap();
+  const prev = useRef<string>("");
+  useEffect(() => {
+    if (!position) return;
+    const key = position.join(",");
+    if (key === prev.current) return;
+    prev.current = key;
+    map.flyTo(position, 15, { duration: 0.5 });
+  }, [position, map]);
+  return null;
+}
+
+function InlineMapPicker({
+  lat, lng, onPick, onGPS, gpsLoading,
+}: {
+  lat: number | null;
+  lng: number | null;
+  onPick: (lat: number, lng: number) => void;
+  onGPS: () => void;
+  gpsLoading: boolean;
+}) {
+  const [isSatellite, setIsSatellite] = useState(false);
+  const position: [number, number] | null = lat !== null && lng !== null ? [lat, lng] : null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border border-slate-700/60 shadow-xl" style={{ position: "relative" }}>
+      <div style={{ height: 260 }}>
+        <MapContainer
+          {...({ tap: true, tapTolerance: 25 } as Record<string, unknown>)}
+          center={position ?? DEFAULT_CENTER}
+          zoom={position ? 15 : 10}
+          style={{ height: "100%", width: "100%" }}
+          zoomControl={false}
+          maxBounds={[[29.5, 34.2], [33.3, 35.9]]}
+          maxBoundsViscosity={1.0}
+          minZoom={8}
+        >
+          <TileLayer url={TILE_URLS[isSatellite ? "satellite" : "map"]} />
+          <MapClickHandler onPick={onPick} />
+          <FlyToPosition position={position} />
+          {position && <Marker position={position} icon={RED_PIN} />}
+        </MapContainer>
+      </div>
+
+      {/* Satellite toggle — top right */}
+      <button
+        type="button"
+        onClick={() => setIsSatellite(s => !s)}
+        style={{ position: "absolute", top: 10, right: 10, zIndex: 1000 }}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/88 backdrop-blur-sm border border-slate-600/50 text-white text-xs font-bold shadow-lg hover:bg-slate-800 transition-all"
+      >
+        {isSatellite ? <MapIcon className="w-3.5 h-3.5" /> : <Satellite className="w-3.5 h-3.5" />}
+        {isSatellite ? "מפה" : "לוויין"}
+      </button>
+
+      {/* GPS button — bottom right */}
+      <button
+        type="button"
+        onClick={onGPS}
+        disabled={gpsLoading}
+        style={{ position: "absolute", bottom: 10, right: 10, zIndex: 1000 }}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/88 backdrop-blur-sm border border-slate-600/50 text-white text-xs font-bold shadow-lg hover:bg-slate-800 transition-all disabled:opacity-50"
+      >
+        {gpsLoading
+          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          : <Locate className="w-3.5 h-3.5 text-primary" />}
+        {gpsLoading ? "מאתר..." : "מיקום נוכחי"}
+      </button>
+
+      {/* Centre instruction — shown only when no pin placed yet */}
+      {!position && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 999,
+            pointerEvents: "none",
+          }}
+        >
+          <div className="bg-slate-900/80 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-xs font-semibold text-center shadow-lg border border-slate-700/40">
+            לחץ על המפה לסימון מיקום
+          </div>
+        </div>
+      )}
+
+      {/* Coordinates bar at bottom of map */}
+      {position && (
+        <div className="px-4 py-2 bg-slate-900/90 flex items-center gap-2 border-t border-slate-700/40">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+          <span className="text-xs text-emerald-400 font-mono">
+            {position[0].toFixed(5)}, {position[1].toFixed(5)}
+          </span>
+          <span className="text-xs text-slate-500 mr-auto">מיקום מסומן ✓</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface FwEntry { id: string; name: string; parent_id: string | null }
 interface OutpostEntry { id: string; name: string; region: string | null }
+
 interface FormData {
   brigade: string;
   safety_category: string;
@@ -110,7 +241,6 @@ interface FormData {
   damage_and_casualties: string;
   initial_lessons: string;
   reporter_name: string;
-  reporter_phone: string;
 }
 
 interface ImagePreview { base64: string; name: string; type: string; preview: string }
@@ -149,10 +279,9 @@ const EMPTY: FormData = {
   damage_and_casualties: "",
   initial_lessons: "",
   reporter_name: "",
-  reporter_phone: "",
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 async function compressImage(file: File): Promise<ImagePreview> {
   return new Promise((resolve, reject) => {
@@ -182,15 +311,17 @@ async function compressImage(file: File): Promise<ImagePreview> {
 }
 
 const isBattalionFw = (fw: string) => fw.startsWith("sector:");
-const isMagavFw = (fw: string) => /מג.?ב/.test(fw);
+const isMagavFw    = (fw: string) => /מג.?ב/.test(fw);
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
+// ─── Form sub-components ─────────────────────────────────────────────────────
 
 const inputCls = "w-full bg-slate-800/70 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary/60 transition-colors text-base";
-const selCls = inputCls + " appearance-none cursor-pointer";
-const errCls = " border-red-500";
+const selCls   = inputCls + " appearance-none cursor-pointer";
+const errCls   = " border-red-500";
 
-function Field({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+function Field({ label, required, error, children }: {
+  label: string; required?: boolean; error?: string; children: React.ReactNode;
+}) {
   return (
     <div className="mb-3">
       <label className="block text-sm font-bold text-slate-300 mb-1.5">
@@ -219,7 +350,7 @@ function Sel({ value, onChange, options, placeholder, className = "" }: {
 
 function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
   return (
-    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
+    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4 shadow-lg">
       <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-700/60">
         <div className={`w-2.5 h-7 rounded-full ${color}`} />
         <h2 className="font-black text-base text-white">{title}</h2>
@@ -229,19 +360,20 @@ function Section({ title, color, children }: { title: string; color: string; chi
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PublicSafetyReport() {
-  const [form, setForm] = useState<FormData>(EMPTY);
-  const [images, setImages] = useState<ImagePreview[]>([]);
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [form, setForm]           = useState<FormData>(EMPTY);
+  const [images, setImages]       = useState<ImagePreview[]>([]);
+  const [errors, setErrors]       = useState<Partial<Record<keyof FormData, string>>>({});
+  const [imageError, setImageError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted]   = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [frameworks, setFrameworks] = useState<FwEntry[]>([]);
-  const [outposts, setOutposts] = useState<OutpostEntry[]>([]);
-  const [fwLoading, setFwLoading] = useState(false);
+  const [frameworks, setFrameworks]   = useState<FwEntry[]>([]);
+  const [outposts, setOutposts]       = useState<OutpostEntry[]>([]);
+  const [fwLoading, setFwLoading]     = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const set = useCallback(<K extends keyof FormData>(k: K, v: FormData[K]) => {
@@ -249,9 +381,9 @@ export default function PublicSafetyReport() {
     setErrors(e => { const n = { ...e }; delete n[k]; return n; });
   }, []);
 
-  // ── Derived options (same logic as internal form) ───────────────────────
-  const rootFws = frameworks.filter(f => !f.parent_id);
-  const uniqueRegions = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
+  // ── Derived options ──────────────────────────────────────────────────────
+  const rootFws        = frameworks.filter(f => !f.parent_id);
+  const uniqueRegions  = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
 
   const frameworkOptions = [
     ...rootFws.map(f => ({ value: f.name, label: f.name })),
@@ -260,16 +392,15 @@ export default function PublicSafetyReport() {
   ];
 
   const selectedFwParent = rootFws.find(f => f.name === form.framework_type);
-  const deptOptions = selectedFwParent
+  const deptOptions      = selectedFwParent
     ? frameworks.filter(f => f.parent_id === selectedFwParent.id).map(f => ({ value: f.name, label: f.name }))
     : [];
-  const hasDepts = deptOptions.length > 0;
-
+  const hasDepts    = deptOptions.length > 0;
   const isBattalion = isBattalionFw(form.framework_type);
-  const isMagav = isMagavFw(form.framework_type);
+  const isMagav     = isMagavFw(form.framework_type);
   const isRoadSafety = form.safety_category === "בטיחות בדרכים";
 
-  const regionOptions = uniqueRegions.map(r => ({ value: r, label: r }));
+  const regionOptions  = uniqueRegions.map(r => ({ value: r, label: r }));
   const selectedRegion = isBattalion ? form.framework_type.replace("sector:", "") : form.region;
   const outpostOptions = outposts
     .filter(o => !selectedRegion || o.region === selectedRegion)
@@ -277,7 +408,7 @@ export default function PublicSafetyReport() {
 
   const driverTypes = isBattalion ? DRIVER_TYPES_BATTALION : DRIVER_TYPES_PLANAG;
 
-  // ── Fetch form data when brigade changes ────────────────────────────────
+  // ── Fetch form data when brigade changes ─────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     setFwLoading(true);
@@ -300,59 +431,70 @@ export default function PublicSafetyReport() {
     return () => { cancelled = true; };
   }, [form.brigade]);
 
-  // ── GPS capture ─────────────────────────────────────────────────────────
-  const captureGPS = () => {
+  // ── GPS capture ──────────────────────────────────────────────────────────
+  const captureGPS = useCallback(() => {
     if (!navigator.geolocation) return;
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setForm(f => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude })); setGpsLoading(false); },
+      (pos) => {
+        setForm(f => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+        setGpsLoading(false);
+      },
       () => setGpsLoading(false),
       { timeout: 12000, enableHighAccuracy: true },
     );
-  };
+  }, []);
 
-  // ── Images ──────────────────────────────────────────────────────────────
+  // ── Images ───────────────────────────────────────────────────────────────
   const addImages = async (files: FileList) => {
     const remaining = 5 - images.length;
     if (remaining <= 0) return;
     const compressed = await Promise.all(Array.from(files).slice(0, remaining).map(compressImage));
-    setImages(prev => [...prev, ...compressed]);
+    setImages(prev => {
+      const next = [...prev, ...compressed];
+      if (next.length > 0) setImageError("");
+      return next;
+    });
   };
 
   // ── Validate ─────────────────────────────────────────────────────────────
   const validate = (): boolean => {
     const e: typeof errors = {};
-    if (!form.safety_category) e.safety_category = "שדה חובה";
-    if (!form.title.trim())    e.title = "שדה חובה";
-    if (!form.event_date)      e.event_date = "שדה חובה";
-    if (!form.event_time)      e.event_time = "שדה חובה";
-    if (!form.location_text.trim()) e.location_text = "שדה חובה";
-    if (!form.framework_type)  e.framework_type = "שדה חובה";
-    if (!form.involved_soldiers.trim()) e.involved_soldiers = "שדה חובה";
-    if (!form.description.trim())      e.description = "שדה חובה";
-    if (!form.event_outcomes.trim())   e.event_outcomes = "שדה חובה";
+    if (!form.safety_category)              e.safety_category = "שדה חובה";
+    if (!form.title.trim())                 e.title = "שדה חובה";
+    if (!form.event_date)                   e.event_date = "שדה חובה";
+    if (!form.event_time)                   e.event_time = "שדה חובה";
+    if (!form.location_text.trim())         e.location_text = "שדה חובה";
+    if (!form.framework_type)               e.framework_type = "שדה חובה";
+    if (!form.involved_soldiers.trim())     e.involved_soldiers = "שדה חובה";
+    if (!form.description.trim())           e.description = "שדה חובה";
+    if (!form.event_outcomes.trim())        e.event_outcomes = "שדה חובה";
     if (!form.person_injury_severity.trim()) e.person_injury_severity = "שדה חובה";
-    if (!form.population_type)         e.population_type = "שדה חובה";
-    if (!form.unit_activity_type.trim()) e.unit_activity_type = "שדה חובה";
-    if (!form.severity)        e.severity = "שדה חובה";
-    if (!form.culpability)     e.culpability = "שדה חובה";
-    if (!form.damage_and_casualties) e.damage_and_casualties = "שדה חובה";
-    if (!form.initial_lessons.trim()) e.initial_lessons = "שדה חובה";
+    if (!form.population_type)              e.population_type = "שדה חובה";
+    if (!form.unit_activity_type.trim())    e.unit_activity_type = "שדה חובה";
+    if (!form.severity)                     e.severity = "שדה חובה";
+    if (!form.culpability)                  e.culpability = "שדה חובה";
+    if (!form.damage_and_casualties)        e.damage_and_casualties = "שדה חובה";
+    if (!form.initial_lessons.trim())       e.initial_lessons = "שדה חובה";
     if (isRoadSafety) {
-      if (!form.driver_type)    e.driver_type = "שדה חובה";
-      if (!form.vehicle_type)   e.vehicle_type = "שדה חובה";
-      if (!form.vehicle_number.trim()) e.vehicle_number = "שדה חובה";
-      if (!form.event_type)     e.event_type = "שדה חובה";
+      if (!form.driver_type)                e.driver_type = "שדה חובה";
+      if (!form.vehicle_type)               e.vehicle_type = "שדה חובה";
+      if (!form.vehicle_number.trim())      e.vehicle_number = "שדה חובה";
+      if (!form.event_type)                 e.event_type = "שדה חובה";
     }
+
+    const hasImgErr = images.length === 0;
+    setImageError(hasImgErr ? "יש לצרף תמונה אחת לפחות" : "");
     setErrors(e);
-    if (Object.keys(e).length > 0) {
+
+    if (Object.keys(e).length > 0 || hasImgErr) {
       const el = document.querySelector("[data-err=true]");
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    return Object.keys(e).length === 0;
+    return Object.keys(e).length === 0 && !hasImgErr;
   };
 
-  // ── Submit ───────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   const submit = async () => {
     if (!validate()) return;
     setSubmitting(true);
@@ -365,19 +507,22 @@ export default function PublicSafetyReport() {
       const { data, error } = await supabase.functions.invoke("submit-safety-report", { body: payload });
       if (error || data?.error) { setSubmitError(data?.error || error?.message || "שגיאה בשליחה. נסה שוב."); return; }
       setSubmitted(true);
-    } catch { setSubmitError("שגיאת רשת. בדוק חיבור ונסה שוב."); }
-    finally { setSubmitting(false); }
+    } catch {
+      setSubmitError("שגיאת רשת. בדוק חיבור ונסה שוב.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // ─── Success screen ──────────────────────────────────────────────────────
+  // ─── Success screen ───────────────────────────────────────────────────────
   if (submitted) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6" dir="rtl">
         <div className="text-center max-w-sm">
-          <div className="relative mx-auto w-24 h-24 mb-6">
-            <div className="absolute inset-0 bg-green-500/30 rounded-full blur-2xl animate-pulse" />
-            <div className="relative w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-2xl">
-              <CheckCircle className="w-12 h-12 text-white" />
+          <div className="relative mx-auto w-28 h-28 mb-6">
+            <div className="absolute inset-0 bg-green-500/25 rounded-full blur-2xl animate-pulse" />
+            <div className="relative w-28 h-28 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-2xl">
+              <CheckCircle className="w-14 h-14 text-white" />
             </div>
           </div>
           <h1 className="text-2xl font-black text-white mb-3">הדיווח נשלח בהצלחה</h1>
@@ -388,8 +533,11 @@ export default function PublicSafetyReport() {
           {isRoadSafety && (
             <p className="text-blue-400 text-sm font-semibold mt-1">🚗 האירוע מופיע גם במעקב תאונות</p>
           )}
+          {form.latitude !== null && (
+            <p className="text-cyan-400 text-sm font-semibold mt-1">📍 המיקום מסומן במפת הכר את הגזרה</p>
+          )}
           <button
-            onClick={() => { setForm(EMPTY); setImages([]); setSubmitted(false); }}
+            onClick={() => { setForm(EMPTY); setImages([]); setSubmitted(false); setImageError(""); }}
             className="mt-8 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all font-semibold"
           >
             דיווח נוסף
@@ -399,9 +547,10 @@ export default function PublicSafetyReport() {
     );
   }
 
-  // ─── Form ────────────────────────────────────────────────────────────────
+  // ─── Form ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 text-white" dir="rtl">
+
       {/* Top bar */}
       <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur border-b border-gold/20 px-4 py-3 flex items-center gap-3">
         <img src={unitLogo} alt="סמל" className="w-9 h-9 object-contain drop-shadow-lg" />
@@ -473,37 +622,31 @@ export default function PublicSafetyReport() {
             </Field>
           </div>
 
-          <Field label="מיקום האירוע" required error={errors.location_text}>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={form.location_text}
-                onChange={e => set("location_text", e.target.value)}
-                placeholder="לדוגמה: כביש 60, צומת בית אל..."
-                className={inputCls + " flex-1" + (errors.location_text ? errCls : "")}
-                data-err={!!errors.location_text || undefined}
-              />
-              {isRoadSafety && (
-                <button
-                  type="button"
-                  onClick={captureGPS}
-                  disabled={gpsLoading}
-                  title="קלוט מיקום GPS"
-                  className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-700 hover:bg-slate-600 border border-slate-600 flex items-center justify-center transition-colors disabled:opacity-50"
-                >
-                  {gpsLoading ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Locate className="w-5 h-5 text-primary" />}
-                </button>
-              )}
-            </div>
-            {isRoadSafety && form.latitude !== null && (
-              <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
-                ✓ מיקום GPS נלכד ({form.latitude.toFixed(5)}, {form.longitude?.toFixed(5)})
-              </p>
-            )}
-            {isRoadSafety && form.latitude === null && (
-              <p className="text-xs text-amber-400 mt-1">לחץ על הכפתור לקליטת מיקום GPS (מומלץ לבטיחות בדרכים)</p>
-            )}
+          <Field label="תיאור מיקום האירוע" required error={errors.location_text}>
+            <input
+              type="text"
+              value={form.location_text}
+              onChange={e => set("location_text", e.target.value)}
+              placeholder="לדוגמה: כביש 60, צומת בית אל..."
+              className={inputCls + (errors.location_text ? errCls : "")}
+              data-err={!!errors.location_text || undefined}
+            />
           </Field>
+
+          {/* Inline map picker — always shown */}
+          <div className="mb-3">
+            <label className="block text-sm font-bold text-slate-300 mb-1.5">
+              סימון מיקום במפה
+              <span className="text-slate-500 text-xs font-normal mr-2">לחץ על המפה לדקירת מיקום מדויק</span>
+            </label>
+            <InlineMapPicker
+              lat={form.latitude}
+              lng={form.longitude}
+              onPick={(lat, lng) => { set("latitude", lat); set("longitude", lng); }}
+              onGPS={captureGPS}
+              gpsLoading={gpsLoading}
+            />
+          </div>
         </Section>
 
         {/* ── Section 2: מסגרת ─────────────────────────────────────────────── */}
@@ -525,7 +668,6 @@ export default function PublicSafetyReport() {
             }
           </Field>
 
-          {/* department: conditional — framework has children && not battalion */}
           {!isBattalion && hasDepts && (
             <Field label="אגף">
               <Sel
@@ -537,7 +679,6 @@ export default function PublicSafetyReport() {
             </Field>
           )}
 
-          {/* battalion_name: conditional — battalion sector, not magav */}
           {isBattalion && !isMagav && (
             <Field label="שם הגדוד">
               <input
@@ -550,7 +691,6 @@ export default function PublicSafetyReport() {
             </Field>
           )}
 
-          {/* company_name: conditional — battalion or magav */}
           {(isBattalion || isMagav) && (
             <Field label="פלוגה / מסגרת / אגף">
               <input
@@ -563,7 +703,6 @@ export default function PublicSafetyReport() {
             </Field>
           )}
 
-          {/* region: conditional — battalion sector */}
           {isBattalion && regionOptions.length > 0 && (
             <Field label="גזרה">
               <Sel
@@ -575,7 +714,6 @@ export default function PublicSafetyReport() {
             </Field>
           )}
 
-          {/* outpost: conditional — battalion sector */}
           {isBattalion && outpostOptions.length > 0 && (
             <Field label="מוצב">
               <Sel
@@ -648,7 +786,7 @@ export default function PublicSafetyReport() {
 
         {/* ── Section 4: בטיחות בדרכים (conditional) ─────────────────────── */}
         {isRoadSafety && (
-          <Section title='פרטי בטיחות בדרכים' color="bg-gradient-to-b from-red-600 to-red-800">
+          <Section title="פרטי בטיחות בדרכים" color="bg-gradient-to-b from-red-600 to-red-800">
             <Field label="סוג הנהג" required error={errors.driver_type}>
               <div data-err={!!errors.driver_type || undefined}>
                 <Sel
@@ -720,7 +858,7 @@ export default function PublicSafetyReport() {
           </Section>
         )}
 
-        {/* ── Section 5: פרטים נוספים ────────────────────────────────────── */}
+        {/* ── Section 5: פרטים נוספים ─────────────────────────────────────── */}
         <Section title="פרטים נוספים" color="bg-gradient-to-b from-purple-500 to-violet-600">
           <Field label="סוג אוכלוסייה" required error={errors.population_type}>
             <div data-err={!!errors.population_type || undefined}>
@@ -779,46 +917,79 @@ export default function PublicSafetyReport() {
           </Field>
         </Section>
 
-        {/* ── Section 6: תמונות ───────────────────────────────────────────── */}
+        {/* ── Section 6: תמונות (required) ────────────────────────────────── */}
         <Section title="תמונות האירוע" color="bg-gradient-to-b from-teal-500 to-cyan-600">
-          {images.length > 0 && (
-            <div className="flex gap-3 mb-4 flex-wrap">
-              {images.map((img, i) => (
-                <div key={i} className="relative">
-                  <img src={img.preview} alt={`תמונה ${i + 1}`} className="w-24 h-24 object-cover rounded-xl border border-slate-600" />
-                  <button type="button" onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg">
-                    <X className="w-3.5 h-3.5 text-white" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {images.length < 5 && (
-            <>
-              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
-                onChange={e => e.target.files && addImages(e.target.files)} />
-              <button type="button" onClick={() => fileRef.current?.click()}
-                className="w-full py-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-primary/60 text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2 font-semibold">
-                <Camera className="w-5 h-5" />
-                {images.length === 0 ? "הוסף תמונות מהאירוע" : `הוסף עוד (${5 - images.length} נותרו)`}
-              </button>
-            </>
-          )}
+          <div data-err={!!imageError || undefined}>
+            {images.length > 0 && (
+              <div className="flex gap-3 mb-4 flex-wrap">
+                {images.map((img, i) => (
+                  <div key={i} className="relative">
+                    <img
+                      src={img.preview}
+                      alt={`תמונה ${i + 1}`}
+                      className="w-24 h-24 object-cover rounded-xl border border-slate-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg"
+                    >
+                      <X className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {images.length < 5 && (
+              <>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={e => { if (e.target.files) { addImages(e.target.files); e.target.value = ""; } }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className={[
+                    "w-full py-4 rounded-xl border-2 border-dashed transition-all flex items-center justify-center gap-2 font-semibold",
+                    imageError
+                      ? "border-red-500/70 text-red-400 hover:border-red-400 bg-red-500/5"
+                      : "border-slate-600 hover:border-primary/60 text-slate-400 hover:text-white",
+                  ].join(" ")}
+                >
+                  <Camera className="w-5 h-5" />
+                  {images.length === 0
+                    ? "הוסף תמונה מהאירוע (חובה)"
+                    : `הוסף עוד (${5 - images.length} נותרו)`}
+                </button>
+              </>
+            )}
+
+            {imageError && (
+              <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                {imageError}
+              </p>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">* יש לצרף תמונה אחת לפחות לפני שליחת הדיווח</p>
         </Section>
 
         {/* ── Section 7: פרטי מדווח ───────────────────────────────────────── */}
-        <Section title="פרטי המדווח (לתיאום, אופציונלי)" color="bg-gradient-to-b from-slate-500 to-slate-600">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="שם המדווח">
-              <input type="text" value={form.reporter_name} onChange={e => set("reporter_name", e.target.value)}
-                placeholder="שם מלא" className={inputCls} />
-            </Field>
-            <Field label="טלפון">
-              <input type="tel" value={form.reporter_phone} onChange={e => set("reporter_phone", e.target.value)}
-                placeholder="05X-XXXXXXX" className={inputCls} inputMode="tel" />
-            </Field>
-          </div>
+        <Section title="פרטי המדווח (אופציונלי)" color="bg-gradient-to-b from-slate-500 to-slate-600">
+          <Field label="שם המדווח">
+            <input
+              type="text"
+              value={form.reporter_name}
+              onChange={e => set("reporter_name", e.target.value)}
+              placeholder="שם מלא"
+              className={inputCls}
+            />
+          </Field>
         </Section>
 
         {/* Error banner */}
@@ -835,8 +1006,12 @@ export default function PublicSafetyReport() {
 
       {/* Sticky submit */}
       <div className="fixed bottom-0 right-0 left-0 bg-slate-900/95 backdrop-blur border-t border-slate-700/50 p-4 z-20">
-        <button type="button" onClick={submit} disabled={submitting}
-          className="w-full max-w-xl mx-auto flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg bg-gradient-to-l from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white shadow-lg shadow-red-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={submitting}
+          className="w-full max-w-xl mx-auto flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg bg-gradient-to-l from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white shadow-lg shadow-red-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
           {submitting
             ? <><Loader2 className="w-5 h-5 animate-spin" /> שולח דיווח...</>
             : <><Send className="w-5 h-5" /> שלח דיווח בטיחות</>}
