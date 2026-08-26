@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  AlertTriangle, MapPin, Camera, Send, CheckCircle, X,
+  AlertTriangle, Camera, Send, CheckCircle, X,
   Locate, Loader2, ChevronDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import unitLogo from "@/assets/unit-logo.png";
+
+// ─── Constants (matching internal form exactly) ─────────────────────────────
 
 const BRIGADES = [
   { code: "binyamin", name: "חטיבת בנימין" },
@@ -16,92 +18,141 @@ const BRIGADES = [
 ];
 
 const SAFETY_CATEGORIES = [
-  "תאונת דרכים",
-  "ירי בשגגה / רשלנות נשק",
-  "פציעת נשק",
-  "נפילה / חבלה",
-  "שריפה",
-  "אובדן כלי נשק",
-  "פגיעה בנפש",
-  "אירוע ביטחוני",
-  "תאונת אימון",
-  "מחלה / תשישות",
-  "תאונת רכב בלי נהיגה",
-  "אחר",
+  "בטיחות בדרכים",
+  "בטיחות בנשק",
+  'בטיחות בפע"ם',
+  "בטיחות בשגרה",
+  "בטיחות באש",
+  'בטיחות באלפ"ה ותחמושת',
+  'כמעט דו"צ',
+  "בטיחות בעבודה",
+  "בטיחות בחופשה",
+];
+
+const DRIVER_TYPES_PLANAG = [
+  { value: "security", label: 'נהג בט"ש' },
+  { value: "combat",   label: "נהג לוחם" },
+  { value: "vehicle_officer", label: "נהג קצין רכב" },
+  { value: "general",  label: "נהג אגפי" },
+  { value: "other",    label: "אחר" },
+];
+
+const DRIVER_TYPES_BATTALION = [
+  { value: "fighter", label: "נהג לוחם" },
+  { value: "palsar",  label: 'נהג פלס"ם' },
+  { value: "general", label: "נהג כללי" },
+  { value: "security", label: 'נהג בט"ש' },
 ];
 
 const VEHICLE_TYPES = [
-  'ג\'יפ',
-  'ניידת / ג\'יפ משוריין',
-  'נגמש',
-  'רכב קל',
-  'משאית',
-  'אוטובוס',
-  'רכב מיוחד',
-  'אחר',
+  "דויד", "סוואנה", "טיגריס", "פנתר",
+  "סיור קל", "מנהלה", "שופל", "אזרחי", "רכב אורגני", "אחר",
 ];
 
-const FRAMEWORK_OPTIONS = [
-  { value: "planag", label: 'פלנ"ג' },
-  { value: "battalion", label: "גדוד תע\"ם" },
-  { value: "maphatch", label: 'מפח"ט' },
-  { value: "other", label: "אחר" },
+const VEHICLE_MODEL_TYPES = ["סיור קל", "מנהלה", "אזרחי", "רכב אורגני", "אחר"];
+
+const POPULATION_TYPES = ["קבע", "סדיר", "מילואים", "אזרח"];
+
+const EVENT_TYPES_ROAD = [
+  { value: "accident",  label: "תאונה" },
+  { value: "stuck",     label: "התחפרות" },
+  { value: "rollover",  label: "התהפכות" },
+  { value: "other",     label: "אחר" },
 ];
 
-interface ImagePreview {
-  base64: string;
-  name: string;
-  type: string;
-  preview: string;
-}
+const SEVERITY_OPTIONS = [
+  { value: "minor",    label: "קל" },
+  { value: "moderate", label: "בינוני" },
+  { value: "severe",   label: "חמור" },
+];
 
+const CULPABILITY_OPTIONS = ["אשם", "לא אשם"];
+
+const DAMAGE_OPTIONS = [
+  "יש נזק אין נפגעים",
+  "יש נזק יש נפגעים",
+  "אין נזק אין נפגעים",
+];
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface FwEntry { id: string; name: string; parent_id: string | null }
+interface OutpostEntry { id: string; name: string; region: string | null }
 interface FormData {
+  brigade: string;
+  safety_category: string;
   title: string;
-  description: string;
   event_date: string;
   event_time: string;
-  severity: string;
-  safety_category: string;
-  brigade: string;
   location_text: string;
   latitude: number | null;
   longitude: number | null;
   framework_type: string;
-  battalion_name: string;
   department: string;
+  battalion_name: string;
   company_name: string;
+  region: string;
+  outpost: string;
   involved_soldiers: string;
+  description: string;
+  event_outcomes: string;
+  person_injury_severity: string;
+  driver_type: string;
   driver_name: string;
-  vehicle_number: string;
   vehicle_type: string;
+  vehicle_model: string;
+  vehicle_number: string;
+  population_type: string;
+  unit_activity_type: string;
+  event_type: string;
+  severity: string;
+  culpability: string;
+  damage_and_casualties: string;
+  initial_lessons: string;
   reporter_name: string;
   reporter_phone: string;
 }
 
+interface ImagePreview { base64: string; name: string; type: string; preview: string }
+
 const today = new Date().toISOString().split("T")[0];
 
-const empty: FormData = {
+const EMPTY: FormData = {
+  brigade: "binyamin",
+  safety_category: "",
   title: "",
-  description: "",
   event_date: today,
   event_time: "",
-  severity: "minor",
-  safety_category: "",
-  brigade: "binyamin",
   location_text: "",
   latitude: null,
   longitude: null,
   framework_type: "",
-  battalion_name: "",
   department: "",
+  battalion_name: "",
   company_name: "",
+  region: "",
+  outpost: "",
   involved_soldiers: "",
+  description: "",
+  event_outcomes: "",
+  person_injury_severity: "",
+  driver_type: "",
   driver_name: "",
-  vehicle_number: "",
   vehicle_type: "",
+  vehicle_model: "",
+  vehicle_number: "",
+  population_type: "",
+  unit_activity_type: "",
+  event_type: "",
+  severity: "minor",
+  culpability: "",
+  damage_and_casualties: "",
+  initial_lessons: "",
   reporter_name: "",
   reporter_phone: "",
 };
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function compressImage(file: File): Promise<ImagePreview> {
   return new Promise((resolve, reject) => {
@@ -117,8 +168,7 @@ async function compressImage(file: File): Promise<ImagePreview> {
           else { width = Math.round(width * MAX / height); height = MAX; }
         }
         const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = width; canvas.height = height;
         canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
         const base64 = canvas.toDataURL("image/jpeg", 0.78);
         resolve({ base64, name: file.name.replace(/\.[^.]+$/, ".jpg"), type: "image/jpeg", preview: base64 });
@@ -131,41 +181,67 @@ async function compressImage(file: File): Promise<ImagePreview> {
   });
 }
 
-const Field = ({
-  label, required, children,
-}: { label: string; required?: boolean; children: React.ReactNode }) => (
-  <div className="mb-4">
-    <label className="block text-sm font-bold text-slate-300 mb-1.5">
-      {label}{required && <span className="text-red-400 mr-1">*</span>}
-    </label>
-    {children}
-  </div>
-);
+const isBattalionFw = (fw: string) => fw.startsWith("sector:");
+const isMagavFw = (fw: string) => /מג.?ב/.test(fw);
 
-const inputClass =
-  "w-full bg-slate-800/70 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary/70 focus:bg-slate-800 transition-colors text-base";
+// ─── Sub-components ─────────────────────────────────────────────────────────
 
-const selectClass = inputClass + " appearance-none cursor-pointer";
+const inputCls = "w-full bg-slate-800/70 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary/60 transition-colors text-base";
+const selCls = inputCls + " appearance-none cursor-pointer";
+const errCls = " border-red-500";
 
-const SectionHeader = ({
-  color, title, icon: Icon,
-}: { color: string; title: string; icon: React.ElementType }) => (
-  <div className={`flex items-center gap-3 mb-4 pb-3 border-b border-slate-700/60`}>
-    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-      <Icon className="w-5 h-5 text-white" />
+function Field({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3">
+      <label className="block text-sm font-bold text-slate-300 mb-1.5">
+        {label}{required && <span className="text-red-400 mr-1">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
     </div>
-    <h2 className="font-black text-base text-white">{title}</h2>
-  </div>
-);
+  );
+}
+
+function Sel({ value, onChange, options, placeholder, className = "" }: {
+  value: string; onChange: (v: string) => void;
+  options: { value: string; label: string }[]; placeholder?: string; className?: string;
+}) {
+  return (
+    <div className="relative">
+      <select value={value} onChange={e => onChange(e.target.value)} className={selCls + " " + className}>
+        {placeholder && <option value="">{placeholder}</option>}
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+    </div>
+  );
+}
+
+function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
+      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-700/60">
+        <div className={`w-2.5 h-7 rounded-full ${color}`} />
+        <h2 className="font-black text-base text-white">{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function PublicSafetyReport() {
-  const [form, setForm] = useState<FormData>(empty);
+  const [form, setForm] = useState<FormData>(EMPTY);
   const [images, setImages] = useState<ImagePreview[]>([]);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [frameworks, setFrameworks] = useState<FwEntry[]>([]);
+  const [outposts, setOutposts] = useState<OutpostEntry[]>([]);
+  const [fwLoading, setFwLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const set = useCallback(<K extends keyof FormData>(k: K, v: FormData[K]) => {
@@ -173,73 +249,127 @@ export default function PublicSafetyReport() {
     setErrors(e => { const n = { ...e }; delete n[k]; return n; });
   }, []);
 
-  const validate = (): boolean => {
-    const e: typeof errors = {};
-    if (!form.title.trim()) e.title = "שדה חובה";
-    if (!form.description.trim()) e.description = "שדה חובה";
-    if (!form.event_date) e.event_date = "שדה חובה";
-    if (!form.brigade) e.brigade = "שדה חובה";
-    if (!errors) return true;
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+  // ── Derived options (same logic as internal form) ───────────────────────
+  const rootFws = frameworks.filter(f => !f.parent_id);
+  const uniqueRegions = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
 
+  const frameworkOptions = [
+    ...rootFws.map(f => ({ value: f.name, label: f.name })),
+    ...uniqueRegions.map(r => ({ value: `sector:${r}`, label: `גדוד ${r}` })),
+    ...(rootFws.length === 0 && uniqueRegions.length === 0 ? [{ value: "other", label: "אחר" }] : []),
+  ];
+
+  const selectedFwParent = rootFws.find(f => f.name === form.framework_type);
+  const deptOptions = selectedFwParent
+    ? frameworks.filter(f => f.parent_id === selectedFwParent.id).map(f => ({ value: f.name, label: f.name }))
+    : [];
+  const hasDepts = deptOptions.length > 0;
+
+  const isBattalion = isBattalionFw(form.framework_type);
+  const isMagav = isMagavFw(form.framework_type);
+  const isRoadSafety = form.safety_category === "בטיחות בדרכים";
+
+  const regionOptions = uniqueRegions.map(r => ({ value: r, label: r }));
+  const selectedRegion = isBattalion ? form.framework_type.replace("sector:", "") : form.region;
+  const outpostOptions = outposts
+    .filter(o => !selectedRegion || o.region === selectedRegion)
+    .map(o => ({ value: o.name, label: o.name }));
+
+  const driverTypes = isBattalion ? DRIVER_TYPES_BATTALION : DRIVER_TYPES_PLANAG;
+
+  // ── Fetch form data when brigade changes ────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setFwLoading(true);
+    setFrameworks([]);
+    setOutposts([]);
+    setForm(f => ({ ...f, framework_type: "", department: "", region: "", outpost: "" }));
+
+    supabase.functions.invoke("submit-safety-report", {
+      body: { action: "get_form_data", brigade: form.brigade },
+    }).then(({ data }) => {
+      if (cancelled) return;
+      setFrameworks((data?.frameworks || []) as FwEntry[]);
+      setOutposts((data?.outposts || []) as OutpostEntry[]);
+    }).catch(() => {
+      // fallback: no dynamic options
+    }).finally(() => {
+      if (!cancelled) setFwLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [form.brigade]);
+
+  // ── GPS capture ─────────────────────────────────────────────────────────
   const captureGPS = () => {
     if (!navigator.geolocation) return;
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm(f => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-        setGpsLoading(false);
-      },
+      (pos) => { setForm(f => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude })); setGpsLoading(false); },
       () => setGpsLoading(false),
-      { timeout: 10000, enableHighAccuracy: true },
+      { timeout: 12000, enableHighAccuracy: true },
     );
   };
 
+  // ── Images ──────────────────────────────────────────────────────────────
   const addImages = async (files: FileList) => {
-    const remaining = 3 - images.length;
+    const remaining = 5 - images.length;
     if (remaining <= 0) return;
-    const toProcess = Array.from(files).slice(0, remaining);
-    const compressed = await Promise.all(toProcess.map(compressImage));
+    const compressed = await Promise.all(Array.from(files).slice(0, remaining).map(compressImage));
     setImages(prev => [...prev, ...compressed]);
   };
 
-  const removeImage = (i: number) => setImages(prev => prev.filter((_, j) => j !== i));
-
-  const submit = async () => {
-    if (!validate()) {
-      const firstErr = document.querySelector("[data-err]");
-      firstErr?.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
+  // ── Validate ─────────────────────────────────────────────────────────────
+  const validate = (): boolean => {
+    const e: typeof errors = {};
+    if (!form.safety_category) e.safety_category = "שדה חובה";
+    if (!form.title.trim())    e.title = "שדה חובה";
+    if (!form.event_date)      e.event_date = "שדה חובה";
+    if (!form.event_time)      e.event_time = "שדה חובה";
+    if (!form.location_text.trim()) e.location_text = "שדה חובה";
+    if (!form.framework_type)  e.framework_type = "שדה חובה";
+    if (!form.involved_soldiers.trim()) e.involved_soldiers = "שדה חובה";
+    if (!form.description.trim())      e.description = "שדה חובה";
+    if (!form.event_outcomes.trim())   e.event_outcomes = "שדה חובה";
+    if (!form.person_injury_severity.trim()) e.person_injury_severity = "שדה חובה";
+    if (!form.population_type)         e.population_type = "שדה חובה";
+    if (!form.unit_activity_type.trim()) e.unit_activity_type = "שדה חובה";
+    if (!form.severity)        e.severity = "שדה חובה";
+    if (!form.culpability)     e.culpability = "שדה חובה";
+    if (!form.damage_and_casualties) e.damage_and_casualties = "שדה חובה";
+    if (!form.initial_lessons.trim()) e.initial_lessons = "שדה חובה";
+    if (isRoadSafety) {
+      if (!form.driver_type)    e.driver_type = "שדה חובה";
+      if (!form.vehicle_type)   e.vehicle_type = "שדה חובה";
+      if (!form.vehicle_number.trim()) e.vehicle_number = "שדה חובה";
+      if (!form.event_type)     e.event_type = "שדה חובה";
     }
+    setErrors(e);
+    if (Object.keys(e).length > 0) {
+      const el = document.querySelector("[data-err=true]");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return Object.keys(e).length === 0;
+  };
 
+  // ── Submit ───────────────────────────────────────────────────────────────
+  const submit = async () => {
+    if (!validate()) return;
     setSubmitting(true);
     setSubmitError("");
-
     try {
       const payload = {
         ...form,
         images: images.map(({ base64, name, type }) => ({ base64, name, type })),
       };
-
-      const { data, error } = await supabase.functions.invoke("submit-safety-report", {
-        body: payload,
-      });
-
-      if (error || data?.error) {
-        setSubmitError(data?.error || error?.message || "שגיאה בשליחה. נסה שוב.");
-        return;
-      }
-
+      const { data, error } = await supabase.functions.invoke("submit-safety-report", { body: payload });
+      if (error || data?.error) { setSubmitError(data?.error || error?.message || "שגיאה בשליחה. נסה שוב."); return; }
       setSubmitted(true);
-    } catch (e) {
-      setSubmitError("שגיאת רשת. בדוק חיבור ונסה שוב.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch { setSubmitError("שגיאת רשת. בדוק חיבור ונסה שוב."); }
+    finally { setSubmitting(false); }
   };
 
+  // ─── Success screen ──────────────────────────────────────────────────────
   if (submitted) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6" dir="rtl">
@@ -253,13 +383,14 @@ export default function PublicSafetyReport() {
           <h1 className="text-2xl font-black text-white mb-3">הדיווח נשלח בהצלחה</h1>
           <p className="text-slate-400 mb-2">הדיווח התקבל ויועבר לגורמים הרלוונטיים.</p>
           {form.brigade === "binyamin" && (
-            <p className="text-emerald-400 text-sm font-semibold">
-              📲 הודעת WhatsApp נשלחת לקצין הבטיחות
-            </p>
+            <p className="text-emerald-400 text-sm font-semibold">📲 הודעת WhatsApp נשלחה לקצין הבטיחות</p>
+          )}
+          {isRoadSafety && (
+            <p className="text-blue-400 text-sm font-semibold mt-1">🚗 האירוע מופיע גם במעקב תאונות</p>
           )}
           <button
-            onClick={() => { setForm(empty); setImages([]); setSubmitted(false); }}
-            className="mt-8 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-all font-semibold"
+            onClick={() => { setForm(EMPTY); setImages([]); setSubmitted(false); }}
+            className="mt-8 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all font-semibold"
           >
             דיווח נוסף
           </button>
@@ -268,6 +399,7 @@ export default function PublicSafetyReport() {
     );
   }
 
+  // ─── Form ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 text-white" dir="rtl">
       {/* Top bar */}
@@ -275,343 +407,436 @@ export default function PublicSafetyReport() {
         <img src={unitLogo} alt="סמל" className="w-9 h-9 object-contain drop-shadow-lg" />
         <div>
           <p className="font-black text-sm text-white leading-tight">דיווח אירוע בטיחות</p>
-          <p className="text-xs text-slate-400">מערכת Connect — איו&quot;ש</p>
+          <p className="text-xs text-slate-400">מערכת Connect — ניתן לדיווח ללא כניסה למערכת</p>
         </div>
         <div className="mr-auto flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/30">
           <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-          <span className="text-xs font-bold text-red-400">לדיווח בלבד</span>
+          <span className="text-xs font-bold text-red-400">דיווח בטיחות</span>
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto px-4 pt-6 pb-32">
+      <div className="max-w-xl mx-auto px-4 pt-5 pb-32">
 
-        {/* Section 1 — Event details */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
-          <SectionHeader color="bg-gradient-to-br from-red-500 to-rose-600" title="פרטי האירוע" icon={AlertTriangle} />
+        {/* ── Section 1: פרטי האירוע ──────────────────────────────────────── */}
+        <Section title="פרטי האירוע" color="bg-gradient-to-b from-red-500 to-rose-600">
+          <Field label="חטיבה" required error={errors.brigade}>
+            <Sel
+              value={form.brigade}
+              onChange={v => set("brigade", v)}
+              options={BRIGADES.map(b => ({ value: b.code, label: b.name }))}
+              className={errors.brigade ? errCls : ""}
+            />
+          </Field>
+
+          <Field label="קטגוריית בטיחות" required error={errors.safety_category}>
+            <div data-err={!!errors.safety_category || undefined}>
+              <Sel
+                value={form.safety_category}
+                onChange={v => { set("safety_category", v); set("driver_type", ""); set("vehicle_type", ""); set("event_type", ""); }}
+                options={SAFETY_CATEGORIES.map(c => ({ value: c, label: c }))}
+                placeholder="בחר קטגוריית בטיחות"
+                className={errors.safety_category ? errCls : ""}
+              />
+            </div>
+          </Field>
+
+          <Field label="כותרת" required error={errors.title}>
+            <input
+              type="text"
+              value={form.title}
+              onChange={e => set("title", e.target.value)}
+              placeholder="הזן כותרת..."
+              className={inputCls + (errors.title ? errCls : "")}
+              data-err={!!errors.title || undefined}
+            />
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="תאריך האירוע" required>
+            <Field label="תאריך" required error={errors.event_date}>
               <input
                 type="date"
                 value={form.event_date}
                 max={today}
                 onChange={e => set("event_date", e.target.value)}
-                className={inputClass + (errors.event_date ? " border-red-500" : "")}
-                data-err={errors.event_date ? true : undefined}
+                className={inputCls + (errors.event_date ? errCls : "")}
+                data-err={!!errors.event_date || undefined}
               />
-              {errors.event_date && <p className="text-red-400 text-xs mt-1">{errors.event_date}</p>}
             </Field>
-            <Field label="שעה (אופציונלי)">
+            <Field label="שעה" required error={errors.event_time}>
               <input
                 type="time"
                 value={form.event_time}
                 onChange={e => set("event_time", e.target.value)}
-                className={inputClass}
+                className={inputCls + (errors.event_time ? errCls : "")}
+                data-err={!!errors.event_time || undefined}
               />
             </Field>
           </div>
 
-          <Field label="חומרת האירוע" required>
-            <div className="relative">
-              <select
-                value={form.severity}
-                onChange={e => set("severity", e.target.value)}
-                className={selectClass}
-              >
-                <option value="minor">🟡 קל</option>
-                <option value="moderate">🟠 בינוני</option>
-                <option value="severe">🔴 חמור</option>
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-          </Field>
-
-          <Field label="סוג האירוע">
-            <div className="relative">
-              <select
-                value={form.safety_category}
-                onChange={e => set("safety_category", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">בחר סוג (אופציונלי)</option>
-                {SAFETY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-          </Field>
-
-          <Field label="חטיבה" required>
-            <div className="relative">
-              <select
-                value={form.brigade}
-                onChange={e => set("brigade", e.target.value)}
-                className={selectClass + (errors.brigade ? " border-red-500" : "")}
-              >
-                {BRIGADES.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-          </Field>
-        </div>
-
-        {/* Section 2 — Description */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
-          <SectionHeader color="bg-gradient-to-br from-amber-500 to-orange-600" title="תיאור האירוע" icon={AlertTriangle} />
-
-          <Field label="כותרת קצרה" required>
-            <input
-              type="text"
-              value={form.title}
-              onChange={e => set("title", e.target.value)}
-              placeholder='למשל: "תאונת דרכים בכביש 60 ליד עופרה"'
-              className={inputClass + (errors.title ? " border-red-500" : "")}
-              data-err={errors.title ? true : undefined}
-            />
-            {errors.title && <p className="text-red-400 text-xs mt-1">{errors.title}</p>}
-          </Field>
-
-          <Field label="תיאור מלא של האירוע" required>
-            <textarea
-              value={form.description}
-              onChange={e => set("description", e.target.value)}
-              placeholder="תאר את האירוע בפירוט: מה קרה, כיצד, מה הנסיבות..."
-              rows={5}
-              className={inputClass + " resize-none" + (errors.description ? " border-red-500" : "")}
-              data-err={errors.description ? true : undefined}
-            />
-            {errors.description && <p className="text-red-400 text-xs mt-1">{errors.description}</p>}
-          </Field>
-
-          <Field label="מיקום האירוע">
+          <Field label="מיקום האירוע" required error={errors.location_text}>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={form.location_text}
                 onChange={e => set("location_text", e.target.value)}
-                placeholder='למשל: "כביש 60 קמ׳ 45 ליד הצומת"'
-                className={inputClass + " flex-1"}
+                placeholder="לדוגמה: כביש 60, צומת בית אל..."
+                className={inputCls + " flex-1" + (errors.location_text ? errCls : "")}
+                data-err={!!errors.location_text || undefined}
               />
-              <button
-                type="button"
-                onClick={captureGPS}
-                disabled={gpsLoading}
-                title="קלוט מיקום GPS"
-                className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-700 hover:bg-slate-600 border border-slate-600 flex items-center justify-center transition-colors disabled:opacity-50"
-              >
-                {gpsLoading
-                  ? <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                  : <Locate className="w-5 h-5 text-primary" />}
-              </button>
+              {isRoadSafety && (
+                <button
+                  type="button"
+                  onClick={captureGPS}
+                  disabled={gpsLoading}
+                  title="קלוט מיקום GPS"
+                  className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-700 hover:bg-slate-600 border border-slate-600 flex items-center justify-center transition-colors disabled:opacity-50"
+                >
+                  {gpsLoading ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Locate className="w-5 h-5 text-primary" />}
+                </button>
+              )}
             </div>
-            {form.latitude !== null && (
-              <p className="text-xs text-emerald-400 mt-1.5 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" />
-                מיקום GPS נלכד ✓ ({form.latitude.toFixed(5)}, {form.longitude?.toFixed(5)})
+            {isRoadSafety && form.latitude !== null && (
+              <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                ✓ מיקום GPS נלכד ({form.latitude.toFixed(5)}, {form.longitude?.toFixed(5)})
               </p>
             )}
+            {isRoadSafety && form.latitude === null && (
+              <p className="text-xs text-amber-400 mt-1">לחץ על הכפתור לקליטת מיקום GPS (מומלץ לבטיחות בדרכים)</p>
+            )}
           </Field>
-        </div>
+        </Section>
 
-        {/* Section 3 — Unit */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
-          <SectionHeader color="bg-gradient-to-br from-blue-500 to-blue-700" title="פרטי מסגרת ויחידה" icon={MapPin} />
-
-          <Field label="מסגרת">
-            <div className="relative">
-              <select
-                value={form.framework_type}
-                onChange={e => set("framework_type", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">בחר (אופציונלי)</option>
-                {FRAMEWORK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
+        {/* ── Section 2: מסגרת ─────────────────────────────────────────────── */}
+        <Section title="מסגרת ויחידה" color="bg-gradient-to-b from-blue-500 to-blue-700">
+          <Field label="מסגרת" required error={errors.framework_type}>
+            {fwLoading
+              ? <div className="flex items-center gap-2 py-3 text-slate-400 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> טוען מסגרות...</div>
+              : (
+                <div data-err={!!errors.framework_type || undefined}>
+                  <Sel
+                    value={form.framework_type}
+                    onChange={v => { set("framework_type", v); set("department", ""); set("region", ""); set("outpost", ""); set("battalion_name", ""); set("company_name", ""); }}
+                    options={frameworkOptions}
+                    placeholder="בחר מסגרת"
+                    className={errors.framework_type ? errCls : ""}
+                  />
+                </div>
+              )
+            }
           </Field>
 
-          {form.framework_type === "battalion" && (
+          {/* department: conditional — framework has children && not battalion */}
+          {!isBattalion && hasDepts && (
+            <Field label="אגף">
+              <Sel
+                value={form.department}
+                onChange={v => set("department", v)}
+                options={deptOptions}
+                placeholder="בחר אגף"
+              />
+            </Field>
+          )}
+
+          {/* battalion_name: conditional — battalion sector, not magav */}
+          {isBattalion && !isMagav && (
             <Field label="שם הגדוד">
               <input
                 type="text"
                 value={form.battalion_name}
                 onChange={e => set("battalion_name", e.target.value)}
-                placeholder='למשל: "גדוד 71"'
-                className={inputClass}
+                placeholder="הזן שם גדוד..."
+                className={inputCls}
               />
             </Field>
           )}
 
-          {form.framework_type === "maphatch" && (
-            <Field label="אגף במפח&quot;ט">
+          {/* company_name: conditional — battalion or magav */}
+          {(isBattalion || isMagav) && (
+            <Field label="פלוגה / מסגרת / אגף">
               <input
                 type="text"
-                value={form.department}
-                onChange={e => set("department", e.target.value)}
-                placeholder='למשל: "לוגיסטיקה", "אג"מ"'
-                className={inputClass}
+                value={form.company_name}
+                onChange={e => set("company_name", e.target.value)}
+                placeholder="הזן שם פלוגה / מסגרת / אגף..."
+                className={inputCls}
               />
             </Field>
           )}
 
-          <Field label="שם הפלוגה / כוח">
-            <input
-              type="text"
-              value={form.company_name}
-              onChange={e => set("company_name", e.target.value)}
-              placeholder='למשל: "פלוגה ב׳", "צוות כ״ב"'
-              className={inputClass}
-            />
-          </Field>
-        </div>
+          {/* region: conditional — battalion sector */}
+          {isBattalion && regionOptions.length > 0 && (
+            <Field label="גזרה">
+              <Sel
+                value={form.region}
+                onChange={v => { set("region", v); set("outpost", ""); }}
+                options={regionOptions}
+                placeholder="בחר גזרה"
+              />
+            </Field>
+          )}
 
-        {/* Section 4 — Involved / Vehicle */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
-          <SectionHeader color="bg-gradient-to-br from-purple-500 to-violet-600" title="מעורבים ורכב" icon={AlertTriangle} />
+          {/* outpost: conditional — battalion sector */}
+          {isBattalion && outpostOptions.length > 0 && (
+            <Field label="מוצב">
+              <Sel
+                value={form.outpost}
+                onChange={v => set("outpost", v)}
+                options={[{ value: 'מפג"ד', label: 'מפג"ד' }, ...outpostOptions]}
+                placeholder="בחר מוצב"
+              />
+            </Field>
+          )}
+        </Section>
 
-          <Field label="שמות המעורבים">
-            <input
-              type="text"
+        {/* ── Section 3: תיאור האירוע ─────────────────────────────────────── */}
+        <Section title="תיאור האירוע" color="bg-gradient-to-b from-amber-500 to-orange-600">
+          <Field label="חיילים מעורבים" required error={errors.involved_soldiers}>
+            <textarea
               value={form.involved_soldiers}
               onChange={e => set("involved_soldiers", e.target.value)}
-              placeholder='שמות + מ.א. של החיילים המעורבים'
-              className={inputClass}
+              placeholder="פרט את החיילים המעורבים..."
+              rows={3}
+              className={inputCls + " resize-none" + (errors.involved_soldiers ? errCls : "")}
+              data-err={!!errors.involved_soldiers || undefined}
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="שם הנהג / הפצוע">
+          <Field label="תיאור האירוע" required error={errors.description}>
+            <textarea
+              value={form.description}
+              onChange={e => set("description", e.target.value)}
+              placeholder="תיאור מפורט של האירוע..."
+              rows={4}
+              className={inputCls + " resize-none" + (errors.description ? errCls : "")}
+              data-err={!!errors.description || undefined}
+            />
+          </Field>
+
+          <Field label="תוצאות האירוע" required error={errors.event_outcomes}>
+            <textarea
+              value={form.event_outcomes}
+              onChange={e => set("event_outcomes", e.target.value)}
+              placeholder="פרט את תוצאות האירוע..."
+              rows={3}
+              className={inputCls + " resize-none" + (errors.event_outcomes ? errCls : "")}
+              data-err={!!errors.event_outcomes || undefined}
+            />
+          </Field>
+
+          <Field label="הערכת חומרת הפגיעה באדם ורכוש" required error={errors.person_injury_severity}>
+            <textarea
+              value={form.person_injury_severity}
+              onChange={e => set("person_injury_severity", e.target.value)}
+              placeholder="פרט את חומרת הפגיעה באדם וברכוש..."
+              rows={3}
+              className={inputCls + " resize-none" + (errors.person_injury_severity ? errCls : "")}
+              data-err={!!errors.person_injury_severity || undefined}
+            />
+          </Field>
+
+          <Field label="לקחים ראשונים" required error={errors.initial_lessons}>
+            <textarea
+              value={form.initial_lessons}
+              onChange={e => set("initial_lessons", e.target.value)}
+              placeholder="פרט לקחים ראשונים..."
+              rows={3}
+              className={inputCls + " resize-none" + (errors.initial_lessons ? errCls : "")}
+              data-err={!!errors.initial_lessons || undefined}
+            />
+          </Field>
+        </Section>
+
+        {/* ── Section 4: בטיחות בדרכים (conditional) ─────────────────────── */}
+        {isRoadSafety && (
+          <Section title='פרטי בטיחות בדרכים' color="bg-gradient-to-b from-red-600 to-red-800">
+            <Field label="סוג הנהג" required error={errors.driver_type}>
+              <div data-err={!!errors.driver_type || undefined}>
+                <Sel
+                  value={form.driver_type}
+                  onChange={v => set("driver_type", v)}
+                  options={driverTypes}
+                  placeholder="בחר סוג נהג"
+                  className={errors.driver_type ? errCls : ""}
+                />
+              </div>
+            </Field>
+
+            <Field label="שם הנהג">
               <input
                 type="text"
                 value={form.driver_name}
                 onChange={e => set("driver_name", e.target.value)}
-                placeholder="שם מלא"
-                className={inputClass}
+                placeholder="הזן שם נהג..."
+                className={inputCls}
               />
             </Field>
-            <Field label="מספר רכב">
+
+            <Field label="סוג הרכב" required error={errors.vehicle_type}>
+              <div data-err={!!errors.vehicle_type || undefined}>
+                <Sel
+                  value={form.vehicle_type}
+                  onChange={v => { set("vehicle_type", v); set("vehicle_model", ""); }}
+                  options={VEHICLE_TYPES.map(v => ({ value: v, label: v }))}
+                  placeholder="בחר סוג רכב"
+                  className={errors.vehicle_type ? errCls : ""}
+                />
+              </div>
+            </Field>
+
+            {VEHICLE_MODEL_TYPES.includes(form.vehicle_type) && (
+              <Field label="דגם הרכב">
+                <input
+                  type="text"
+                  value={form.vehicle_model}
+                  onChange={e => set("vehicle_model", e.target.value)}
+                  placeholder="לדוגמה: הילקס, דימקס, ספארי..."
+                  className={inputCls}
+                />
+              </Field>
+            )}
+
+            <Field label="מספר רכב" required error={errors.vehicle_number}>
               <input
                 type="text"
                 value={form.vehicle_number}
                 onChange={e => set("vehicle_number", e.target.value)}
-                placeholder='מס׳ לוחית'
-                className={inputClass}
+                placeholder="הזן מספר רכב..."
+                className={inputCls + (errors.vehicle_number ? errCls : "")}
+                data-err={!!errors.vehicle_number || undefined}
               />
             </Field>
-          </div>
 
-          <Field label="סוג רכב">
-            <div className="relative">
-              <select
-                value={form.vehicle_type}
-                onChange={e => set("vehicle_type", e.target.value)}
-                className={selectClass}
-              >
-                <option value="">בחר (אופציונלי)</option>
-                {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <Field label="סוג האירוע" required error={errors.event_type}>
+              <div data-err={!!errors.event_type || undefined}>
+                <Sel
+                  value={form.event_type}
+                  onChange={v => set("event_type", v)}
+                  options={EVENT_TYPES_ROAD}
+                  placeholder="בחר סוג אירוע"
+                  className={errors.event_type ? errCls : ""}
+                />
+              </div>
+            </Field>
+          </Section>
+        )}
+
+        {/* ── Section 5: פרטים נוספים ────────────────────────────────────── */}
+        <Section title="פרטים נוספים" color="bg-gradient-to-b from-purple-500 to-violet-600">
+          <Field label="סוג אוכלוסייה" required error={errors.population_type}>
+            <div data-err={!!errors.population_type || undefined}>
+              <Sel
+                value={form.population_type}
+                onChange={v => set("population_type", v)}
+                options={POPULATION_TYPES.map(p => ({ value: p, label: p }))}
+                placeholder="בחר סוג אוכלוסייה"
+                className={errors.population_type ? errCls : ""}
+              />
             </div>
           </Field>
-        </div>
 
-        {/* Section 5 — Images */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4">
-          <SectionHeader color="bg-gradient-to-br from-teal-500 to-cyan-600" title="תמונות (אופציונלי, עד 3)" icon={Camera} />
+          <Field label="סוג האירוע (פעילות היחידה)" required error={errors.unit_activity_type}>
+            <input
+              type="text"
+              value={form.unit_activity_type}
+              onChange={e => set("unit_activity_type", e.target.value)}
+              placeholder="לדוגמה: סיור, מחסום, אימון..."
+              className={inputCls + (errors.unit_activity_type ? errCls : "")}
+              data-err={!!errors.unit_activity_type || undefined}
+            />
+          </Field>
 
+          <Field label="חומרת האירוע" required error={errors.severity}>
+            <Sel
+              value={form.severity}
+              onChange={v => set("severity", v)}
+              options={SEVERITY_OPTIONS}
+              className={errors.severity ? errCls : ""}
+            />
+          </Field>
+
+          <Field label="סיווג האשמה" required error={errors.culpability}>
+            <div data-err={!!errors.culpability || undefined}>
+              <Sel
+                value={form.culpability}
+                onChange={v => set("culpability", v)}
+                options={CULPABILITY_OPTIONS.map(c => ({ value: c, label: c }))}
+                placeholder="בחר סיווג אשמה"
+                className={errors.culpability ? errCls : ""}
+              />
+            </div>
+          </Field>
+
+          <Field label="נזק ונפגעים" required error={errors.damage_and_casualties}>
+            <div data-err={!!errors.damage_and_casualties || undefined}>
+              <Sel
+                value={form.damage_and_casualties}
+                onChange={v => set("damage_and_casualties", v)}
+                options={DAMAGE_OPTIONS.map(d => ({ value: d, label: d }))}
+                placeholder="בחר סיווג נזק ונפגעים"
+                className={errors.damage_and_casualties ? errCls : ""}
+              />
+            </div>
+          </Field>
+        </Section>
+
+        {/* ── Section 6: תמונות ───────────────────────────────────────────── */}
+        <Section title="תמונות האירוע" color="bg-gradient-to-b from-teal-500 to-cyan-600">
           {images.length > 0 && (
             <div className="flex gap-3 mb-4 flex-wrap">
               {images.map((img, i) => (
                 <div key={i} className="relative">
-                  <img
-                    src={img.preview}
-                    alt={`תמונה ${i + 1}`}
-                    className="w-24 h-24 object-cover rounded-xl border border-slate-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg"
-                  >
+                  <img src={img.preview} alt={`תמונה ${i + 1}`} className="w-24 h-24 object-cover rounded-xl border border-slate-600" />
+                  <button type="button" onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg">
                     <X className="w-3.5 h-3.5 text-white" />
                   </button>
                 </div>
               ))}
             </div>
           )}
-
-          {images.length < 3 && (
+          {images.length < 5 && (
             <>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={e => e.target.files && addImages(e.target.files)}
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="w-full py-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-primary/60 text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2 font-semibold"
-              >
+              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+                onChange={e => e.target.files && addImages(e.target.files)} />
+              <button type="button" onClick={() => fileRef.current?.click()}
+                className="w-full py-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-primary/60 text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2 font-semibold">
                 <Camera className="w-5 h-5" />
-                {images.length === 0 ? "הוסף תמונות מהאירוע" : `הוסף עוד (${3 - images.length} נותרו)`}
+                {images.length === 0 ? "הוסף תמונות מהאירוע" : `הוסף עוד (${5 - images.length} נותרו)`}
               </button>
             </>
           )}
-        </div>
+        </Section>
 
-        {/* Section 6 — Reporter */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-6">
-          <SectionHeader color="bg-gradient-to-br from-slate-500 to-slate-600" title="פרטי המדווח (לתיאום)" icon={Send} />
-          <p className="text-xs text-slate-500 mb-4">אופציונלי — לשם יצירת קשר במידת הצורך</p>
-
+        {/* ── Section 7: פרטי מדווח ───────────────────────────────────────── */}
+        <Section title="פרטי המדווח (לתיאום, אופציונלי)" color="bg-gradient-to-b from-slate-500 to-slate-600">
           <div className="grid grid-cols-2 gap-3">
             <Field label="שם המדווח">
-              <input
-                type="text"
-                value={form.reporter_name}
-                onChange={e => set("reporter_name", e.target.value)}
-                placeholder="שם מלא"
-                className={inputClass}
-              />
+              <input type="text" value={form.reporter_name} onChange={e => set("reporter_name", e.target.value)}
+                placeholder="שם מלא" className={inputCls} />
             </Field>
             <Field label="טלפון">
-              <input
-                type="tel"
-                value={form.reporter_phone}
-                onChange={e => set("reporter_phone", e.target.value)}
-                placeholder="05X-XXXXXXX"
-                className={inputClass}
-                inputMode="tel"
-              />
+              <input type="tel" value={form.reporter_phone} onChange={e => set("reporter_phone", e.target.value)}
+                placeholder="05X-XXXXXXX" className={inputCls} inputMode="tel" />
             </Field>
           </div>
-        </div>
+        </Section>
 
-        {/* Error */}
+        {/* Error banner */}
         {submitError && (
           <div className="mb-4 p-4 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-sm font-semibold flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            {submitError}
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />{submitError}
           </div>
         )}
 
-        {/* Disclaimer */}
         <p className="text-xs text-slate-500 text-center mb-4 px-2">
           הדיווח נשמר במערכת Connect ומועבר לקצין הבטיחות. במקרה חירום — פנה ישירות לחדר המצב.
         </p>
       </div>
 
-      {/* Sticky submit button */}
+      {/* Sticky submit */}
       <div className="fixed bottom-0 right-0 left-0 bg-slate-900/95 backdrop-blur border-t border-slate-700/50 p-4 z-20">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={submitting}
-          className="w-full max-w-xl mx-auto flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg bg-gradient-to-l from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white shadow-lg shadow-red-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
+        <button type="button" onClick={submit} disabled={submitting}
+          className="w-full max-w-xl mx-auto flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg bg-gradient-to-l from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white shadow-lg shadow-red-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
           {submitting
             ? <><Loader2 className="w-5 h-5 animate-spin" /> שולח דיווח...</>
             : <><Send className="w-5 h-5" /> שלח דיווח בטיחות</>}
