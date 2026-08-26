@@ -21,15 +21,8 @@ const BRIGADES = [
 ];
 
 const SAFETY_CATEGORIES = [
-  "בטיחות בדרכים",
-  "בטיחות בנשק",
-  'בטיחות בפע"ם',
-  "בטיחות בשגרה",
-  "בטיחות באש",
-  'בטיחות באלפ"ה ותחמושת',
-  'כמעט דו"צ',
-  "בטיחות בעבודה",
-  "בטיחות בחופשה",
+  "בטיחות בדרכים", "בטיחות בנשק", 'בטיחות בפע"ם', "בטיחות בשגרה",
+  "בטיחות באש", 'בטיחות באלפ"ה ותחמושת', 'כמעט דו"צ', "בטיחות בעבודה", "בטיחות בחופשה",
 ];
 
 const DRIVER_TYPES_PLANAG = [
@@ -47,19 +40,13 @@ const DRIVER_TYPES_BATTALION = [
   { value: "security", label: 'נהג בט"ש' },
 ];
 
-const VEHICLE_TYPES = [
-  "דויד", "סוואנה", "טיגריס", "פנתר",
-  "סיור קל", "מנהלה", "שופל", "אזרחי", "רכב אורגני", "אחר",
-];
-
-const VEHICLE_MODEL_TYPES = ["סיור קל", "מנהלה", "אזרחי", "רכב אורגני", "אחר"];
-const POPULATION_TYPES = ["קבע", "סדיר", "מילואים", "אזרח"];
+const VEHICLE_TYPES       = ["דויד","סוואנה","טיגריס","פנתר","סיור קל","מנהלה","שופל","אזרחי","רכב אורגני","אחר"];
+const VEHICLE_MODEL_TYPES = ["סיור קל","מנהלה","אזרחי","רכב אורגני","אחר"];
+const POPULATION_TYPES    = ["קבע","סדיר","מילואים","אזרח"];
 
 const EVENT_TYPES_ROAD = [
-  { value: "accident",  label: "תאונה" },
-  { value: "stuck",     label: "התחפרות" },
-  { value: "rollover",  label: "התהפכות" },
-  { value: "other",     label: "אחר" },
+  { value: "accident", label: "תאונה" }, { value: "stuck",    label: "התחפרות" },
+  { value: "rollover", label: "התהפכות" }, { value: "other",   label: "אחר" },
 ];
 
 const SEVERITY_OPTIONS = [
@@ -69,12 +56,24 @@ const SEVERITY_OPTIONS = [
 ];
 
 const CULPABILITY_OPTIONS = ["אשם", "לא אשם"];
+const DAMAGE_OPTIONS = ["יש נזק אין נפגעים","יש נזק יש נפגעים","אין נזק אין נפגעים"];
 
-const DAMAGE_OPTIONS = [
-  "יש נזק אין נפגעים",
-  "יש נזק יש נפגעים",
-  "אין נזק אין נפגעים",
-];
+// ─── Apple design tokens ─────────────────────────────────────────────────────
+// Used as inline strings so they survive Tailwind's purge
+
+const C = {
+  bg:        "#000000",
+  card:      "#1C1C1E",
+  card2:     "#2C2C2E",
+  fill:      "rgba(118,118,128,0.14)",
+  fillFocus: "rgba(118,118,128,0.22)",
+  sep:       "#38383A",
+  label2:    "#8E8E93",
+  label3:    "#48484A",
+  red:       "#FF3B30",
+  green:     "#30D158",
+  font:      "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif",
+};
 
 // ─── Leaflet setup ───────────────────────────────────────────────────────────
 
@@ -82,14 +81,11 @@ const TILE_URLS = {
   map:       "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 };
-
 const DEFAULT_CENTER: [number, number] = [31.88, 35.22];
 
 const RED_PIN = new L.DivIcon({
-  html: `<div style="width:20px;height:20px;background:#ef4444;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,0.5)"></div>`,
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-  className: "",
+  html: `<div style="width:20px;height:20px;background:${C.red};border:3px solid #fff;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,0.5)"></div>`,
+  iconSize: [20, 20], iconAnchor: [10, 10], className: "",
 });
 
 // ─── Map sub-components ──────────────────────────────────────────────────────
@@ -118,17 +114,23 @@ function FlyToPosition({ position }: { position: [number, number] | null }) {
 function InlineMapPicker({
   lat, lng, onPick, onGPS, gpsLoading,
 }: {
-  lat: number | null;
-  lng: number | null;
+  lat: number | null; lng: number | null;
   onPick: (lat: number, lng: number) => void;
-  onGPS: () => void;
-  gpsLoading: boolean;
+  onGPS: () => void; gpsLoading: boolean;
 }) {
   const [isSatellite, setIsSatellite] = useState(false);
   const position: [number, number] | null = lat !== null && lng !== null ? [lat, lng] : null;
 
+  const overlayBtn: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 6,
+    padding: "6px 12px", borderRadius: 12, border: "1px solid rgba(84,84,88,0.65)",
+    background: "rgba(0,0,0,0.82)", backdropFilter: "blur(8px)",
+    color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer",
+    fontFamily: C.font, boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+  };
+
   return (
-    <div className="rounded-2xl overflow-hidden border border-slate-700/60 shadow-xl" style={{ position: "relative" }}>
+    <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", border: `1px solid ${C.sep}` }}>
       <div style={{ height: 260 }}>
         <MapContainer
           {...({ tap: true, tapTolerance: 25 } as Record<string, unknown>)}
@@ -147,57 +149,51 @@ function InlineMapPicker({
         </MapContainer>
       </div>
 
-      {/* Satellite toggle — top right */}
-      <button
-        type="button"
-        onClick={() => setIsSatellite(s => !s)}
-        style={{ position: "absolute", top: 10, right: 10, zIndex: 1000 }}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/88 backdrop-blur-sm border border-slate-600/50 text-white text-xs font-bold shadow-lg hover:bg-slate-800 transition-all"
-      >
-        {isSatellite ? <MapIcon className="w-3.5 h-3.5" /> : <Satellite className="w-3.5 h-3.5" />}
+      {/* Satellite toggle */}
+      <button type="button" onClick={() => setIsSatellite(s => !s)}
+        style={{ ...overlayBtn, position: "absolute", top: 10, right: 10, zIndex: 1000 }}>
+        {isSatellite
+          ? <MapIcon style={{ width: 13, height: 13 }} />
+          : <Satellite style={{ width: 13, height: 13 }} />}
         {isSatellite ? "מפה" : "לוויין"}
       </button>
 
-      {/* GPS button — bottom right */}
-      <button
-        type="button"
-        onClick={onGPS}
-        disabled={gpsLoading}
-        style={{ position: "absolute", bottom: 10, right: 10, zIndex: 1000 }}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/88 backdrop-blur-sm border border-slate-600/50 text-white text-xs font-bold shadow-lg hover:bg-slate-800 transition-all disabled:opacity-50"
-      >
+      {/* GPS button */}
+      <button type="button" onClick={onGPS} disabled={gpsLoading}
+        style={{ ...overlayBtn, position: "absolute", bottom: position ? 46 : 10, right: 10, zIndex: 1000, opacity: gpsLoading ? 0.5 : 1 }}>
         {gpsLoading
-          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          : <Locate className="w-3.5 h-3.5 text-primary" />}
+          ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
+          : <Locate style={{ width: 13, height: 13, color: C.red }} />}
         {gpsLoading ? "מאתר..." : "מיקום נוכחי"}
       </button>
 
-      {/* Centre instruction — shown only when no pin placed yet */}
+      {/* Instruction overlay when no pin */}
       {!position && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 999,
-            pointerEvents: "none",
-          }}
-        >
-          <div className="bg-slate-900/80 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-xs font-semibold text-center shadow-lg border border-slate-700/40">
+        <div style={{
+          position: "absolute", top: "50%", left: "50%",
+          transform: "translate(-50%,-50%)", zIndex: 999, pointerEvents: "none",
+        }}>
+          <div style={{
+            background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
+            borderRadius: 12, padding: "8px 16px", border: `1px solid ${C.sep}`,
+            color: "#fff", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+          }}>
             לחץ על המפה לסימון מיקום
           </div>
         </div>
       )}
 
-      {/* Coordinates bar at bottom of map */}
+      {/* Coordinates bar */}
       {position && (
-        <div className="px-4 py-2 bg-slate-900/90 flex items-center gap-2 border-t border-slate-700/40">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-          <span className="text-xs text-emerald-400 font-mono">
+        <div style={{
+          padding: "8px 16px", background: "rgba(0,0,0,0.88)",
+          borderTop: `1px solid ${C.sep}`, display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: C.green, fontFamily: "monospace" }}>
             {position[0].toFixed(5)}, {position[1].toFixed(5)}
           </span>
-          <span className="text-xs text-slate-500 mr-auto">מיקום מסומן ✓</span>
+          <span style={{ fontSize: 11, color: C.label3, marginRight: "auto" }}>מיקום מסומן ✓</span>
         </div>
       )}
     </div>
@@ -210,37 +206,17 @@ interface FwEntry { id: string; name: string; parent_id: string | null }
 interface OutpostEntry { id: string; name: string; region: string | null }
 
 interface FormData {
-  brigade: string;
-  safety_category: string;
-  title: string;
-  event_date: string;
-  event_time: string;
-  location_text: string;
-  latitude: number | null;
-  longitude: number | null;
-  framework_type: string;
-  department: string;
-  battalion_name: string;
-  company_name: string;
-  region: string;
-  outpost: string;
-  involved_soldiers: string;
-  description: string;
-  event_outcomes: string;
-  person_injury_severity: string;
-  driver_type: string;
-  driver_name: string;
-  vehicle_type: string;
-  vehicle_model: string;
-  vehicle_number: string;
-  population_type: string;
-  unit_activity_type: string;
-  event_type: string;
-  severity: string;
-  culpability: string;
-  damage_and_casualties: string;
-  initial_lessons: string;
-  reporter_name: string;
+  brigade: string; safety_category: string; title: string;
+  event_date: string; event_time: string; location_text: string;
+  latitude: number | null; longitude: number | null;
+  framework_type: string; department: string; battalion_name: string;
+  company_name: string; region: string; outpost: string;
+  involved_soldiers: string; description: string; event_outcomes: string;
+  person_injury_severity: string; driver_type: string; driver_name: string;
+  vehicle_type: string; vehicle_model: string; vehicle_number: string;
+  population_type: string; unit_activity_type: string; event_type: string;
+  severity: string; culpability: string; damage_and_casualties: string;
+  initial_lessons: string; reporter_name: string;
 }
 
 interface ImagePreview { base64: string; name: string; type: string; preview: string }
@@ -248,37 +224,16 @@ interface ImagePreview { base64: string; name: string; type: string; preview: st
 const today = new Date().toISOString().split("T")[0];
 
 const EMPTY: FormData = {
-  brigade: "binyamin",
-  safety_category: "",
-  title: "",
-  event_date: today,
-  event_time: "",
-  location_text: "",
-  latitude: null,
-  longitude: null,
-  framework_type: "",
-  department: "",
-  battalion_name: "",
-  company_name: "",
-  region: "",
-  outpost: "",
-  involved_soldiers: "",
-  description: "",
-  event_outcomes: "",
-  person_injury_severity: "",
-  driver_type: "",
-  driver_name: "",
-  vehicle_type: "",
-  vehicle_model: "",
-  vehicle_number: "",
-  population_type: "",
-  unit_activity_type: "",
-  event_type: "",
-  severity: "minor",
-  culpability: "",
-  damage_and_casualties: "",
-  initial_lessons: "",
-  reporter_name: "",
+  brigade: "binyamin", safety_category: "", title: "",
+  event_date: today, event_time: "", location_text: "",
+  latitude: null, longitude: null, framework_type: "", department: "",
+  battalion_name: "", company_name: "", region: "", outpost: "",
+  involved_soldiers: "", description: "", event_outcomes: "",
+  person_injury_severity: "", driver_type: "", driver_name: "",
+  vehicle_type: "", vehicle_model: "", vehicle_number: "",
+  population_type: "", unit_activity_type: "", event_type: "",
+  severity: "minor", culpability: "", damage_and_casualties: "",
+  initial_lessons: "", reporter_name: "",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -313,49 +268,126 @@ async function compressImage(file: File): Promise<ImagePreview> {
 const isBattalionFw = (fw: string) => fw.startsWith("sector:");
 const isMagavFw    = (fw: string) => /מג.?ב/.test(fw);
 
-// ─── Form sub-components ─────────────────────────────────────────────────────
+// ─── Apple-style design components ───────────────────────────────────────────
 
-const inputCls = "w-full bg-slate-800/70 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary/60 transition-colors text-base";
-const selCls   = inputCls + " appearance-none cursor-pointer";
-const errCls   = " border-red-500";
-
-function Field({ label, required, error, children }: {
-  label: string; required?: boolean; error?: string; children: React.ReactNode;
-}) {
+// Section = iOS grouped section: label above, dark card, dividers between rows
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-3">
-      <label className="block text-sm font-bold text-slate-300 mb-1.5">
-        {label}{required && <span className="text-red-400 mr-1">*</span>}
-      </label>
-      {children}
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+    <div style={{ marginBottom: 28 }}>
+      <p style={{
+        fontSize: 12, fontWeight: 600, textTransform: "uppercase",
+        letterSpacing: "0.06em", color: C.label2, padding: "0 4px", marginBottom: 8,
+      }}>
+        {title}
+      </p>
+      <div style={{
+        background: C.card, borderRadius: 16, overflow: "hidden",
+      }}>
+        {children}
+      </div>
     </div>
   );
 }
 
-function Sel({ value, onChange, options, placeholder, className = "" }: {
-  value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[]; placeholder?: string; className?: string;
+// Row = a field row inside a Section card, with a bottom separator
+function Row({ label, required, error, children, noBorder }: {
+  label: string; required?: boolean; error?: string;
+  children: React.ReactNode; noBorder?: boolean;
 }) {
   return (
-    <div className="relative">
-      <select value={value} onChange={e => onChange(e.target.value)} className={selCls + " " + className}>
+    <div style={{
+      padding: "12px 16px",
+      borderBottom: noBorder ? "none" : `0.5px solid ${C.sep}`,
+    }}>
+      <label style={{
+        display: "block", fontSize: 13, fontWeight: 500,
+        color: C.label2, marginBottom: 8,
+      }}>
+        {label}{required && <span style={{ color: C.red, marginRight: 4 }}>*</span>}
+      </label>
+      {children}
+      {error && (
+        <p style={{ color: C.red, fontSize: 12, marginTop: 6, fontWeight: 500 }}>{error}</p>
+      )}
+    </div>
+  );
+}
+
+// Apple-style input
+const iStyle: React.CSSProperties = {
+  width: "100%", boxSizing: "border-box",
+  background: C.fill, border: "none", borderRadius: 10,
+  padding: "10px 14px", fontSize: 15, color: "#fff",
+  fontFamily: C.font, outline: "none", transition: "background 0.15s",
+  WebkitAppearance: "none",
+};
+
+function SfInput(props: React.InputHTMLAttributes<HTMLInputElement> & { hasError?: boolean }) {
+  const { hasError, style, onFocus, onBlur, ...rest } = props;
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      {...rest}
+      onFocus={e => { setFocused(true); onFocus?.(e); }}
+      onBlur={e => { setFocused(false); onBlur?.(e); }}
+      style={{
+        ...iStyle,
+        background: focused ? C.fillFocus : C.fill,
+        outline: hasError ? `2px solid ${C.red}` : focused ? `2px solid rgba(255,59,48,0.45)` : "none",
+        ...style,
+      }}
+    />
+  );
+}
+
+function SfTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { hasError?: boolean }) {
+  const { hasError, style, onFocus, onBlur, ...rest } = props;
+  const [focused, setFocused] = useState(false);
+  return (
+    <textarea
+      {...rest}
+      onFocus={e => { setFocused(true); onFocus?.(e); }}
+      onBlur={e => { setFocused(false); onBlur?.(e); }}
+      style={{
+        ...iStyle,
+        resize: "none",
+        background: focused ? C.fillFocus : C.fill,
+        outline: hasError ? `2px solid ${C.red}` : focused ? `2px solid rgba(255,59,48,0.45)` : "none",
+        ...style,
+      }}
+    />
+  );
+}
+
+function SfSelect({ value, onChange, options, placeholder, hasError }: {
+  value: string; onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string; hasError?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{
+          ...iStyle,
+          paddingLeft: 36,
+          appearance: "none",
+          cursor: "pointer",
+          background: focused ? C.fillFocus : C.fill,
+          outline: hasError ? `2px solid ${C.red}` : focused ? `2px solid rgba(255,59,48,0.45)` : "none",
+        }}
+      >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-    </div>
-  );
-}
-
-function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-5 mb-4 shadow-lg">
-      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-700/60">
-        <div className={`w-2.5 h-7 rounded-full ${color}`} />
-        <h2 className="font-black text-base text-white">{title}</h2>
-      </div>
-      {children}
+      <ChevronDown style={{
+        position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+        width: 16, height: 16, color: C.label2, pointerEvents: "none",
+      }} />
     </div>
   );
 }
@@ -363,9 +395,9 @@ function Section({ title, color, children }: { title: string; color: string; chi
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PublicSafetyReport() {
-  const [form, setForm]           = useState<FormData>(EMPTY);
-  const [images, setImages]       = useState<ImagePreview[]>([]);
-  const [errors, setErrors]       = useState<Partial<Record<keyof FormData, string>>>({});
+  const [form, setForm]             = useState<FormData>(EMPTY);
+  const [images, setImages]         = useState<ImagePreview[]>([]);
+  const [errors, setErrors]         = useState<Partial<Record<keyof FormData, string>>>({});
   const [imageError, setImageError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -381,9 +413,8 @@ export default function PublicSafetyReport() {
     setErrors(e => { const n = { ...e }; delete n[k]; return n; });
   }, []);
 
-  // ── Derived options ──────────────────────────────────────────────────────
-  const rootFws        = frameworks.filter(f => !f.parent_id);
-  const uniqueRegions  = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
+  const rootFws       = frameworks.filter(f => !f.parent_id);
+  const uniqueRegions = [...new Set(outposts.map(o => o.region).filter(Boolean))] as string[];
 
   const frameworkOptions = [
     ...rootFws.map(f => ({ value: f.name, label: f.name })),
@@ -392,7 +423,7 @@ export default function PublicSafetyReport() {
   ];
 
   const selectedFwParent = rootFws.find(f => f.name === form.framework_type);
-  const deptOptions      = selectedFwParent
+  const deptOptions = selectedFwParent
     ? frameworks.filter(f => f.parent_id === selectedFwParent.id).map(f => ({ value: f.name, label: f.name }))
     : [];
   const hasDepts    = deptOptions.length > 0;
@@ -405,15 +436,12 @@ export default function PublicSafetyReport() {
   const outpostOptions = outposts
     .filter(o => !selectedRegion || o.region === selectedRegion)
     .map(o => ({ value: o.name, label: o.name }));
-
   const driverTypes = isBattalion ? DRIVER_TYPES_BATTALION : DRIVER_TYPES_PLANAG;
 
-  // ── Fetch form data when brigade changes ─────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     setFwLoading(true);
-    setFrameworks([]);
-    setOutposts([]);
+    setFrameworks([]); setOutposts([]);
     setForm(f => ({ ...f, framework_type: "", department: "", region: "", outpost: "" }));
 
     supabase.functions.invoke("submit-safety-report", {
@@ -422,30 +450,21 @@ export default function PublicSafetyReport() {
       if (cancelled) return;
       setFrameworks((data?.frameworks || []) as FwEntry[]);
       setOutposts((data?.outposts || []) as OutpostEntry[]);
-    }).catch(() => {
-      // fallback: no dynamic options
-    }).finally(() => {
-      if (!cancelled) setFwLoading(false);
-    });
+    }).catch(() => {}).finally(() => { if (!cancelled) setFwLoading(false); });
 
     return () => { cancelled = true; };
   }, [form.brigade]);
 
-  // ── GPS capture ──────────────────────────────────────────────────────────
   const captureGPS = useCallback(() => {
     if (!navigator.geolocation) return;
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm(f => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-        setGpsLoading(false);
-      },
+      (pos) => { setForm(f => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude })); setGpsLoading(false); },
       () => setGpsLoading(false),
       { timeout: 12000, enableHighAccuracy: true },
     );
   }, []);
 
-  // ── Images ───────────────────────────────────────────────────────────────
   const addImages = async (files: FileList) => {
     const remaining = 5 - images.length;
     if (remaining <= 0) return;
@@ -457,88 +476,82 @@ export default function PublicSafetyReport() {
     });
   };
 
-  // ── Validate ─────────────────────────────────────────────────────────────
   const validate = (): boolean => {
     const e: typeof errors = {};
-    if (!form.safety_category)              e.safety_category = "שדה חובה";
-    if (!form.title.trim())                 e.title = "שדה חובה";
-    if (!form.event_date)                   e.event_date = "שדה חובה";
-    if (!form.event_time)                   e.event_time = "שדה חובה";
-    if (!form.location_text.trim())         e.location_text = "שדה חובה";
-    if (!form.framework_type)               e.framework_type = "שדה חובה";
-    if (!form.involved_soldiers.trim())     e.involved_soldiers = "שדה חובה";
-    if (!form.description.trim())           e.description = "שדה חובה";
-    if (!form.event_outcomes.trim())        e.event_outcomes = "שדה חובה";
+    if (!form.safety_category)               e.safety_category = "שדה חובה";
+    if (!form.title.trim())                  e.title = "שדה חובה";
+    if (!form.event_date)                    e.event_date = "שדה חובה";
+    if (!form.event_time)                    e.event_time = "שדה חובה";
+    if (!form.location_text.trim())          e.location_text = "שדה חובה";
+    if (!form.framework_type)                e.framework_type = "שדה חובה";
+    if (!form.involved_soldiers.trim())      e.involved_soldiers = "שדה חובה";
+    if (!form.description.trim())            e.description = "שדה חובה";
+    if (!form.event_outcomes.trim())         e.event_outcomes = "שדה חובה";
     if (!form.person_injury_severity.trim()) e.person_injury_severity = "שדה חובה";
-    if (!form.population_type)              e.population_type = "שדה חובה";
-    if (!form.unit_activity_type.trim())    e.unit_activity_type = "שדה חובה";
-    if (!form.severity)                     e.severity = "שדה חובה";
-    if (!form.culpability)                  e.culpability = "שדה חובה";
-    if (!form.damage_and_casualties)        e.damage_and_casualties = "שדה חובה";
-    if (!form.initial_lessons.trim())       e.initial_lessons = "שדה חובה";
+    if (!form.population_type)               e.population_type = "שדה חובה";
+    if (!form.unit_activity_type.trim())     e.unit_activity_type = "שדה חובה";
+    if (!form.severity)                      e.severity = "שדה חובה";
+    if (!form.culpability)                   e.culpability = "שדה חובה";
+    if (!form.damage_and_casualties)         e.damage_and_casualties = "שדה חובה";
+    if (!form.initial_lessons.trim())        e.initial_lessons = "שדה חובה";
     if (isRoadSafety) {
-      if (!form.driver_type)                e.driver_type = "שדה חובה";
-      if (!form.vehicle_type)               e.vehicle_type = "שדה חובה";
-      if (!form.vehicle_number.trim())      e.vehicle_number = "שדה חובה";
-      if (!form.event_type)                 e.event_type = "שדה חובה";
+      if (!form.driver_type)           e.driver_type = "שדה חובה";
+      if (!form.vehicle_type)          e.vehicle_type = "שדה חובה";
+      if (!form.vehicle_number.trim()) e.vehicle_number = "שדה חובה";
+      if (!form.event_type)            e.event_type = "שדה חובה";
     }
-
     const hasImgErr = images.length === 0;
     setImageError(hasImgErr ? "יש לצרף תמונה אחת לפחות" : "");
     setErrors(e);
-
     if (Object.keys(e).length > 0 || hasImgErr) {
-      const el = document.querySelector("[data-err=true]");
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.querySelector("[data-err=true]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
     return Object.keys(e).length === 0 && !hasImgErr;
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
   const submit = async () => {
     if (!validate()) return;
-    setSubmitting(true);
-    setSubmitError("");
+    setSubmitting(true); setSubmitError("");
     try {
-      const payload = {
-        ...form,
-        images: images.map(({ base64, name, type }) => ({ base64, name, type })),
-      };
-      const { data, error } = await supabase.functions.invoke("submit-safety-report", { body: payload });
+      const { data, error } = await supabase.functions.invoke("submit-safety-report", {
+        body: { ...form, images: images.map(({ base64, name, type }) => ({ base64, name, type })) },
+      });
       if (error || data?.error) { setSubmitError(data?.error || error?.message || "שגיאה בשליחה. נסה שוב."); return; }
       setSubmitted(true);
-    } catch {
-      setSubmitError("שגיאת רשת. בדוק חיבור ונסה שוב.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch { setSubmitError("שגיאת רשת. בדוק חיבור ונסה שוב."); }
+    finally { setSubmitting(false); }
   };
 
   // ─── Success screen ───────────────────────────────────────────────────────
+
   if (submitted) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6" dir="rtl">
-        <div className="text-center max-w-sm">
-          <div className="relative mx-auto w-28 h-28 mb-6">
-            <div className="absolute inset-0 bg-green-500/25 rounded-full blur-2xl animate-pulse" />
-            <div className="relative w-28 h-28 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-2xl">
-              <CheckCircle className="w-14 h-14 text-white" />
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: C.font }} dir="rtl">
+        <div style={{ textAlign: "center", maxWidth: 320 }}>
+          <div style={{ position: "relative", width: 96, height: 96, margin: "0 auto 24px" }}>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(48,209,88,0.2)", borderRadius: "50%", filter: "blur(20px)" }} />
+            <div style={{ position: "relative", width: 96, height: 96, background: "linear-gradient(135deg,#30D158,#25A244)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 32px rgba(48,209,88,0.4)" }}>
+              <CheckCircle style={{ width: 48, height: 48, color: "#fff" }} />
             </div>
           </div>
-          <h1 className="text-2xl font-black text-white mb-3">הדיווח נשלח בהצלחה</h1>
-          <p className="text-slate-400 mb-2">הדיווח התקבל ויועבר לגורמים הרלוונטיים.</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8 }}>הדיווח נשלח בהצלחה</h1>
+          <p style={{ fontSize: 15, color: C.label2, marginBottom: 4 }}>הדיווח התקבל ויועבר לגורמים הרלוונטיים.</p>
           {form.brigade === "binyamin" && (
-            <p className="text-emerald-400 text-sm font-semibold">📲 הודעת WhatsApp נשלחה לקצין הבטיחות</p>
+            <p style={{ fontSize: 14, color: C.green, fontWeight: 600, marginTop: 8 }}>📲 הודעת WhatsApp נשלחה לקצין הבטיחות</p>
           )}
           {isRoadSafety && (
-            <p className="text-blue-400 text-sm font-semibold mt-1">🚗 האירוע מופיע גם במעקב תאונות</p>
+            <p style={{ fontSize: 14, color: "#64D2FF", fontWeight: 600, marginTop: 4 }}>🚗 האירוע מופיע גם במעקב תאונות</p>
           )}
           {form.latitude !== null && (
-            <p className="text-cyan-400 text-sm font-semibold mt-1">📍 המיקום מסומן במפת הכר את הגזרה</p>
+            <p style={{ fontSize: 14, color: "#64D2FF", fontWeight: 600, marginTop: 4 }}>📍 המיקום מסומן במפת הכר את הגזרה</p>
           )}
           <button
             onClick={() => { setForm(EMPTY); setImages([]); setSubmitted(false); setImageError(""); }}
-            className="mt-8 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all font-semibold"
+            style={{
+              marginTop: 32, padding: "12px 28px", borderRadius: 14, border: `1px solid ${C.sep}`,
+              background: C.card, color: C.label2, fontSize: 15, fontWeight: 600,
+              cursor: "pointer", fontFamily: C.font,
+            }}
           >
             דיווח נוסף
           </button>
@@ -548,96 +561,114 @@ export default function PublicSafetyReport() {
   }
 
   // ─── Form ─────────────────────────────────────────────────────────────────
-  return (
-    <div className="min-h-screen bg-slate-900 text-white" dir="rtl">
 
-      {/* Top bar */}
-      <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur border-b border-gold/20 px-4 py-3 flex items-center gap-3">
-        <img src={unitLogo} alt="סמל" className="w-9 h-9 object-contain drop-shadow-lg" />
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: "#fff", fontFamily: C.font }} dir="rtl">
+
+      {/* ── Header ── */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 20,
+        background: "rgba(0,0,0,0.92)", backdropFilter: "blur(20px) saturate(180%)",
+        borderBottom: "0.5px solid rgba(84,84,88,0.65)",
+        padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+      }}>
+        <img src={unitLogo} alt="סמל" style={{ width: 36, height: 36, objectFit: "contain" }} />
         <div>
-          <p className="font-black text-sm text-white leading-tight">דיווח אירוע בטיחות</p>
-          <p className="text-xs text-slate-400">מערכת Connect — ניתן לדיווח ללא כניסה למערכת</p>
+          <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>דיווח אירוע בטיחות</p>
+          <p style={{ fontSize: 12, color: C.label2 }}>ניתן לדיווח ללא כניסה למערכת</p>
         </div>
-        <div className="mr-auto flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/30">
-          <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-          <span className="text-xs font-bold text-red-400">דיווח בטיחות</span>
+        <div style={{
+          marginRight: "auto", display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 12px", borderRadius: 20,
+          background: "rgba(255,59,48,0.12)", border: "1px solid rgba(255,59,48,0.3)",
+        }}>
+          <AlertTriangle style={{ width: 13, height: 13, color: C.red }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>בטיחות</span>
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto px-4 pt-5 pb-32">
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "24px 16px 120px" }}>
 
-        {/* ── Section 1: פרטי האירוע ──────────────────────────────────────── */}
-        <Section title="פרטי האירוע" color="bg-gradient-to-b from-red-500 to-rose-600">
-          <Field label="חטיבה" required error={errors.brigade}>
-            <Sel
+        {/* ══ פרטי האירוע ══════════════════════════════════════════════════ */}
+        <Section title="פרטי האירוע">
+          <Row label="חטיבה" required>
+            <SfSelect
               value={form.brigade}
               onChange={v => set("brigade", v)}
               options={BRIGADES.map(b => ({ value: b.code, label: b.name }))}
-              className={errors.brigade ? errCls : ""}
             />
-          </Field>
+          </Row>
 
-          <Field label="קטגוריית בטיחות" required error={errors.safety_category}>
+          <Row label="קטגוריית בטיחות" required error={errors.safety_category}>
             <div data-err={!!errors.safety_category || undefined}>
-              <Sel
+              <SfSelect
                 value={form.safety_category}
                 onChange={v => { set("safety_category", v); set("driver_type", ""); set("vehicle_type", ""); set("event_type", ""); }}
                 options={SAFETY_CATEGORIES.map(c => ({ value: c, label: c }))}
                 placeholder="בחר קטגוריית בטיחות"
-                className={errors.safety_category ? errCls : ""}
+                hasError={!!errors.safety_category}
               />
             </div>
-          </Field>
+          </Row>
 
-          <Field label="כותרת" required error={errors.title}>
-            <input
+          <Row label="כותרת" required error={errors.title}>
+            <SfInput
               type="text"
               value={form.title}
               onChange={e => set("title", e.target.value)}
               placeholder="הזן כותרת..."
-              className={inputCls + (errors.title ? errCls : "")}
+              hasError={!!errors.title}
               data-err={!!errors.title || undefined}
             />
-          </Field>
+          </Row>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="תאריך" required error={errors.event_date}>
-              <input
+          {/* Date + Time as a single row split in two */}
+          <div style={{ padding: "12px 16px", borderBottom: `0.5px solid ${C.sep}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
+                תאריך<span style={{ color: C.red, marginRight: 4 }}>*</span>
+              </label>
+              <SfInput
                 type="date"
                 value={form.event_date}
                 max={today}
                 onChange={e => set("event_date", e.target.value)}
-                className={inputCls + (errors.event_date ? errCls : "")}
+                hasError={!!errors.event_date}
                 data-err={!!errors.event_date || undefined}
               />
-            </Field>
-            <Field label="שעה" required error={errors.event_time}>
-              <input
+              {errors.event_date && <p style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{errors.event_date}</p>}
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
+                שעה<span style={{ color: C.red, marginRight: 4 }}>*</span>
+              </label>
+              <SfInput
                 type="time"
                 value={form.event_time}
                 onChange={e => set("event_time", e.target.value)}
-                className={inputCls + (errors.event_time ? errCls : "")}
+                hasError={!!errors.event_time}
                 data-err={!!errors.event_time || undefined}
               />
-            </Field>
+              {errors.event_time && <p style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{errors.event_time}</p>}
+            </div>
           </div>
 
-          <Field label="תיאור מיקום האירוע" required error={errors.location_text}>
-            <input
+          <Row label="תיאור מיקום האירוע" required error={errors.location_text}>
+            <SfInput
               type="text"
               value={form.location_text}
               onChange={e => set("location_text", e.target.value)}
               placeholder="לדוגמה: כביש 60, צומת בית אל..."
-              className={inputCls + (errors.location_text ? errCls : "")}
+              hasError={!!errors.location_text}
               data-err={!!errors.location_text || undefined}
             />
-          </Field>
+          </Row>
 
-          {/* Inline map picker — always shown */}
-          <div className="mb-3">
-            <label className="block text-sm font-bold text-slate-300 mb-1.5">
+          {/* Inline map */}
+          <div style={{ padding: "12px 16px" }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
               סימון מיקום במפה
-              <span className="text-slate-500 text-xs font-normal mr-2">לחץ על המפה לדקירת מיקום מדויק</span>
+              <span style={{ fontSize: 11, color: C.label3, fontWeight: 400, marginRight: 8 }}>לחץ על המפה לדקירה מדויקת</span>
             </label>
             <InlineMapPicker
               lat={form.latitude}
@@ -649,374 +680,262 @@ export default function PublicSafetyReport() {
           </div>
         </Section>
 
-        {/* ── Section 2: מסגרת ─────────────────────────────────────────────── */}
-        <Section title="מסגרת ויחידה" color="bg-gradient-to-b from-blue-500 to-blue-700">
-          <Field label="מסגרת" required error={errors.framework_type}>
+        {/* ══ מסגרת ════════════════════════════════════════════════════════ */}
+        <Section title="מסגרת ויחידה">
+          <Row label="מסגרת" required error={errors.framework_type}>
             {fwLoading
-              ? <div className="flex items-center gap-2 py-3 text-slate-400 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> טוען מסגרות...</div>
+              ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.label2, fontSize: 14, padding: "4px 0" }}>
+                  <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                  טוען מסגרות...
+                </div>
+              )
               : (
                 <div data-err={!!errors.framework_type || undefined}>
-                  <Sel
+                  <SfSelect
                     value={form.framework_type}
                     onChange={v => { set("framework_type", v); set("department", ""); set("region", ""); set("outpost", ""); set("battalion_name", ""); set("company_name", ""); }}
                     options={frameworkOptions}
                     placeholder="בחר מסגרת"
-                    className={errors.framework_type ? errCls : ""}
+                    hasError={!!errors.framework_type}
                   />
                 </div>
               )
             }
-          </Field>
+          </Row>
 
           {!isBattalion && hasDepts && (
-            <Field label="אגף">
-              <Sel
-                value={form.department}
-                onChange={v => set("department", v)}
-                options={deptOptions}
-                placeholder="בחר אגף"
-              />
-            </Field>
+            <Row label="אגף">
+              <SfSelect value={form.department} onChange={v => set("department", v)} options={deptOptions} placeholder="בחר אגף" />
+            </Row>
           )}
-
           {isBattalion && !isMagav && (
-            <Field label="שם הגדוד">
-              <input
-                type="text"
-                value={form.battalion_name}
-                onChange={e => set("battalion_name", e.target.value)}
-                placeholder="הזן שם גדוד..."
-                className={inputCls}
-              />
-            </Field>
+            <Row label="שם הגדוד">
+              <SfInput type="text" value={form.battalion_name} onChange={e => set("battalion_name", e.target.value)} placeholder="הזן שם גדוד..." />
+            </Row>
           )}
-
           {(isBattalion || isMagav) && (
-            <Field label="פלוגה / מסגרת / אגף">
-              <input
-                type="text"
-                value={form.company_name}
-                onChange={e => set("company_name", e.target.value)}
-                placeholder="הזן שם פלוגה / מסגרת / אגף..."
-                className={inputCls}
-              />
-            </Field>
+            <Row label="פלוגה / מסגרת / אגף">
+              <SfInput type="text" value={form.company_name} onChange={e => set("company_name", e.target.value)} placeholder="הזן שם פלוגה / מסגרת / אגף..." />
+            </Row>
           )}
-
           {isBattalion && regionOptions.length > 0 && (
-            <Field label="גזרה">
-              <Sel
-                value={form.region}
-                onChange={v => { set("region", v); set("outpost", ""); }}
-                options={regionOptions}
-                placeholder="בחר גזרה"
-              />
-            </Field>
+            <Row label="גזרה">
+              <SfSelect value={form.region} onChange={v => { set("region", v); set("outpost", ""); }} options={regionOptions} placeholder="בחר גזרה" />
+            </Row>
           )}
-
           {isBattalion && outpostOptions.length > 0 && (
-            <Field label="מוצב">
-              <Sel
-                value={form.outpost}
-                onChange={v => set("outpost", v)}
-                options={[{ value: 'מפג"ד', label: 'מפג"ד' }, ...outpostOptions]}
-                placeholder="בחר מוצב"
-              />
-            </Field>
+            <Row label="מוצב" noBorder>
+              <SfSelect value={form.outpost} onChange={v => set("outpost", v)} options={[{ value: 'מפג"ד', label: 'מפג"ד' }, ...outpostOptions]} placeholder="בחר מוצב" />
+            </Row>
           )}
         </Section>
 
-        {/* ── Section 3: תיאור האירוע ─────────────────────────────────────── */}
-        <Section title="תיאור האירוע" color="bg-gradient-to-b from-amber-500 to-orange-600">
-          <Field label="חיילים מעורבים" required error={errors.involved_soldiers}>
-            <textarea
-              value={form.involved_soldiers}
-              onChange={e => set("involved_soldiers", e.target.value)}
-              placeholder="פרט את החיילים המעורבים..."
-              rows={3}
-              className={inputCls + " resize-none" + (errors.involved_soldiers ? errCls : "")}
-              data-err={!!errors.involved_soldiers || undefined}
-            />
-          </Field>
-
-          <Field label="תיאור האירוע" required error={errors.description}>
-            <textarea
-              value={form.description}
-              onChange={e => set("description", e.target.value)}
-              placeholder="תיאור מפורט של האירוע..."
-              rows={4}
-              className={inputCls + " resize-none" + (errors.description ? errCls : "")}
-              data-err={!!errors.description || undefined}
-            />
-          </Field>
-
-          <Field label="תוצאות האירוע" required error={errors.event_outcomes}>
-            <textarea
-              value={form.event_outcomes}
-              onChange={e => set("event_outcomes", e.target.value)}
-              placeholder="פרט את תוצאות האירוע..."
-              rows={3}
-              className={inputCls + " resize-none" + (errors.event_outcomes ? errCls : "")}
-              data-err={!!errors.event_outcomes || undefined}
-            />
-          </Field>
-
-          <Field label="הערכת חומרת הפגיעה באדם ורכוש" required error={errors.person_injury_severity}>
-            <textarea
-              value={form.person_injury_severity}
-              onChange={e => set("person_injury_severity", e.target.value)}
-              placeholder="פרט את חומרת הפגיעה באדם וברכוש..."
-              rows={3}
-              className={inputCls + " resize-none" + (errors.person_injury_severity ? errCls : "")}
-              data-err={!!errors.person_injury_severity || undefined}
-            />
-          </Field>
-
-          <Field label="לקחים ראשונים" required error={errors.initial_lessons}>
-            <textarea
-              value={form.initial_lessons}
-              onChange={e => set("initial_lessons", e.target.value)}
-              placeholder="פרט לקחים ראשונים..."
-              rows={3}
-              className={inputCls + " resize-none" + (errors.initial_lessons ? errCls : "")}
-              data-err={!!errors.initial_lessons || undefined}
-            />
-          </Field>
+        {/* ══ תיאור האירוע ══════════════════════════════════════════════════ */}
+        <Section title="תיאור האירוע">
+          <Row label="חיילים מעורבים" required error={errors.involved_soldiers}>
+            <SfTextarea value={form.involved_soldiers} onChange={e => set("involved_soldiers", e.target.value)}
+              placeholder="פרט את החיילים המעורבים..." rows={3}
+              hasError={!!errors.involved_soldiers} data-err={!!errors.involved_soldiers || undefined} />
+          </Row>
+          <Row label="תיאור האירוע" required error={errors.description}>
+            <SfTextarea value={form.description} onChange={e => set("description", e.target.value)}
+              placeholder="תיאור מפורט של האירוע..." rows={4}
+              hasError={!!errors.description} data-err={!!errors.description || undefined} />
+          </Row>
+          <Row label="תוצאות האירוע" required error={errors.event_outcomes}>
+            <SfTextarea value={form.event_outcomes} onChange={e => set("event_outcomes", e.target.value)}
+              placeholder="פרט את תוצאות האירוע..." rows={3}
+              hasError={!!errors.event_outcomes} data-err={!!errors.event_outcomes || undefined} />
+          </Row>
+          <Row label="הערכת חומרת הפגיעה באדם ורכוש" required error={errors.person_injury_severity}>
+            <SfTextarea value={form.person_injury_severity} onChange={e => set("person_injury_severity", e.target.value)}
+              placeholder="פרט את חומרת הפגיעה באדם וברכוש..." rows={3}
+              hasError={!!errors.person_injury_severity} data-err={!!errors.person_injury_severity || undefined} />
+          </Row>
+          <Row label="לקחים ראשונים" required error={errors.initial_lessons} noBorder>
+            <SfTextarea value={form.initial_lessons} onChange={e => set("initial_lessons", e.target.value)}
+              placeholder="פרט לקחים ראשונים..." rows={3}
+              hasError={!!errors.initial_lessons} data-err={!!errors.initial_lessons || undefined} />
+          </Row>
         </Section>
 
-        {/* ── Section 4: בטיחות בדרכים (conditional) ─────────────────────── */}
+        {/* ══ בטיחות בדרכים (conditional) ══════════════════════════════════ */}
         {isRoadSafety && (
-          <Section title="פרטי בטיחות בדרכים" color="bg-gradient-to-b from-red-600 to-red-800">
-            <Field label="סוג הנהג" required error={errors.driver_type}>
+          <Section title="פרטי בטיחות בדרכים">
+            <Row label="סוג הנהג" required error={errors.driver_type}>
               <div data-err={!!errors.driver_type || undefined}>
-                <Sel
-                  value={form.driver_type}
-                  onChange={v => set("driver_type", v)}
-                  options={driverTypes}
-                  placeholder="בחר סוג נהג"
-                  className={errors.driver_type ? errCls : ""}
-                />
+                <SfSelect value={form.driver_type} onChange={v => set("driver_type", v)}
+                  options={driverTypes} placeholder="בחר סוג נהג" hasError={!!errors.driver_type} />
               </div>
-            </Field>
-
-            <Field label="שם הנהג">
-              <input
-                type="text"
-                value={form.driver_name}
-                onChange={e => set("driver_name", e.target.value)}
-                placeholder="הזן שם נהג..."
-                className={inputCls}
-              />
-            </Field>
-
-            <Field label="סוג הרכב" required error={errors.vehicle_type}>
+            </Row>
+            <Row label="שם הנהג">
+              <SfInput type="text" value={form.driver_name} onChange={e => set("driver_name", e.target.value)} placeholder="הזן שם נהג..." />
+            </Row>
+            <Row label="סוג הרכב" required error={errors.vehicle_type}>
               <div data-err={!!errors.vehicle_type || undefined}>
-                <Sel
-                  value={form.vehicle_type}
-                  onChange={v => { set("vehicle_type", v); set("vehicle_model", ""); }}
-                  options={VEHICLE_TYPES.map(v => ({ value: v, label: v }))}
-                  placeholder="בחר סוג רכב"
-                  className={errors.vehicle_type ? errCls : ""}
-                />
+                <SfSelect value={form.vehicle_type} onChange={v => { set("vehicle_type", v); set("vehicle_model", ""); }}
+                  options={VEHICLE_TYPES.map(v => ({ value: v, label: v }))} placeholder="בחר סוג רכב" hasError={!!errors.vehicle_type} />
               </div>
-            </Field>
-
+            </Row>
             {VEHICLE_MODEL_TYPES.includes(form.vehicle_type) && (
-              <Field label="דגם הרכב">
-                <input
-                  type="text"
-                  value={form.vehicle_model}
-                  onChange={e => set("vehicle_model", e.target.value)}
-                  placeholder="לדוגמה: הילקס, דימקס, ספארי..."
-                  className={inputCls}
-                />
-              </Field>
+              <Row label="דגם הרכב">
+                <SfInput type="text" value={form.vehicle_model} onChange={e => set("vehicle_model", e.target.value)} placeholder="לדוגמה: הילקס, דימקס, ספארי..." />
+              </Row>
             )}
-
-            <Field label="מספר רכב" required error={errors.vehicle_number}>
-              <input
-                type="text"
-                value={form.vehicle_number}
-                onChange={e => set("vehicle_number", e.target.value)}
-                placeholder="הזן מספר רכב..."
-                className={inputCls + (errors.vehicle_number ? errCls : "")}
-                data-err={!!errors.vehicle_number || undefined}
-              />
-            </Field>
-
-            <Field label="סוג האירוע" required error={errors.event_type}>
+            <Row label="מספר רכב" required error={errors.vehicle_number}>
+              <SfInput type="text" value={form.vehicle_number} onChange={e => set("vehicle_number", e.target.value)}
+                placeholder="הזן מספר רכב..." hasError={!!errors.vehicle_number} data-err={!!errors.vehicle_number || undefined} />
+            </Row>
+            <Row label="סוג האירוע" required error={errors.event_type} noBorder>
               <div data-err={!!errors.event_type || undefined}>
-                <Sel
-                  value={form.event_type}
-                  onChange={v => set("event_type", v)}
-                  options={EVENT_TYPES_ROAD}
-                  placeholder="בחר סוג אירוע"
-                  className={errors.event_type ? errCls : ""}
-                />
+                <SfSelect value={form.event_type} onChange={v => set("event_type", v)}
+                  options={EVENT_TYPES_ROAD} placeholder="בחר סוג אירוע" hasError={!!errors.event_type} />
               </div>
-            </Field>
+            </Row>
           </Section>
         )}
 
-        {/* ── Section 5: פרטים נוספים ─────────────────────────────────────── */}
-        <Section title="פרטים נוספים" color="bg-gradient-to-b from-purple-500 to-violet-600">
-          <Field label="סוג אוכלוסייה" required error={errors.population_type}>
+        {/* ══ פרטים נוספים ══════════════════════════════════════════════════ */}
+        <Section title="פרטים נוספים">
+          <Row label="סוג אוכלוסייה" required error={errors.population_type}>
             <div data-err={!!errors.population_type || undefined}>
-              <Sel
-                value={form.population_type}
-                onChange={v => set("population_type", v)}
-                options={POPULATION_TYPES.map(p => ({ value: p, label: p }))}
-                placeholder="בחר סוג אוכלוסייה"
-                className={errors.population_type ? errCls : ""}
-              />
+              <SfSelect value={form.population_type} onChange={v => set("population_type", v)}
+                options={POPULATION_TYPES.map(p => ({ value: p, label: p }))} placeholder="בחר סוג אוכלוסייה" hasError={!!errors.population_type} />
             </div>
-          </Field>
-
-          <Field label="סוג האירוע (פעילות היחידה)" required error={errors.unit_activity_type}>
-            <input
-              type="text"
-              value={form.unit_activity_type}
-              onChange={e => set("unit_activity_type", e.target.value)}
-              placeholder="לדוגמה: סיור, מחסום, אימון..."
-              className={inputCls + (errors.unit_activity_type ? errCls : "")}
-              data-err={!!errors.unit_activity_type || undefined}
-            />
-          </Field>
-
-          <Field label="חומרת האירוע" required error={errors.severity}>
-            <Sel
-              value={form.severity}
-              onChange={v => set("severity", v)}
-              options={SEVERITY_OPTIONS}
-              className={errors.severity ? errCls : ""}
-            />
-          </Field>
-
-          <Field label="סיווג האשמה" required error={errors.culpability}>
+          </Row>
+          <Row label="סוג האירוע (פעילות היחידה)" required error={errors.unit_activity_type}>
+            <SfInput type="text" value={form.unit_activity_type} onChange={e => set("unit_activity_type", e.target.value)}
+              placeholder="לדוגמה: סיור, מחסום, אימון..." hasError={!!errors.unit_activity_type}
+              data-err={!!errors.unit_activity_type || undefined} />
+          </Row>
+          <Row label="חומרת האירוע" required error={errors.severity}>
+            <SfSelect value={form.severity} onChange={v => set("severity", v)} options={SEVERITY_OPTIONS} hasError={!!errors.severity} />
+          </Row>
+          <Row label="סיווג האשמה" required error={errors.culpability}>
             <div data-err={!!errors.culpability || undefined}>
-              <Sel
-                value={form.culpability}
-                onChange={v => set("culpability", v)}
-                options={CULPABILITY_OPTIONS.map(c => ({ value: c, label: c }))}
-                placeholder="בחר סיווג אשמה"
-                className={errors.culpability ? errCls : ""}
-              />
+              <SfSelect value={form.culpability} onChange={v => set("culpability", v)}
+                options={CULPABILITY_OPTIONS.map(c => ({ value: c, label: c }))} placeholder="בחר סיווג אשמה" hasError={!!errors.culpability} />
             </div>
-          </Field>
-
-          <Field label="נזק ונפגעים" required error={errors.damage_and_casualties}>
+          </Row>
+          <Row label="נזק ונפגעים" required error={errors.damage_and_casualties} noBorder>
             <div data-err={!!errors.damage_and_casualties || undefined}>
-              <Sel
-                value={form.damage_and_casualties}
-                onChange={v => set("damage_and_casualties", v)}
-                options={DAMAGE_OPTIONS.map(d => ({ value: d, label: d }))}
-                placeholder="בחר סיווג נזק ונפגעים"
-                className={errors.damage_and_casualties ? errCls : ""}
-              />
+              <SfSelect value={form.damage_and_casualties} onChange={v => set("damage_and_casualties", v)}
+                options={DAMAGE_OPTIONS.map(d => ({ value: d, label: d }))} placeholder="בחר סיווג נזק ונפגעים" hasError={!!errors.damage_and_casualties} />
             </div>
-          </Field>
+          </Row>
         </Section>
 
-        {/* ── Section 6: תמונות (required) ────────────────────────────────── */}
-        <Section title="תמונות האירוע" color="bg-gradient-to-b from-teal-500 to-cyan-600">
-          <div data-err={!!imageError || undefined}>
+        {/* ══ תמונות ════════════════════════════════════════════════════════ */}
+        <Section title="תמונות האירוע">
+          <div style={{ padding: "16px" }} data-err={!!imageError || undefined}>
             {images.length > 0 && (
-              <div className="flex gap-3 mb-4 flex-wrap">
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
                 {images.map((img, i) => (
-                  <div key={i} className="relative">
-                    <img
-                      src={img.preview}
-                      alt={`תמונה ${i + 1}`}
-                      className="w-24 h-24 object-cover rounded-xl border border-slate-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg"
-                    >
-                      <X className="w-3.5 h-3.5 text-white" />
+                  <div key={i} style={{ position: "relative" }}>
+                    <img src={img.preview} alt={`תמונה ${i + 1}`}
+                      style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 12 }} />
+                    <button type="button" onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                      style={{
+                        position: "absolute", top: -8, right: -8,
+                        width: 24, height: 24, borderRadius: "50%",
+                        background: C.red, border: "2px solid #000",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer",
+                      }}>
+                      <X style={{ width: 12, height: 12, color: "#fff" }} />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-
             {images.length < 5 && (
               <>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={e => { if (e.target.files) { addImages(e.target.files); e.target.value = ""; } }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className={[
-                    "w-full py-4 rounded-xl border-2 border-dashed transition-all flex items-center justify-center gap-2 font-semibold",
-                    imageError
-                      ? "border-red-500/70 text-red-400 hover:border-red-400 bg-red-500/5"
-                      : "border-slate-600 hover:border-primary/60 text-slate-400 hover:text-white",
-                  ].join(" ")}
-                >
-                  <Camera className="w-5 h-5" />
-                  {images.length === 0
-                    ? "הוסף תמונה מהאירוע (חובה)"
-                    : `הוסף עוד (${5 - images.length} נותרו)`}
+                <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+                  onChange={e => { if (e.target.files) { addImages(e.target.files); e.target.value = ""; } }} />
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  style={{
+                    width: "100%", height: 56, borderRadius: 14, cursor: "pointer",
+                    border: `2px dashed ${imageError ? "rgba(255,59,48,0.6)" : "rgba(118,118,128,0.35)"}`,
+                    background: imageError ? "rgba(255,59,48,0.06)" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    fontSize: 15, fontWeight: 600, fontFamily: C.font,
+                    color: imageError ? C.red : C.label2,
+                    transition: "all 0.15s",
+                  }}>
+                  <Camera style={{ width: 20, height: 20 }} />
+                  {images.length === 0 ? "הוסף תמונה (חובה)" : `הוסף עוד (${5 - images.length} נותרו)`}
                 </button>
               </>
             )}
-
             {imageError && (
-              <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                {imageError}
+              <p style={{ color: C.red, fontSize: 12, marginTop: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                <AlertTriangle style={{ width: 12, height: 12 }} />{imageError}
               </p>
             )}
+            <p style={{ fontSize: 11, color: C.label3, marginTop: 8 }}>חובה לצרף תמונה אחת לפחות</p>
           </div>
-          <p className="text-xs text-slate-500 mt-2">* יש לצרף תמונה אחת לפחות לפני שליחת הדיווח</p>
         </Section>
 
-        {/* ── Section 7: פרטי מדווח ───────────────────────────────────────── */}
-        <Section title="פרטי המדווח (אופציונלי)" color="bg-gradient-to-b from-slate-500 to-slate-600">
-          <Field label="שם המדווח">
-            <input
-              type="text"
-              value={form.reporter_name}
-              onChange={e => set("reporter_name", e.target.value)}
-              placeholder="שם מלא"
-              className={inputCls}
-            />
-          </Field>
+        {/* ══ פרטי מדווח ════════════════════════════════════════════════════ */}
+        <Section title="פרטי המדווח — אופציונלי">
+          <Row label="שם המדווח" noBorder>
+            <SfInput type="text" value={form.reporter_name} onChange={e => set("reporter_name", e.target.value)} placeholder="שם מלא" />
+          </Row>
         </Section>
 
         {/* Error banner */}
         {submitError && (
-          <div className="mb-4 p-4 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-sm font-semibold flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />{submitError}
+          <div style={{
+            marginBottom: 16, padding: "14px 16px", borderRadius: 14,
+            background: "rgba(255,59,48,0.1)", border: `1px solid rgba(255,59,48,0.35)`,
+            display: "flex", alignItems: "center", gap: 10,
+            fontSize: 14, fontWeight: 600, color: C.red,
+          }}>
+            <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />{submitError}
           </div>
         )}
 
-        <p className="text-xs text-slate-500 text-center mb-4 px-2">
+        <p style={{ fontSize: 12, color: C.label3, textAlign: "center", padding: "0 8px" }}>
           הדיווח נשמר במערכת Connect ומועבר לקצין הבטיחות. במקרה חירום — פנה ישירות לחדר המצב.
         </p>
       </div>
 
-      {/* Sticky submit */}
-      <div className="fixed bottom-0 right-0 left-0 bg-slate-900/95 backdrop-blur border-t border-slate-700/50 p-4 z-20">
+      {/* ── Sticky submit button ── */}
+      <div style={{
+        position: "fixed", bottom: 0, right: 0, left: 0, zIndex: 20,
+        background: "rgba(0,0,0,0.92)", backdropFilter: "blur(20px) saturate(180%)",
+        borderTop: "0.5px solid rgba(84,84,88,0.65)",
+        padding: "16px",
+      }}>
         <button
           type="button"
           onClick={submit}
           disabled={submitting}
-          className="w-full max-w-xl mx-auto flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg bg-gradient-to-l from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white shadow-lg shadow-red-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            width: "100%", maxWidth: 560, margin: "0 auto",
+            height: 54, borderRadius: 14,
+            background: submitting ? "rgba(255,59,48,0.5)" : C.red,
+            border: "none", cursor: submitting ? "not-allowed" : "pointer",
+            fontSize: 17, fontWeight: 600, color: "#fff",
+            fontFamily: C.font,
+            boxShadow: submitting ? "none" : "0 4px 20px rgba(255,59,48,0.4)",
+            transition: "all 0.2s",
+          }}>
           {submitting
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> שולח דיווח...</>
-            : <><Send className="w-5 h-5" /> שלח דיווח בטיחות</>}
+            ? <><Loader2 style={{ width: 20, height: 20, animation: "spin 1s linear infinite" }} /> שולח דיווח...</>
+            : <><Send style={{ width: 20, height: 20 }} /> שלח דיווח בטיחות</>}
         </button>
       </div>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+        select option { background: #1C1C1E; color: #fff; }
+        ::placeholder { color: #48484A !important; }
+      `}</style>
     </div>
   );
 }
