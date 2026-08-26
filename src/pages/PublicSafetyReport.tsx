@@ -499,8 +499,9 @@ export default function PublicSafetyReport() {
       if (!form.vehicle_type)          e.vehicle_type = "שדה חובה";
       if (!form.vehicle_number.trim()) e.vehicle_number = "שדה חובה";
       if (!form.event_type)            e.event_type = "שדה חובה";
+      if (form.latitude === null)      e.latitude = "יש לסמן מיקום במפה";
     }
-    const hasImgErr = images.length === 0;
+    const hasImgErr = isRoadSafety && images.length === 0;
     setImageError(hasImgErr ? "יש לצרף תמונה אחת לפחות" : "");
     setErrors(e);
     if (Object.keys(e).length > 0 || hasImgErr) {
@@ -603,7 +604,14 @@ export default function PublicSafetyReport() {
             <div data-err={!!errors.safety_category || undefined}>
               <SfSelect
                 value={form.safety_category}
-                onChange={v => { set("safety_category", v); set("driver_type", ""); set("vehicle_type", ""); set("event_type", ""); }}
+                onChange={v => {
+                  set("safety_category", v);
+                  set("driver_type", ""); set("vehicle_type", ""); set("event_type", "");
+                  if (v !== "בטיחות בדרכים") {
+                    setErrors(prev => { const n = { ...prev }; delete n.latitude; return n; });
+                    setImageError("");
+                  }
+                }}
                 options={SAFETY_CATEGORIES.map(c => ({ value: c, label: c }))}
                 placeholder="בחר קטגוריית בטיחות"
                 hasError={!!errors.safety_category}
@@ -664,20 +672,27 @@ export default function PublicSafetyReport() {
             />
           </Row>
 
-          {/* Inline map */}
-          <div style={{ padding: "12px 16px" }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
-              סימון מיקום במפה
-              <span style={{ fontSize: 11, color: C.label3, fontWeight: 400, marginRight: 8 }}>לחץ על המפה לדקירה מדויקת</span>
-            </label>
-            <InlineMapPicker
-              lat={form.latitude}
-              lng={form.longitude}
-              onPick={(lat, lng) => { set("latitude", lat); set("longitude", lng); }}
-              onGPS={captureGPS}
-              gpsLoading={gpsLoading}
-            />
-          </div>
+          {/* Inline map — shown only for road safety, required */}
+          {isRoadSafety && (
+            <div style={{ padding: "12px 16px" }} data-err={!!errors.latitude || undefined}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
+                סימון מיקום במפה<span style={{ color: C.red, marginRight: 4 }}>*</span>
+                <span style={{ fontSize: 11, color: C.label3, fontWeight: 400, marginRight: 8 }}>לחץ על המפה לדקירה מדויקת</span>
+              </label>
+              <InlineMapPicker
+                lat={form.latitude}
+                lng={form.longitude}
+                onPick={(lat, lng) => { set("latitude", lat); set("longitude", lng); }}
+                onGPS={captureGPS}
+                gpsLoading={gpsLoading}
+              />
+              {errors.latitude && (
+                <p style={{ color: C.red, fontSize: 12, marginTop: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                  <AlertTriangle style={{ width: 12, height: 12 }} />{errors.latitude}
+                </p>
+              )}
+            </div>
+          )}
         </Section>
 
         {/* ══ מסגרת ════════════════════════════════════════════════════════ */}
@@ -864,7 +879,9 @@ export default function PublicSafetyReport() {
                     transition: "all 0.15s",
                   }}>
                   <Camera style={{ width: 20, height: 20 }} />
-                  {images.length === 0 ? "הוסף תמונה (חובה)" : `הוסף עוד (${5 - images.length} נותרו)`}
+                  {images.length === 0
+                    ? isRoadSafety ? "הוסף תמונה (חובה)" : "הוסף תמונה (אופציונלי)"
+                    : `הוסף עוד (${5 - images.length} נותרו)`}
                 </button>
               </>
             )}
@@ -873,7 +890,9 @@ export default function PublicSafetyReport() {
                 <AlertTriangle style={{ width: 12, height: 12 }} />{imageError}
               </p>
             )}
-            <p style={{ fontSize: 11, color: C.label3, marginTop: 8 }}>חובה לצרף תמונה אחת לפחות</p>
+            {isRoadSafety && (
+              <p style={{ fontSize: 11, color: C.label3, marginTop: 8 }}>חובה לצרף תמונה אחת לפחות בבטיחות בדרכים</p>
+            )}
           </div>
         </Section>
 
