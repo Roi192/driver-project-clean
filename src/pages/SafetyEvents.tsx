@@ -551,7 +551,18 @@ const getFields = (
       },
       // ── 22. לקחים ראשונים ────────────────────────────────────────────────────
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים...", required: true },
-      // ── 23. דקירת מיקום במפה — בטיחות בדרכים בלבד ───────────────────────────
+      // ── 23. גזרת החטיבה — חובה לכל אירוע ───────────────────────────────────────
+      {
+        name: "in_brigade_sector",
+        label: "האירוע קרה בגזרת החטיבה?",
+        type: "pill_choice",
+        required: true,
+        options: [
+          { value: "yes", label: "בגזרת החטיבה" },
+          { value: "no",  label: "לא בגזרת החטיבה" },
+        ],
+      },
+      // ── 24. דקירת מיקום במפה — בטיחות בדרכים + בגזרה בלבד ────────────────────
       {
         name: "map_picker",
         label: "📍 דקור מיקום האירוע במפה",
@@ -559,7 +570,9 @@ const getFields = (
         latField: "latitude",
         lngField: "longitude",
         required: true,
-        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
+        condition: (formData) =>
+          String(formData.safety_category || "") === "בטיחות בדרכים" &&
+          String(formData.in_brigade_sector || "") === "yes",
       },
       // ── 24. הוספת תמונות — חובה לבטיחות בדרכים, אופציונלי לשאר ──────────────
       { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
@@ -769,7 +782,12 @@ export default function SafetyEvents() {
       console.warn("Invalid longitude:", data.longitude, "-> resetting to null");
       longitude = null;
     }
-    
+    // Clear coordinates when not in brigade sector
+    if (toNullableText(data.in_brigade_sector) === "no") {
+      latitude = null;
+      longitude = null;
+    }
+
     const title = toText(data.title);
     const eventType = toNullableText(data.event_type);
     const driverType = toNullableText(data.driver_type);
@@ -802,6 +820,8 @@ export default function SafetyEvents() {
       if (!toNullableText(data.population_type)) missing.push("סוג אוכלוסייה");
       if (!toNullableText(data.unit_activity_type)) missing.push("סוג האירוע (פעילות היחידה)");
       const isRoadSafety = toNullableText(data.safety_category) === "בטיחות בדרכים";
+      const inBrigadeSector = toNullableText(data.in_brigade_sector);
+      if (!inBrigadeSector) missing.push("האירוע בגזרת החטיבה (חובה לבחור)");
       if (isRoadSafety && !driverType) missing.push("סוג נהג");
       if (isRoadSafety && !toNullableText(data.vehicle_type)) missing.push("סוג הרכב");
       if (isRoadSafety && !toNullableText(data.vehicle_number)) missing.push("מספר רכב");
@@ -810,7 +830,7 @@ export default function SafetyEvents() {
       if (!toNullableText(data.culpability)) missing.push("סיווג האשמה");
       if (!toNullableText(data.damage_and_casualties)) missing.push("נזק ונפגעים");
       if (!toNullableText(data.initial_lessons)) missing.push("לקחים ראשונים");
-      if (isRoadSafety && (!latitude || !longitude)) missing.push("מיקום במפה (דקור נקודה)");
+      if (isRoadSafety && inBrigadeSector === "yes" && (!latitude || !longitude)) missing.push("מיקום במפה (דקור נקודה)");
       if (isRoadSafety && !toNullableText(data.image_urls)) missing.push("תמונות האירוע (חובה להעלות לפחות תמונה אחת)");
       if (missing.length) {
         toast.error(`חסרים שדות חובה: ${missing.join(", ")}`);
@@ -948,7 +968,12 @@ export default function SafetyEvents() {
       console.warn("Invalid longitude:", data.longitude, "-> resetting to null");
       longitude = null;
     }
-    
+    // Clear coordinates when explicitly choosing "not in brigade sector"
+    if (toNullableText(data.in_brigade_sector) === "no") {
+      latitude = null;
+      longitude = null;
+    }
+
     const title = toText(data.title);
     const eventType = toNullableText(data.event_type);
     const driverType = toNullableText(data.driver_type);
@@ -1648,7 +1673,7 @@ export default function SafetyEvents() {
         onOpenChange={setEditDialogOpen}
         title={`עריכת ${categoryLabels[selectedCategory!] || 'תוכן'}`}
         fields={fields}
-        initialData={editDraftData || selectedItem || undefined}
+        initialData={editDraftData || (selectedItem ? { ...selectedItem, in_brigade_sector: selectedItem.latitude ? "yes" : "" } : undefined)}
         onSubmit={handleEdit}
         onFormChange={(formData) => {
           if (!selectedCategory || !selectedItem) return;

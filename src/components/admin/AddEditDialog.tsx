@@ -39,7 +39,7 @@ const toInputString = (value: unknown): string => {
 export interface FieldConfig {
   name: string;
   label: string;
-  type: "text" | "textarea" | "url" | "select" | "number" | "image" | "multi_image" | "video" | "media" | "location" | "date" | "map_picker";
+  type: "text" | "textarea" | "url" | "select" | "pill_choice" | "number" | "image" | "multi_image" | "video" | "media" | "location" | "date" | "map_picker";
   placeholder?: string;
   required?: boolean;
   options?: { value: string; label: string }[];
@@ -225,6 +225,45 @@ export function AddEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              ) : field.type === "pill_choice" ? (
+                <div className="flex gap-2">
+                  {(field.options || []).map((option) => {
+                    const isSelected = toInputString(formData[field.name]) === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          handleChange(field.name, option.value);
+                          // Clear lat/lng when "not in sector" is chosen
+                          if (field.name === "in_brigade_sector" && option.value === "no") {
+                            setFormData((prev) => {
+                              const next = { ...prev, [field.name]: option.value, latitude: "", longitude: "" };
+                              onFormChange?.(next);
+                              return next;
+                            });
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          height: 44,
+                          borderRadius: 10,
+                          border: isSelected ? "2px solid transparent" : "2px solid rgba(0,0,0,0.12)",
+                          cursor: "pointer",
+                          background: isSelected
+                            ? option.value === "yes" ? "#16a34a" : "#374151"
+                            : "rgba(0,0,0,0.04)",
+                          color: isSelected ? "#fff" : "#374151",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
               ) : field.type === "image" ? (
                 <ImageUpload
                   value={toInputString(formData[field.name])}

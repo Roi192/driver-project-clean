@@ -858,8 +858,27 @@ const KnowTheArea = () => {
         ],
       },
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים...", required: true },
-      // ── מפה (pre-filled from map click, shown for all categories) ──────────────
-      { name: "map_picker", label: "📍 מיקום האירוע במפה", type: "map_picker", latField: "latitude", lngField: "longitude" },
+      // ── גזרת החטיבה ────────────────────────────────────────────────────────────
+      {
+        name: "in_brigade_sector",
+        label: "האירוע קרה בגזרת החטיבה?",
+        type: "pill_choice" as const,
+        required: true,
+        options: [
+          { value: "yes", label: "בגזרת החטיבה" },
+          { value: "no",  label: "לא בגזרת החטיבה" },
+        ],
+      },
+      // ── מפה — מופיעה רק כשבגזרה ────────────────────────────────────────────────
+      {
+        name: "map_picker",
+        label: "📍 מיקום האירוע במפה",
+        type: "map_picker" as const,
+        latField: "latitude",
+        lngField: "longitude",
+        required: true,
+        condition: (formData: Record<string, unknown>) => String(formData.in_brigade_sector || "") === "yes",
+      },
       // ── תמונות (אופציונלי) ──────────────────────────────────────────────────────
       { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
     ];
@@ -1219,6 +1238,7 @@ const KnowTheArea = () => {
       department: event.department || "",
       battalion_name: event.battalion_name || "",
       brigade: event.brigade || myBrigade,
+      in_brigade_sector: event.latitude ? "yes" : "",
     });
     setShowAddEventDialog(true);
   };
@@ -1229,14 +1249,15 @@ const KnowTheArea = () => {
     
     let latitude = data.latitude ? parseFloat(data.latitude) : null;
     let longitude = data.longitude ? parseFloat(data.longitude) : null;
-    
+
     if (latitude !== null && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
       latitude = null;
     }
     if (longitude !== null && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
       longitude = null;
     }
-    
+    if (data.in_brigade_sector === "no") { latitude = null; longitude = null; }
+
     const updFw = String(data.framework_type || "");
     const isUpdBattalionFw = updFw.startsWith("sector:");
     const updRegion = isUpdBattalionFw ? updFw.replace("sector:", "") : (data.region || null);
@@ -1398,8 +1419,10 @@ const KnowTheArea = () => {
     let longitude = data.longitude ? parseFloat(data.longitude) : null;
     if (latitude !== null && (isNaN(latitude) || latitude < -90 || latitude > 90)) latitude = null;
     if (longitude !== null && (isNaN(longitude) || longitude < -180 || longitude > 180)) longitude = null;
+    if (data.in_brigade_sector === "no") { latitude = null; longitude = null; }
 
     const isRoadSafety = data.safety_category === "בטיחות בדרכים";
+    const inBrigadeSector = data.in_brigade_sector;
 
     const missing: string[] = [];
     if (!data.safety_category) missing.push("קטגוריה");
@@ -1419,6 +1442,8 @@ const KnowTheArea = () => {
     if (!data.culpability) missing.push("סיווג האשמה");
     if (!data.damage_and_casualties) missing.push("נזק ונפגעים");
     if (!data.initial_lessons?.trim()) missing.push("לקחים ראשונים");
+    if (!inBrigadeSector) missing.push("האירוע בגזרת החטיבה (חובה לבחור)");
+    if (inBrigadeSector === "yes" && (!latitude || !longitude)) missing.push("מיקום במפה (דקור נקודה)");
     if (isRoadSafety && !data.driver_type) missing.push("סוג נהג");
     if (isRoadSafety && !data.vehicle_type) missing.push("סוג הרכב");
     if (isRoadSafety && !data.vehicle_number?.trim()) missing.push("מספר רכב");
