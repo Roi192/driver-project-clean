@@ -399,6 +399,8 @@ export default function PublicSafetyReport() {
   const [images, setImages]         = useState<ImagePreview[]>([]);
   const [errors, setErrors]         = useState<Partial<Record<keyof FormData, string>>>({});
   const [imageError, setImageError] = useState("");
+  const [inBrigadeSector, setInBrigadeSector] = useState<"" | "yes" | "no">("");
+  const [inBrigadeSectorError, setInBrigadeSectorError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
@@ -482,8 +484,8 @@ export default function PublicSafetyReport() {
     if (!form.title.trim())                  e.title = "שדה חובה";
     if (!form.event_date)                    e.event_date = "שדה חובה";
     if (!form.event_time)                    e.event_time = "שדה חובה";
-    if (!form.location_text.trim())          e.location_text = "שדה חובה";
     if (!form.framework_type)                e.framework_type = "שדה חובה";
+    if (!form.location_text.trim())          e.location_text = "שדה חובה";
     if (!form.involved_soldiers.trim())      e.involved_soldiers = "שדה חובה";
     if (!form.description.trim())            e.description = "שדה חובה";
     if (!form.event_outcomes.trim())         e.event_outcomes = "שדה חובה";
@@ -494,20 +496,26 @@ export default function PublicSafetyReport() {
     if (!form.culpability)                   e.culpability = "שדה חובה";
     if (!form.damage_and_casualties)         e.damage_and_casualties = "שדה חובה";
     if (!form.initial_lessons.trim())        e.initial_lessons = "שדה חובה";
+
+    // Sector choice — required for all events
+    const hasSectorErr = !inBrigadeSector;
+    setInBrigadeSectorError(hasSectorErr ? "יש לבחור אם האירוע בגזרת החטיבה" : "");
+
     if (isRoadSafety) {
       if (!form.driver_type)           e.driver_type = "שדה חובה";
       if (!form.vehicle_type)          e.vehicle_type = "שדה חובה";
       if (!form.vehicle_number.trim()) e.vehicle_number = "שדה חובה";
       if (!form.event_type)            e.event_type = "שדה חובה";
-      if (form.latitude === null)      e.latitude = "יש לסמן מיקום במפה";
+      // Map pin required only when in brigade sector
+      if (inBrigadeSector === "yes" && form.latitude === null) e.latitude = "יש לסמן מיקום במפה";
     }
     const hasImgErr = isRoadSafety && images.length === 0;
     setImageError(hasImgErr ? "יש לצרף תמונה אחת לפחות" : "");
     setErrors(e);
-    if (Object.keys(e).length > 0 || hasImgErr) {
+    if (Object.keys(e).length > 0 || hasSectorErr || hasImgErr) {
       document.querySelector("[data-err=true]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    return Object.keys(e).length === 0 && !hasImgErr;
+    return Object.keys(e).length === 0 && !hasSectorErr && !hasImgErr;
   };
 
   const submit = async () => {
@@ -619,83 +627,19 @@ export default function PublicSafetyReport() {
             </div>
           </Row>
 
-          <Row label="כותרת" required error={errors.title}>
+          <Row label="כותרת" required error={errors.title} noBorder>
             <SfInput
               type="text"
               value={form.title}
               onChange={e => set("title", e.target.value)}
-              placeholder="הזן כותרת..."
+              placeholder="לדוגמה: תאונה רכב צבאי עם אזרחי גבעת אסף"
               hasError={!!errors.title}
               data-err={!!errors.title || undefined}
             />
           </Row>
-
-          {/* Date + Time as a single row split in two */}
-          <div style={{ padding: "12px 16px", borderBottom: `0.5px solid ${C.sep}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
-                תאריך<span style={{ color: C.red, marginRight: 4 }}>*</span>
-              </label>
-              <SfInput
-                type="date"
-                value={form.event_date}
-                max={today}
-                onChange={e => set("event_date", e.target.value)}
-                hasError={!!errors.event_date}
-                data-err={!!errors.event_date || undefined}
-              />
-              {errors.event_date && <p style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{errors.event_date}</p>}
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
-                שעה<span style={{ color: C.red, marginRight: 4 }}>*</span>
-              </label>
-              <SfInput
-                type="time"
-                value={form.event_time}
-                onChange={e => set("event_time", e.target.value)}
-                hasError={!!errors.event_time}
-                data-err={!!errors.event_time || undefined}
-              />
-              {errors.event_time && <p style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{errors.event_time}</p>}
-            </div>
-          </div>
-
-          <Row label="תיאור מיקום האירוע" required error={errors.location_text}>
-            <SfInput
-              type="text"
-              value={form.location_text}
-              onChange={e => set("location_text", e.target.value)}
-              placeholder="לדוגמה: כביש 60, צומת בית אל..."
-              hasError={!!errors.location_text}
-              data-err={!!errors.location_text || undefined}
-            />
-          </Row>
-
-          {/* Inline map — shown only for road safety, required */}
-          {isRoadSafety && (
-            <div style={{ padding: "12px 16px" }} data-err={!!errors.latitude || undefined}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
-                סימון מיקום במפה<span style={{ color: C.red, marginRight: 4 }}>*</span>
-                <span style={{ fontSize: 11, color: C.label3, fontWeight: 400, marginRight: 8 }}>לחץ על המפה לדקירה מדויקת</span>
-              </label>
-              <InlineMapPicker
-                lat={form.latitude}
-                lng={form.longitude}
-                onPick={(lat, lng) => { set("latitude", lat); set("longitude", lng); }}
-                onGPS={captureGPS}
-                gpsLoading={gpsLoading}
-              />
-              {errors.latitude && (
-                <p style={{ color: C.red, fontSize: 12, marginTop: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
-                  <AlertTriangle style={{ width: 12, height: 12 }} />{errors.latitude}
-                </p>
-              )}
-            </div>
-          )}
         </Section>
 
-        {/* ══ מסגרת ════════════════════════════════════════════════════════ */}
+        {/* ══ מסגרת — לפני תאריך ומיקום ════════════════════════════════════ */}
         <Section title="מסגרת ויחידה">
           <Row label="מסגרת" required error={errors.framework_type}>
             {fwLoading
@@ -743,6 +687,116 @@ export default function PublicSafetyReport() {
             <Row label="מוצב" noBorder>
               <SfSelect value={form.outpost} onChange={v => set("outpost", v)} options={[{ value: 'מפג"ד', label: 'מפג"ד' }, ...outpostOptions]} placeholder="בחר מוצב" />
             </Row>
+          )}
+        </Section>
+
+        {/* ══ תאריך ומיקום ══════════════════════════════════════════════════ */}
+        <Section title="תאריך ומיקום">
+          {/* Date + Time */}
+          <div style={{ padding: "12px 16px", borderBottom: `0.5px solid ${C.sep}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
+                תאריך<span style={{ color: C.red, marginRight: 4 }}>*</span>
+              </label>
+              <SfInput
+                type="date"
+                value={form.event_date}
+                max={today}
+                onChange={e => set("event_date", e.target.value)}
+                hasError={!!errors.event_date}
+                data-err={!!errors.event_date || undefined}
+              />
+              {errors.event_date && <p style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{errors.event_date}</p>}
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
+                שעה<span style={{ color: C.red, marginRight: 4 }}>*</span>
+              </label>
+              <SfInput
+                type="time"
+                value={form.event_time}
+                onChange={e => set("event_time", e.target.value)}
+                hasError={!!errors.event_time}
+                data-err={!!errors.event_time || undefined}
+              />
+              {errors.event_time && <p style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{errors.event_time}</p>}
+            </div>
+          </div>
+
+          {/* Sector choice — required */}
+          <Row
+            label="האירוע קרה בגזרת החטיבה?"
+            required
+            error={inBrigadeSectorError}
+            noBorder={false}
+          >
+            <div style={{ display: "flex", gap: 8 }} data-err={!!inBrigadeSectorError || undefined}>
+              <button
+                type="button"
+                onClick={() => { setInBrigadeSector("yes"); setInBrigadeSectorError(""); }}
+                style={{
+                  flex: 1, height: 42, borderRadius: 10, border: "none", cursor: "pointer",
+                  background: inBrigadeSector === "yes" ? C.red : C.fill,
+                  color: inBrigadeSector === "yes" ? "#fff" : C.label2,
+                  fontSize: 14, fontWeight: 600, fontFamily: C.font, transition: "all 0.15s",
+                }}
+              >
+                בגזרת החטיבה
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInBrigadeSector("no");
+                  setInBrigadeSectorError("");
+                  // Clear pin + map error — map hidden when not in sector
+                  set("latitude", null);
+                  set("longitude", null);
+                  setErrors(prev => { const n = { ...prev }; delete n.latitude; return n; });
+                }}
+                style={{
+                  flex: 1, height: 42, borderRadius: 10, border: "none", cursor: "pointer",
+                  background: inBrigadeSector === "no" ? C.card2 : C.fill,
+                  color: inBrigadeSector === "no" ? "#fff" : C.label2,
+                  fontSize: 14, fontWeight: 600, fontFamily: C.font, transition: "all 0.15s",
+                }}
+              >
+                לא בגזרת החטיבה
+              </button>
+            </div>
+          </Row>
+
+          {/* Location text */}
+          <Row label="תיאור מיקום האירוע" required error={errors.location_text}>
+            <SfInput
+              type="text"
+              value={form.location_text}
+              onChange={e => set("location_text", e.target.value)}
+              placeholder="לדוגמה: כביש 60, צומת בית אל..."
+              hasError={!!errors.location_text}
+              data-err={!!errors.location_text || undefined}
+            />
+          </Row>
+
+          {/* Map picker — road safety + in brigade sector only */}
+          {isRoadSafety && inBrigadeSector === "yes" && (
+            <div style={{ padding: "12px 16px" }} data-err={!!errors.latitude || undefined}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.label2, marginBottom: 8 }}>
+                סימון מיקום במפה<span style={{ color: C.red, marginRight: 4 }}>*</span>
+                <span style={{ fontSize: 11, color: C.label3, fontWeight: 400, marginRight: 8 }}>לחץ על המפה לדקירה מדויקת</span>
+              </label>
+              <InlineMapPicker
+                lat={form.latitude}
+                lng={form.longitude}
+                onPick={(lat, lng) => { set("latitude", lat); set("longitude", lng); }}
+                onGPS={captureGPS}
+                gpsLoading={gpsLoading}
+              />
+              {errors.latitude && (
+                <p style={{ color: C.red, fontSize: 12, marginTop: 8, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                  <AlertTriangle style={{ width: 12, height: 12 }} />{errors.latitude}
+                </p>
+              )}
+            </div>
           )}
         </Section>
 
