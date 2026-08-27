@@ -47,32 +47,33 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    // Get all users
-    const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
-    
-    if (usersError) {
-      throw new Error('Failed to fetch users')
-    }
-
-    // Map user IDs to emails + return full auth user list (so frontend can show
-    // users that exist in auth but don't have a profile row yet)
+    // Get all users — paginate with perPage=1000 to avoid the default 50-user cap
     const emailMap: Record<string, string> = {}
     const authUsers = [] as Array<{
       id: string
       email: string | null
       created_at: string
-      user_metadata: Record<string, any>
+      user_metadata: Record<string, unknown>
     }>
-    for (const user of users) {
-      if (user.email) {
-        emailMap[user.id] = user.email
-      }
-      authUsers.push({
-        id: user.id,
-        email: user.email ?? null,
-        created_at: user.created_at,
-        user_metadata: user.user_metadata ?? {},
+
+    let page = 1
+    while (true) {
+      const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: 1000,
       })
+      if (usersError) throw new Error('Failed to fetch users')
+      for (const user of users) {
+        if (user.email) emailMap[user.id] = user.email
+        authUsers.push({
+          id: user.id,
+          email: user.email ?? null,
+          created_at: user.created_at,
+          user_metadata: user.user_metadata ?? {},
+        })
+      }
+      if (users.length < 1000) break
+      page++
     }
 
     return new Response(
@@ -80,10 +81,10 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error: any) {
-    console.error('Error:', error.message)
+  } catch (error: unknown) {
+    console.error('Error:', (error as Error).message)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error).message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
