@@ -41,7 +41,7 @@ const emptyForm = (type: UIFrameworkType, parentId?: string, brigade?: string): 
 
 export default function FrameworksManagement() {
   const { brigade: myBrigade } = useAuth() as any;
-  const { frameworks, rootFrameworks, getChildren, isLoading, create, update, toggleActive, isCreating, isUpdating } = useFrameworks();
+  const { frameworks, rootFrameworks, getChildren, isLoading, create, update, toggleActive, isCreating, isUpdating } = useFrameworks(myBrigade || undefined);
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -124,8 +124,6 @@ serve(async (req: Request) => {
     const record = await req.json();
     if (!record?.id) return new Response("Invalid payload", { status: 400 });
 
-    const BINYAMIN = 'binyamin';
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -144,10 +142,10 @@ serve(async (req: Request) => {
     const eventBrigade: string | null = dbEvent?.brigade ?? (record.brigade || null);
     console.log(JSON.stringify({ step: '[SafetyWhatsApp] brigade_resolved', eventId: record.id, brigade: eventBrigade, source: dbEvent ? 'db' : 'payload' }));
 
-    if (eventBrigade !== BINYAMIN) {
-      console.log(JSON.stringify({ step: '[SafetyWhatsApp] skipped_non_binyamin', eventId: record.id, brigade: eventBrigade }));
+    if (!eventBrigade) {
+      console.log(JSON.stringify({ step: '[SafetyWhatsApp] skipped_no_brigade', eventId: record.id }));
       return new Response(
-        JSON.stringify({ success: true, skipped: true, reason: 'NON_BINYAMIN_BRIGADE', brigade: eventBrigade }),
+        JSON.stringify({ success: true, skipped: true, reason: 'NO_BRIGADE', brigade: eventBrigade }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -155,16 +153,18 @@ serve(async (req: Request) => {
     const { data: cfg } = await supabase
       .from("whatsapp_config")
       .select("instance_id, api_token, is_enabled")
-      .single();
+      .eq("brigade", eventBrigade)
+      .maybeSingle();
 
     if (!cfg?.is_enabled || !cfg?.instance_id || !cfg?.api_token) {
-      console.log("WhatsApp not configured or disabled — skipping");
+      console.log(`WhatsApp not configured or disabled for brigade '${eventBrigade}' — skipping`);
       return new Response(JSON.stringify({ skipped: true }), { status: 200 });
     }
 
     const { data: allGroups } = await supabase
       .from("whatsapp_groups")
       .select("wa_id, name, is_global, battalion_name")
+      .eq("brigade", eventBrigade)
       .eq("is_active", true);
 
     if (!allGroups?.length) {

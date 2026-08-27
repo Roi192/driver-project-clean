@@ -45,9 +45,10 @@ async function callAdmin(action: string, extra: object = {}) {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function WhatsAppSettings() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, role, brigade: myBrigadeCtx } = useAuth() as any;
+  const isAdmin = isSuperAdmin || role === "admin" || role === "brigade_admin";
 
-  if (!isSuperAdmin) {
+  if (!isAdmin) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
@@ -109,7 +110,7 @@ export default function WhatsAppSettings() {
 
   async function loadConfig() {
     try {
-      const data = await callAdmin("get-config");
+      const data = await callAdmin("get-config", { brigade: myBrigadeCtx });
       setInstanceId(data.instanceId || "");
       setIsEnabled(data.isEnabled ?? true);
       setHasToken(data.hasToken);
@@ -138,6 +139,7 @@ export default function WhatsAppSettings() {
     setSavingCfg(true);
     try {
       await callAdmin("save-config", {
+        brigade: myBrigadeCtx,
         instanceId: instanceId.trim(),
         apiToken: apiToken.trim() || undefined,
         isEnabled,
@@ -161,7 +163,7 @@ export default function WhatsAppSettings() {
     setDiscovered([]);
     setDiscoverLoading(true);
     try {
-      const data = await callAdmin("get-groups");
+      const data = await callAdmin("get-groups", { brigade: myBrigadeCtx });
       setDiscovered(data.groups || []);
     } catch (e: unknown) {
       toast.error("שגיאה בטעינת קבוצות: " + (e instanceof Error ? e.message : String(e)));
@@ -182,11 +184,12 @@ export default function WhatsAppSettings() {
       {
         name: g.name,
         wa_id: g.wa_id,
+        brigade: myBrigadeCtx,
         is_active: true,
         is_global: isGlobal,
         battalion_name: isGlobal ? null : myBattalion,
       },
-      { onConflict: "wa_id" }
+      { onConflict: "wa_id,brigade" }
     );
     if (error) return toast.error("שגיאה: " + error.message);
     toast.success(`נוסף: ${g.name}`);
@@ -214,11 +217,12 @@ export default function WhatsAppSettings() {
         {
           name: newName.trim(),
           wa_id: waId,
+          brigade: myBrigadeCtx,
           is_active: true,
           is_global: isGlobal,
           battalion_name: isGlobal ? null : myBattalion,
         },
-        { onConflict: "wa_id" }
+        { onConflict: "wa_id,brigade" }
       );
       if (error) throw error;
       toast.success("הקבוצה נוספה ✓");
@@ -248,7 +252,7 @@ export default function WhatsAppSettings() {
   async function sendTest(group: WAGroup) {
     setTestingId(group.id);
     try {
-      await callAdmin("send-test", { wa_id: group.wa_id });
+      await callAdmin("send-test", { brigade: myBrigadeCtx, wa_id: group.wa_id });
       toast.success(`הודעת בדיקה נשלחה לקבוצה "${group.name}"`);
     } catch (e: unknown) {
       toast.error("שגיאה: " + (e instanceof Error ? e.message : String(e)));
