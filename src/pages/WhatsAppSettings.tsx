@@ -92,10 +92,11 @@ export default function WhatsAppSettings() {
   const [testingId, setTestingId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!myBrigadeCtx) return;
     loadConfig();
     loadGroups();
     fetchMyBattalion();
-  }, []);
+  }, [myBrigadeCtx]);
 
   async function fetchMyBattalion() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -119,11 +120,13 @@ export default function WhatsAppSettings() {
   }
 
   async function loadGroups() {
+    if (!myBrigadeCtx) return;
     setLoadingGroups(true);
     try {
       const { data } = await supabase
         .from("whatsapp_groups")
         .select("*")
+        .eq("brigade", myBrigadeCtx)
         .order("is_global", { ascending: false })
         .order("name");
       setGroups((data as WAGroup[]) || []);
