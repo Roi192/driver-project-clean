@@ -551,7 +551,7 @@ const getFields = (
       },
       // ── 22. לקחים ראשונים ────────────────────────────────────────────────────
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים...", required: true },
-      // ── 23. גזרת החטיבה — חובה לכל אירוע ───────────────────────────────────────
+      // ── 23. גזרת החטיבה — בטיחות בדרכים בלבד ───────────────────────────────────
       {
         name: "in_brigade_sector",
         label: "האירוע קרה בגזרת החטיבה?",
@@ -561,6 +561,7 @@ const getFields = (
           { value: "yes", label: "בגזרת החטיבה" },
           { value: "no",  label: "לא בגזרת החטיבה" },
         ],
+        condition: (formData) => String(formData.safety_category || "") === "בטיחות בדרכים",
       },
       // ── 24. דקירת מיקום במפה — בטיחות בדרכים + בגזרה בלבד ────────────────────
       {
@@ -821,7 +822,7 @@ export default function SafetyEvents() {
       if (!toNullableText(data.unit_activity_type)) missing.push("סוג האירוע (פעילות היחידה)");
       const isRoadSafety = toNullableText(data.safety_category) === "בטיחות בדרכים";
       const inBrigadeSector = toNullableText(data.in_brigade_sector);
-      if (!inBrigadeSector) missing.push("האירוע בגזרת החטיבה (חובה לבחור)");
+      if (isRoadSafety && !inBrigadeSector) missing.push("האירוע בגזרת החטיבה (חובה לבחור)");
       if (isRoadSafety && !driverType) missing.push("סוג נהג");
       if (isRoadSafety && !toNullableText(data.vehicle_type)) missing.push("סוג הרכב");
       if (isRoadSafety && !toNullableText(data.vehicle_number)) missing.push("מספר רכב");

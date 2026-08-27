@@ -497,8 +497,8 @@ export default function PublicSafetyReport() {
     if (!form.damage_and_casualties)         e.damage_and_casualties = "שדה חובה";
     if (!form.initial_lessons.trim())        e.initial_lessons = "שדה חובה";
 
-    // Sector choice — required for all events
-    const hasSectorErr = !inBrigadeSector;
+    // Sector choice — required only for road safety
+    const hasSectorErr = isRoadSafety && !inBrigadeSector;
     setInBrigadeSectorError(hasSectorErr ? "יש לבחור אם האירוע בגזרת החטיבה" : "");
 
     if (isRoadSafety) {
@@ -618,6 +618,8 @@ export default function PublicSafetyReport() {
                   if (v !== "בטיחות בדרכים") {
                     setErrors(prev => { const n = { ...prev }; delete n.latitude; return n; });
                     setImageError("");
+                    setInBrigadeSector("");
+                    setInBrigadeSectorError("");
                   }
                 }}
                 options={SAFETY_CATEGORIES.map(c => ({ value: c, label: c }))}
@@ -723,47 +725,48 @@ export default function PublicSafetyReport() {
             </div>
           </div>
 
-          {/* Sector choice — required */}
-          <Row
-            label="האירוע קרה בגזרת החטיבה?"
-            required
-            error={inBrigadeSectorError}
-            noBorder={false}
-          >
-            <div style={{ display: "flex", gap: 8 }} data-err={!!inBrigadeSectorError || undefined}>
-              <button
-                type="button"
-                onClick={() => { setInBrigadeSector("yes"); setInBrigadeSectorError(""); }}
-                style={{
-                  flex: 1, height: 42, borderRadius: 10, border: "none", cursor: "pointer",
-                  background: inBrigadeSector === "yes" ? C.red : C.fill,
-                  color: inBrigadeSector === "yes" ? "#fff" : C.label2,
-                  fontSize: 14, fontWeight: 600, fontFamily: C.font, transition: "all 0.15s",
-                }}
-              >
-                בגזרת החטיבה
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInBrigadeSector("no");
-                  setInBrigadeSectorError("");
-                  // Clear pin + map error — map hidden when not in sector
-                  set("latitude", null);
-                  set("longitude", null);
-                  setErrors(prev => { const n = { ...prev }; delete n.latitude; return n; });
-                }}
-                style={{
-                  flex: 1, height: 42, borderRadius: 10, border: "none", cursor: "pointer",
-                  background: inBrigadeSector === "no" ? C.card2 : C.fill,
-                  color: inBrigadeSector === "no" ? "#fff" : C.label2,
-                  fontSize: 14, fontWeight: 600, fontFamily: C.font, transition: "all 0.15s",
-                }}
-              >
-                לא בגזרת החטיבה
-              </button>
-            </div>
-          </Row>
+          {/* Sector choice — road safety only */}
+          {isRoadSafety && (
+            <Row
+              label="האירוע קרה בגזרת החטיבה?"
+              required
+              error={inBrigadeSectorError}
+              noBorder={false}
+            >
+              <div style={{ display: "flex", gap: 8 }} data-err={!!inBrigadeSectorError || undefined}>
+                <button
+                  type="button"
+                  onClick={() => { setInBrigadeSector("yes"); setInBrigadeSectorError(""); }}
+                  style={{
+                    flex: 1, height: 42, borderRadius: 10, border: "none", cursor: "pointer",
+                    background: inBrigadeSector === "yes" ? C.red : C.fill,
+                    color: inBrigadeSector === "yes" ? "#fff" : C.label2,
+                    fontSize: 14, fontWeight: 600, fontFamily: C.font, transition: "all 0.15s",
+                  }}
+                >
+                  בגזרת החטיבה
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInBrigadeSector("no");
+                    setInBrigadeSectorError("");
+                    set("latitude", null);
+                    set("longitude", null);
+                    setErrors(prev => { const n = { ...prev }; delete n.latitude; return n; });
+                  }}
+                  style={{
+                    flex: 1, height: 42, borderRadius: 10, border: "none", cursor: "pointer",
+                    background: inBrigadeSector === "no" ? C.card2 : C.fill,
+                    color: inBrigadeSector === "no" ? "#fff" : C.label2,
+                    fontSize: 14, fontWeight: 600, fontFamily: C.font, transition: "all 0.15s",
+                  }}
+                >
+                  לא בגזרת החטיבה
+                </button>
+              </div>
+            </Row>
+          )}
 
           {/* Location text */}
           <Row label="תיאור מיקום האירוע" required error={errors.location_text}>

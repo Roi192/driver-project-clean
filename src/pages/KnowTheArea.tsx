@@ -858,7 +858,7 @@ const KnowTheArea = () => {
         ],
       },
       { name: "initial_lessons", label: "לקחים ראשונים", type: "textarea", placeholder: "פרט לקחים ראשונים...", required: true },
-      // ── גזרת החטיבה ────────────────────────────────────────────────────────────
+      // ── גזרת החטיבה — בטיחות בדרכים בלבד ─────────────────────────────────────
       {
         name: "in_brigade_sector",
         label: "האירוע קרה בגזרת החטיבה?",
@@ -868,8 +868,9 @@ const KnowTheArea = () => {
           { value: "yes", label: "בגזרת החטיבה" },
           { value: "no",  label: "לא בגזרת החטיבה" },
         ],
+        condition: (formData: Record<string, unknown>) => String(formData.safety_category || "") === "בטיחות בדרכים",
       },
-      // ── מפה — מופיעה רק כשבגזרה ────────────────────────────────────────────────
+      // ── מפה — בטיחות בדרכים + בגזרה בלבד ─────────────────────────────────────
       {
         name: "map_picker",
         label: "📍 מיקום האירוע במפה",
@@ -877,7 +878,9 @@ const KnowTheArea = () => {
         latField: "latitude",
         lngField: "longitude",
         required: true,
-        condition: (formData: Record<string, unknown>) => String(formData.in_brigade_sector || "") === "yes",
+        condition: (formData: Record<string, unknown>) =>
+          String(formData.safety_category || "") === "בטיחות בדרכים" &&
+          String(formData.in_brigade_sector || "") === "yes",
       },
       // ── תמונות (אופציונלי) ──────────────────────────────────────────────────────
       { name: "image_urls", label: "תמונות האירוע", type: "multi_image", imageAccept: "image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" },
@@ -1442,8 +1445,8 @@ const KnowTheArea = () => {
     if (!data.culpability) missing.push("סיווג האשמה");
     if (!data.damage_and_casualties) missing.push("נזק ונפגעים");
     if (!data.initial_lessons?.trim()) missing.push("לקחים ראשונים");
-    if (!inBrigadeSector) missing.push("האירוע בגזרת החטיבה (חובה לבחור)");
-    if (inBrigadeSector === "yes" && (!latitude || !longitude)) missing.push("מיקום במפה (דקור נקודה)");
+    if (isRoadSafety && !inBrigadeSector) missing.push("האירוע בגזרת החטיבה (חובה לבחור)");
+    if (isRoadSafety && inBrigadeSector === "yes" && (!latitude || !longitude)) missing.push("מיקום במפה (דקור נקודה)");
     if (isRoadSafety && !data.driver_type) missing.push("סוג נהג");
     if (isRoadSafety && !data.vehicle_type) missing.push("סוג הרכב");
     if (isRoadSafety && !data.vehicle_number?.trim()) missing.push("מספר רכב");
