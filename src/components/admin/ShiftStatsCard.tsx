@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sun, Sunset, Moon, ChevronLeft, MapPin, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
+import { todayIsrael } from '@/lib/dateUtils';
 
 interface ShiftReport {
   id: string;
@@ -28,7 +29,7 @@ export function ShiftStatsCard({ reports, outposts }: ShiftStatsCardProps) {
   const [selectedShift, setSelectedShift] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayIsrael();
 
   const shiftStats = useMemo(() => {
     const todayReports = reports.filter((r) => r.report_date === today);

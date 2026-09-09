@@ -105,7 +105,7 @@ export function OutpostStatsCard({ reports, outposts }: OutpostStatsCardProps) {
                       <div>
                         <div className="font-bold text-slate-800">{report.driver_name}</div>
                         <div className="text-sm text-slate-500">
-                          {new Date(report.report_date).toLocaleDateString('he-IL')}
+                          {new Date(report.report_date + 'T00:00:00').toLocaleDateString('he-IL')}
                         </div>
                       </div>
                       <Badge variant="outline" className="rounded-xl font-bold">

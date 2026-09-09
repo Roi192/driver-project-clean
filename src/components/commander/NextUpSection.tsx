@@ -54,7 +54,7 @@ export function NextUpSection() {
       const { data: events } = await scopeQuery(supabase
         .from('work_plan_events')
         .select('id, title, event_date, category, status, description')
-        .gte('event_date', today.toISOString().split('T')[0])
+        .gte('event_date', format(today, 'yyyy-MM-dd'))
         .eq('status', 'pending')
         .order('event_date', { ascending: true })
         .limit(1));

@@ -113,7 +113,7 @@ export function ExportButton({ reports }: ExportButtonProps) {
 
     // Transform data for Excel
     const excelData = reports.map((report) => ({
-      'תאריך': new Date(report.report_date).toLocaleDateString('he-IL'),
+      'תאריך': new Date(report.report_date + 'T00:00:00').toLocaleDateString('he-IL'),
       'שעה': report.report_time,
       'מוצב': report.outpost,
       'שם הנהג': report.driver_name,

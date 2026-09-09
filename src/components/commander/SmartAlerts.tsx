@@ -15,7 +15,7 @@ import {
   TrendingUp,
   Gauge
 } from 'lucide-react';
-import { differenceInDays, differenceInMonths, parseISO, isAfter, startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { differenceInDays, differenceInMonths, format, parseISO, isAfter, startOfWeek, endOfWeek, addDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -306,8 +306,8 @@ export function SmartAlerts() {
       const { data: upcomingEvents } = await scopeQuery(supabase
         .from('work_plan_events')
         .select('id, title, event_date, status')
-        .gte('event_date', today.toISOString().split('T')[0])
-        .lte('event_date', weekEnd.toISOString().split('T')[0])
+        .gte('event_date', format(today, 'yyyy-MM-dd'))
+        .lte('event_date', format(weekEnd, 'yyyy-MM-dd'))
         .eq('status', 'pending'));
 
       if (upcomingEvents && upcomingEvents.length > 0) {
@@ -323,7 +323,7 @@ export function SmartAlerts() {
       }
 
       // 6. Check incomplete shift reports from yesterday
-      const yesterday = addDays(today, -1).toISOString().split('T')[0];
+      const yesterday = format(addDays(today, -1), 'yyyy-MM-dd');
       const { data: incompleteReports } = await scopeQuery(supabase
         .from('shift_reports')
         .select('id, is_complete, report_date')

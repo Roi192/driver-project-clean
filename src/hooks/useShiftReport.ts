@@ -4,6 +4,7 @@ import { useAuth } from "./useAuth";
 import { toast } from "./use-toast";
 import { COMBAT_EQUIPMENT, PRE_MOVEMENT_CHECKS, DRIVER_TOOLS, DRILLS } from "@/lib/constants";
 import { normalizeShiftPhotoPath } from "@/lib/shift-photo-storage";
+import { toLocalDateStr } from "@/lib/dateUtils";
 
 interface ShiftFormData {
   dateTime: Date;
@@ -98,7 +99,9 @@ export function useShiftReport() {
       // Photos are required only for brigades that include the photos step (Binyamin).
       // For other brigades, photos are optional and stored as null.
 
-      const reportDate = formData.dateTime.toISOString().split("T")[0];
+      // Use local calendar components — toISOString() is UTC and would give yesterday's
+      // date for submissions before 02:00–03:00 Israel time.
+      const reportDate = toLocalDateStr(formData.dateTime);
       const reportTime = formData.dateTime.toTimeString().split(" ")[0];
 
       const photoFront = toStoredPhotoPath(formData.photos.front, "front");

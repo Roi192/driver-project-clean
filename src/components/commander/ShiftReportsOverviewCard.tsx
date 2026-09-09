@@ -149,7 +149,7 @@ export function ShiftReportsOverviewCard() {
                     {report.is_complete && <CheckCircle2 className="w-5 h-5 text-success" />}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span>{format(new Date(report.report_date), "dd/MM/yyyy", { locale: he })}</span>
+                    <span>{format(new Date(report.report_date + 'T00:00:00'), "dd/MM/yyyy", { locale: he })}</span>
                     {report.shift_type && <span>• משמרת {shiftTypeLabels[report.shift_type] || report.shift_type}</span>}
                     {report.vehicle_number && <span>• רכב {report.vehicle_number}</span>}
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{format(new Date(report.created_at), "HH:mm", { locale: he })}</span>

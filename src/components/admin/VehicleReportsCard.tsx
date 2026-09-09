@@ -170,7 +170,7 @@ export function VehicleReportsCard({ reports }: VehicleReportsCardProps) {
                           <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                             <Calendar className="w-4 h-4 text-primary" />
                           </div>
-                          <span className="font-medium">{format(new Date(report.report_date), 'dd/MM/yyyy', { locale: he })}</span>
+                          <span className="font-medium">{format(new Date(report.report_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: he })}</span>
                         </div>
                         <div className="flex items-center gap-2 text-slate-600">
                           <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">

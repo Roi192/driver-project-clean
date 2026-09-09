@@ -22,7 +22,7 @@ export function WeeklyReportsChart({ reports }: WeeklyReportsChartProps) {
     return weeks.map((weekStart) => {
       const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 });
       const count = reports.filter((r) => {
-        const reportDate = new Date(r.report_date);
+        const reportDate = new Date(r.report_date + 'T00:00:00');
         return reportDate >= weekStart && reportDate <= weekEnd;
       }).length;
 

@@ -216,7 +216,7 @@ function ShiftFormStatusCard({ status }: { status: ShiftFormStatus }) {
               {status.hasTodayReport 
                 ? "הטופס הוגש היום ✓"
                 : status.lastReportDate 
-                  ? `דיווח אחרון: ${format(new Date(status.lastReportDate), "dd/MM")}`
+                  ? `דיווח אחרון: ${format(new Date(status.lastReportDate + 'T00:00:00'), "dd/MM")}`
                   : "טרם הוגש טופס"
               }
             </p>

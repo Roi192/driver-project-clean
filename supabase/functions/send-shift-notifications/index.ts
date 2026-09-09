@@ -81,7 +81,7 @@ serve(async (req: Request) => {
           phone: phoneNumber,
           shift_type: "test",
           outpost: outpost,
-          shift_date: new Date().toISOString().split("T")[0],
+          shift_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date()),
           status: "sent",
         });
 
@@ -256,7 +256,7 @@ serve(async (req: Request) => {
             phone: phoneNumber,
             shift_type: notification.shiftType,
             outpost: notification.outpost,
-            shift_date: new Date().toISOString().split("T")[0],
+            shift_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date()),
             status: "sent",
           });
 
@@ -271,7 +271,7 @@ serve(async (req: Request) => {
             phone: phoneNumber,
             shift_type: notification.shiftType,
             outpost: notification.outpost,
-            shift_date: new Date().toISOString().split("T")[0],
+            shift_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date()),
             status: "failed",
             error_message: twilioResult.message || "Unknown error",
           });

@@ -509,7 +509,7 @@ export default function AdminDashboard() {
                           style={{ animationDelay: `${index * 30}ms` }}
                         >
                           <TableCell className="font-bold text-slate-700">
-                            {format(new Date(report.report_date), 'dd/MM/yyyy', { locale: he })}
+                            {format(new Date(report.report_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: he })}
                           </TableCell>
                           <TableCell className="font-bold text-slate-800">{report.driver_name}</TableCell>
                           <TableCell>
@@ -590,7 +590,7 @@ export default function AdminDashboard() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="מחיקת דיווח"
-        description={`האם אתה בטוח שברצונך למחוק את הדיווח של ${reportToDelete?.driver_name} מתאריך ${reportToDelete ? format(new Date(reportToDelete.report_date), 'dd/MM/yyyy', { locale: he }) : ''}? פעולה זו לא ניתנת לביטול.`}
+        description={`האם אתה בטוח שברצונך למחוק את הדיווח של ${reportToDelete?.driver_name} מתאריך ${reportToDelete ? format(new Date(reportToDelete.report_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: he }) : ''}? פעולה זו לא ניתנת לביטול.`}
         onConfirm={handleDeleteReport}
         isLoading={isDeleting}
       />

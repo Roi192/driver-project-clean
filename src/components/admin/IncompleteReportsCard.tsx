@@ -172,7 +172,7 @@ export function IncompleteReportsCard({ reports, onViewReport }: IncompleteRepor
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                          <span>{format(new Date(report.report_date), 'dd/MM/yyyy', { locale: he })}</span>
+                          <span>{format(new Date(report.report_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: he })}</span>
                           <span>•</span>
                           <span>{report.outpost}</span>
                           <span>•</span>

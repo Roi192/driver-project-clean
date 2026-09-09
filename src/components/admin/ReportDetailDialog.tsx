@@ -196,7 +196,7 @@ export function ReportDetailDialog({ report, open, onOpenChange }: ReportDetailD
                 <Calendar className="w-4 h-4 text-slate-500" />
                 <span className="text-sm text-slate-500">תאריך:</span>
                 <span className="font-bold text-slate-800">
-                  {format(new Date(report.report_date), 'dd/MM/yyyy', { locale: he })}
+                  {format(new Date(report.report_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: he })}
                 </span>
               </div>
               <div className="flex items-center gap-2">
